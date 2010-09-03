@@ -1274,6 +1274,12 @@ class FileHandler(BaseHandler):
         import mimetypes
         host = req.get_host()
         file = req.get_selector()
+
+        # YD hack: add again drive name
+        if os.name == 'os2' and len(host)>2 and host[1] == ':':
+            file = host + file
+            host = ""
+
         localfile = url2pathname(file)
         try:
             stats = os.stat(localfile)

@@ -1036,6 +1036,31 @@ _expectations = {
         test_resource
         test_signal
         """,
+    'os2knix':
+        """
+        test_al
+        test_applesingle
+        test_audioop
+        test_bsddb185
+        test_bsddb3
+        test_cd
+        test_cl
+        test_commands
+        test_dl
+        test_gl
+        test_imgfile
+        test_linuxaudiodev
+        test_mhlib
+        test_mmap
+        test_nis
+        test_openpty
+        test_ossaudiodev
+        test_pty
+        test_resource
+        test_sqlite
+        test_startfile
+        test_sunaudiodev
+        """,
     'freebsd4':
         """
         test_bsddb

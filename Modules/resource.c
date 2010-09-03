@@ -68,6 +68,7 @@ resource_getrusage(PyObject *self, PyObject *args)
 	if (!PyArg_ParseTuple(args, "i:getrusage", &who))
 		return NULL;
 
+#ifndef __OS2__
 	if (getrusage(who, &ru) == -1) {
 		if (errno == EINVAL) {
 			PyErr_SetString(PyExc_ValueError,
@@ -77,7 +78,7 @@ resource_getrusage(PyObject *self, PyObject *args)
 		PyErr_SetFromErrno(ResourceError);
 		return NULL;
 	}
-
+#endif
 	result = PyStructSequence_New(&StructRUsageType);
 	if (!result)
 		return NULL;

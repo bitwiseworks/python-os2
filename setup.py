@@ -382,6 +382,10 @@ class PyBuildExt(build_ext):
             inc_dirs += ['/system/include', '/atheos/autolnk/include']
             inc_dirs += os.getenv('C_INCLUDE_PATH', '').split(os.pathsep)
 
+        # Check for OS/2 which may have libraries in non-standard locations
+        if platform == 'os2knix':
+            lib_dirs += os.getenv('LIBRARY_PATH', '').split(os.pathsep)
+            inc_dirs += os.getenv('C_INCLUDE_PATH', '').split(os.pathsep)
         # OSF/1 and Unixware have some stuff in /usr/ccs/lib (like -ldb)
         if platform in ['osf1', 'unixware7', 'openunix8']:
             lib_dirs += ['/usr/ccs/lib']
@@ -516,7 +520,7 @@ class PyBuildExt(build_ext):
         exts.append( Extension('cPickle', ['cPickle.c']) )
 
         # Memory-mapped files (also works on Win32).
-        if platform not in ['atheos', 'mac']:
+        if platform not in ['atheos', 'mac', 'os2knix']:
             exts.append( Extension('mmap', ['mmapmodule.c']) )
         else:
             missing.append('mmap')
@@ -867,6 +871,9 @@ class PyBuildExt(build_ext):
                 print "bsddb lib dir:", dblib_dir, " inc dir:", db_incdir
             db_incs = [db_incdir]
             dblibs = [dblib]
+            # YD add required libs
+            if os.name == "os2":
+                dblibs += ["mmap", "pthread"]
             # We add the runtime_library_dirs argument because the
             # BerkeleyDB lib we're linking against often isn't in the
             # system dynamic library search path.  This is usually
@@ -1068,7 +1075,7 @@ class PyBuildExt(build_ext):
                 missing.append('resource')
 
             # Sun yellow pages. Some systems have the functions in libc.
-            if (platform not in ['cygwin', 'atheos', 'qnx6'] and
+            if (platform not in ['cygwin', 'atheos', 'qnx6', 'os2knix'] and
                 find_file('rpcsvc/yp_prot.h', inc_dirs, []) is not None):
                 if (self.compiler.find_library_file(lib_dirs, 'nsl')):
                     libs = ['nsl']
@@ -1287,6 +1294,14 @@ class PyBuildExt(build_ext):
                 )
             libraries = []
 
+        elif platform in ('os2knix'):
+            # FreeBSD's P1003.1b semaphore support is very experimental
+            # and has many known problems. (as of June 2008)
+            macros = dict(                  # FreeBSD
+                HAVE_SEM_OPEN=0,
+                HAVE_SEM_TIMEDWAIT=0,
+                )
+            libraries = []
         elif platform.startswith('openbsd'):
             macros = dict(                  # OpenBSD
                 HAVE_SEM_OPEN=0,            # Not implemented

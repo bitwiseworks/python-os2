@@ -34,6 +34,10 @@
 #    include <unixio.h>
 #endif /* defined(__VMS) */
 
+#if defined(__KLIBC__)
+#include <sys/socket.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -131,7 +135,7 @@ corresponding Unix manual entries for more information on calls.");
 #define HAVE_FSYNC	1
 #define fsync _commit
 #else
-#if defined(PYOS_OS2) && defined(PYCC_GCC) || defined(__VMS)
+#if (defined(PYOS_OS2) && defined(PYCC_GCC) && !defined(__KLIBC__)) || defined(__VMS)
 /* Everything needed is defined in PC/os2emx/pyconfig.h or vms/pyconfig.h */
 #else			/* all other compilers */
 /* Unix functions that the configure script doesn't check for */
@@ -427,6 +431,15 @@ convertenviron(void)
 		    PyDict_SetItemString(d, "ENDLIBPATH", v);
             Py_DECREF(v);
         }
+#ifdef LIBPATHSTRICT
+        buffer[0] = buffer[1] = buffer[2] = buffer[3] = '\0';
+        rc = DosQueryExtLIBPATH(buffer, LIBPATHSTRICT);
+        if (rc == NO_ERROR) { /* (not a typo, envname is NOT 'LIBPATH_STRICT') */
+            PyObject *v = PyString_FromString(buffer);
+                    PyDict_SetItemString(d, "LIBPATHSTRICT", v);
+            Py_DECREF(v);
+        }
+#endif
     }
 #endif
 	return d;
@@ -1649,8 +1662,6 @@ posix_chdir(PyObject *self, PyObject *args)
 {
 #ifdef MS_WINDOWS
 	return win32_1str(args, "chdir", "s:chdir", win32_chdir, "U:chdir", win32_wchdir);
-#elif defined(PYOS_OS2) && defined(PYCC_GCC)
-	return posix_1str(args, "et:chdir", _chdir2);
 #elif defined(__VMS)
 	return posix_1str(args, "et:chdir", (int (*)(const char *))chdir);
 #else
@@ -1986,11 +1997,7 @@ posix_getcwd(PyObject *self, PyObject *noargs)
 		if (tmpbuf == NULL) {
 			break;
 		}
-#if defined(PYOS_OS2) && defined(PYCC_GCC)
-		res = _getcwd2(tmpbuf, bufsize);
-#else
 		res = getcwd(tmpbuf, bufsize);
-#endif
 
 		if (res == NULL) {
 			free(tmpbuf);
@@ -2050,11 +2057,7 @@ posix_getcwdu(PyObject *self, PyObject *noargs)
 #endif
 
 	Py_BEGIN_ALLOW_THREADS
-#if defined(PYOS_OS2) && defined(PYCC_GCC)
-	res = _getcwd2(buf, sizeof buf);
-#else
 	res = getcwd(buf, sizeof buf);
-#endif
 	Py_END_ALLOW_THREADS
 	if (res == NULL)
 		return posix_error();
@@ -2244,7 +2247,7 @@ posix_listdir(PyObject *self, PyObject *args)
 
 	return d;
 
-#elif defined(PYOS_OS2)
+#elif defined(PYOS_OS2_00) // YD os2 api does not support path rewriting
 
 #ifndef MAX_PATH
 #define MAX_PATH    CCHMAXPATH
@@ -3116,7 +3119,8 @@ posix_execve(PyObject *self, PyObject *args)
 
 #if defined(PYOS_OS2)
         /* Omit Pseudo-Env Vars that Would Confuse Programs if Passed On */
-        if (stricmp(k, "BEGINLIBPATH") != 0 && stricmp(k, "ENDLIBPATH") != 0) {
+        if (stricmp(k, "BEGINLIBPATH") != 0 && stricmp(k, "ENDLIBPATH") != 0
+         && stricmp(k, "LIBPATHSTRICT") != 0) {
 #endif
 		len = PyString_Size(key) + PyString_Size(val) + 2;
 		p = PyMem_NEW(char, len);
@@ -4215,13 +4219,28 @@ posix_popen(PyObject *self, PyObject *args)
 	char *name;
 	char *mode = "r";
 	int bufsize = -1;
+	int unset_emxshell = 0;
 	FILE *fp;
 	PyObject *f;
 	if (!PyArg_ParseTuple(args, "s|si:popen", &name, &mode, &bufsize))
 		return NULL;
+	/* a little hack for making sure commands.getstatusoutput works 
+	 * (ASSUMES that COMSPEC isn't a posix shell.) */
+	if (name[0] == '{' && !getenv("EMXSHELL")) {
+		char path[512];
+		_searchenv("sh.exe", "PATH", path);
+		if (!path[0])
+			_searchenv("ash.exe", "PATH", path);
+		if (!path[0])
+			_searchenv("bash.exe", "PATH", path);
+		if (path[0])
+			unset_emxshell = setenv("EMXSHELL", path, 0) == 0;
+	}
 	Py_BEGIN_ALLOW_THREADS
 	fp = popen(name, mode);
 	Py_END_ALLOW_THREADS
+	if (unset_emxshell)
+		unsetenv("EMXSHELL");
 	if (fp == NULL)
 		return posix_error();
 	f = PyFile_FromFile(fp, name, mode, pclose);
@@ -4371,7 +4390,7 @@ _PyPopen(char *cmdstring, int mode, int n, int bufsize)
 	struct pipe_ref p_fd[3];
 	FILE *p_s[3];
 	int file_count, i, pipe_err;
-	pid_t pipe_pid;
+	pid_t pipe_pid = -1;
 	char *shell, *sh_name, *opt, *rd_mode, *wr_mode;
 	PyObject *f, *p_f[3];
 
@@ -4390,6 +4409,8 @@ _PyPopen(char *cmdstring, int mode, int n, int bufsize)
 	/* prepare shell references */
 	if ((shell = getenv("EMXSHELL")) == NULL)
 		if ((shell = getenv("COMSPEC")) == NULL)
+			if ((shell = getenv("SHELL")) == NULL)
+				if ((shell = getenv("OS2_SHELL")) == NULL)
 		{
 			errno = ENOENT;
 			return posix_error();
@@ -4428,7 +4449,11 @@ _PyPopen(char *cmdstring, int mode, int n, int bufsize)
 		file_count = 3;
 	i = pipe_err = 0;
 	while ((pipe_err == 0) && (i < file_count))
+#ifndef __KLIBC__
 		pipe_err = pipe((int *)&p_fd[i++]);
+#else
+		pipe_err = socketpair(AF_UNIX, SOCK_STREAM,0,(int *)&p_fd[i++]);
+#endif
 	if (pipe_err < 0)
 	{
 		/* didn't get them all made - clean up and bail out */
@@ -6589,7 +6614,7 @@ Create a pipe.");
 static PyObject *
 posix_pipe(PyObject *self, PyObject *noargs)
 {
-#if defined(PYOS_OS2)
+#if defined(PYOS_OS2) && !defined(__KLIBC__)
     HFILE read, write;
     APIRET rc;
 
@@ -6605,7 +6630,11 @@ posix_pipe(PyObject *self, PyObject *noargs)
 	int fds[2];
 	int res;
 	Py_BEGIN_ALLOW_THREADS
+#ifndef __KLIBC__
 	res = pipe(fds);
+#else
+	res = socketpair(AF_UNIX, SOCK_STREAM,0, fds);
+#endif
 	Py_END_ALLOW_THREADS
 	if (res != 0)
 		return posix_error();
@@ -6795,8 +6824,16 @@ posix_putenv(PyObject *self, PyObject *args)
         rc = DosSetExtLIBPATH(s2, END_LIBPATH);
         if (rc != NO_ERROR)
             return os2_error(rc);
-    } else {
+#ifdef LIBPATHSTRICT
+    } else if (stricmp(s1, "LIBPATHSTRICT") == 0) {
+        APIRET rc;
+
+        rc = DosSetExtLIBPATH(s2, LIBPATHSTRICT);
+        if (rc != NO_ERROR)
+            return os2_error(rc);
 #endif
+    } else {
+#endif /* OS2 */
 
 	/* XXX This can leak memory -- not easy to fix :-( */
 	len = strlen(s1) + strlen(s2) + 2;
@@ -8429,6 +8466,43 @@ vms_urandom(PyObject *self, PyObject *args)
 }
 #endif
 
+#ifdef __EMX__
+/* Use openssl random routine */
+#include <openssl/rand.h>
+PyDoc_STRVAR(os2_urandom__doc__,
+"urandom(n) -> str\n\n\
+Return a string of n random bytes suitable for cryptographic use.");
+
+static PyObject*
+os2_urandom(PyObject *self, PyObject *args)
+{
+	int howMany;
+	PyObject* result;
+
+	/* Read arguments */
+	if (! PyArg_ParseTuple(args, "i:urandom", &howMany))
+		return NULL;
+	if (howMany < 0)
+		return PyErr_Format(PyExc_ValueError,
+				    "negative argument not allowed");
+
+	/* Allocate bytes */
+	result = PyString_FromStringAndSize(NULL, howMany);
+	if (result != NULL) {
+		/* Get random data */
+		if (RAND_pseudo_bytes((unsigned char*)
+				      PyString_AS_STRING(result),
+				      howMany) < 0) {
+			Py_DECREF(result);
+			return PyErr_Format(PyExc_ValueError,
+					    "RAND_pseudo_bytes");
+		}
+	}
+	return result;
+}
+#endif
+
+
 static PyMethodDef posix_methods[] = {
 	{"access",	posix_access, METH_VARARGS, posix_access__doc__},
 #ifdef HAVE_TTYNAME
@@ -8739,6 +8813,9 @@ static PyMethodDef posix_methods[] = {
  #ifdef __VMS
  	{"urandom", vms_urandom, METH_VARARGS, vms_urandom__doc__},
  #endif
+ #ifdef __EMX__
+ 	{"urandom", os2_urandom, METH_VARARGS, os2_urandom__doc__},
+ #endif
 	{NULL,		NULL}		 /* Sentinel */
 };
 
@@ -8755,7 +8832,6 @@ static int insertvalues(PyObject *module)
 {
     APIRET    rc;
     ULONG     values[QSV_MAX+1];
-    PyObject *v;
     char     *ver, tmp[50];
 
     Py_BEGIN_ALLOW_THREADS
@@ -8784,7 +8860,7 @@ static int insertvalues(PyObject *module)
     case 50: ver = "5.00"; break;
     default:
         PyOS_snprintf(tmp, sizeof(tmp),
-        	      "%d-%d", values[QSV_VERSION_MAJOR],
+        	      "%ld-%ld", values[QSV_VERSION_MAJOR],
                       values[QSV_VERSION_MINOR]);
         ver = &tmp[0];
     }

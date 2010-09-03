@@ -387,7 +387,7 @@ class _TemporaryFileWrapper:
     # NT provides delete-on-close as a primitive, so we don't need
     # the wrapper to do anything special.  We still use it so that
     # file.name is useful (i.e. not "(fdopen)") with NamedTemporaryFile.
-    if _os.name != 'nt':
+    if _os.name != 'nt' and _os.name != 'os2':
         # Cache the unlinker so we don't get spurious errors at
         # shutdown when the module-level "os" is None'd out.  Note
         # that this must be referenced as self.unlink, because the
@@ -445,7 +445,7 @@ def NamedTemporaryFile(mode='w+b', bufsize=-1, suffix="",
     file = _os.fdopen(fd, mode, bufsize)
     return _TemporaryFileWrapper(file, name, delete)
 
-if _os.name != 'posix' or _os.sys.platform == 'cygwin':
+if _os.name != 'posix' or _os.sys.platform == 'cygwin' or _os.sys.platform == 'os2emx' or _os.sys.platform == 'os2knix':
     # On non-POSIX and Cygwin systems, assume that we cannot unlink a file
     # while it is open.
     TemporaryFile = NamedTemporaryFile

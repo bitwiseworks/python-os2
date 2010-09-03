@@ -1604,7 +1604,11 @@ static PyMethodDef functions[] = {
 };
 
 
+#ifdef __OS2__
+PyMODINIT_FUNC
+#else
 void
+#endif
 init_hotshot(void)
 {
     PyObject *module;

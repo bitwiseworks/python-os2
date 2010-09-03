@@ -1555,19 +1555,29 @@ PySys_SetArgv(int argc, char **argv)
 		if (nr > 0) {
 			/* It's a symlink */
 			link[nr] = '\0';
-			if (link[0] == SEP)
+			if (IS_ABSPATH(link))
 				argv0 = link; /* Link to absolute path */
-			else if (strchr(link, SEP) == NULL)
+			else if (!HAS_ANYSEP(link))
 				; /* Link without path */
 			else {
 				/* Must join(dirname(argv0), link) */
 				char *q = strrchr(argv0, SEP);
+#ifdef ALTSEP
+				char *q2 = strrchr(q ? q : argv0, ALTSEP);
+				if (q2)
+					q = q2;
+#endif
+#ifdef DRVSEP
+				if (!q && HAS_DRV(argv0))
+					q = strchr(argv0, DRVSEP);
+#endif
+
 				if (q == NULL)
 					argv0 = link; /* argv0 without path */
 				else {
 					/* Must make a copy */
 					strcpy(argv0copy, argv0);
-					q = strrchr(argv0copy, SEP);
+                                        q = &argv0copy[q - argv0];
 					strcpy(q+1, link);
 					argv0 = argv0copy;
 				}
@@ -1608,6 +1618,17 @@ PySys_SetArgv(int argc, char **argv)
 			}
 #endif
 			p = strrchr(argv0, SEP);
+#ifdef ALTSEP
+			{
+				char *p2 = strrchr(p ? p : argv0, ALTSEP);
+				if (p2 != NULL)
+					p = p2;
+			}
+#endif
+#ifdef DRVSEP
+			if (p == NULL && HAS_DRV(argv0))
+				p = strchr(argv0, DRVSEP);
+#endif
 		}
 		if (p != NULL) {
 #ifndef RISCOS

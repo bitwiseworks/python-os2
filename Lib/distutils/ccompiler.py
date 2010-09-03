@@ -982,6 +982,7 @@ _default_compilers = (
     # on a cygwin built python we can use gcc like an ordinary UNIXish
     # compiler
     ('cygwin.*', 'unix'),
+    ('os2knix', 'emx'),
     ('os2emx', 'emx'),
 
     # OS name mappings

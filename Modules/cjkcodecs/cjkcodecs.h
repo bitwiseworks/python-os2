@@ -386,6 +386,16 @@ errorexit:
 }
 #endif
 
+#ifdef __OS2__
+#define I_AM_A_MODULE_FOR(loc)						\
+	PyMODINIT_FUNC								\
+	init_codecs_##loc(void)						\
+	{								\
+		PyObject *m = Py_InitModule("_codecs_" #loc, __methods);\
+		if (m != NULL)						\
+			(void)register_maps(m);				\
+	}
+#else    
 #define I_AM_A_MODULE_FOR(loc)						\
 	void								\
 	init_codecs_##loc(void)						\
@@ -394,5 +404,6 @@ errorexit:
 		if (m != NULL)						\
 			(void)register_maps(m);				\
 	}
+#endif 
 
 #endif

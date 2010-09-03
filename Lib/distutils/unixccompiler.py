@@ -139,7 +139,7 @@ class UnixCCompiler(CCompiler):
     shared_lib_extension = ".so"
     dylib_lib_extension = ".dylib"
     static_lib_format = shared_lib_format = dylib_lib_format = "lib%s%s"
-    if sys.platform == "cygwin":
+    if sys.platform == "cygwin" or sys.platform == "os2emx" or sys.platform == "os2knix":
         exe_extension = ".exe"
 
     def preprocess(self, source,
@@ -283,7 +283,7 @@ class UnixCCompiler(CCompiler):
         # the configuration data stored in the Python installation, so
         # we use this hack.
         compiler = os.path.basename(sysconfig.get_config_var("CC"))
-        if sys.platform[:6] == "darwin":
+        if sys.platform[:6] == "darwin" or sys.platform[:7] == "os2knix":
             # MacOSX's linker doesn't understand the -R flag at all
             return "-L" + dir
         elif sys.platform[:5] == "hp-ux":

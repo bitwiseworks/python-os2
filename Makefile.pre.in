@@ -157,6 +157,7 @@ BLDLIBRARY=     @BLDLIBRARY@
 DLLLIBRARY=	@DLLLIBRARY@
 LDLIBRARYDIR=   @LDLIBRARYDIR@
 INSTSONAME=	@INSTSONAME@
+CONDENSED_VERSION=	@CONDENSED_VERSION@
 
 
 LIBS=		@LIBS@
@@ -453,6 +454,12 @@ $(PYTHONFRAMEWORKDIR)/Versions/$(VERSION)/$(PYTHONFRAMEWORK): \
 	$(LN) -fsn Versions/Current/Headers $(PYTHONFRAMEWORKDIR)/Headers
 	$(LN) -fsn Versions/Current/Resources $(PYTHONFRAMEWORKDIR)/Resources
 
+ifneq ($(filter os2emx os2knix,$(MACHDEP)),) # bird hack!
+$(DLLLIBRARY) $(LDLIBRARY): $(LIBRARY_OBJS)
+	$(LDSHARED) -o $(DLLLIBRARY) $^ $(LIBS) $(MODLIBS) $(SYSLIBS)
+	emximp -o $(LDLIBRARY) $(DLLLIBRARY)
+
+else # CYGWIN
 # This rule builds the Cygwin Python DLL and import library if configured
 # for a shared core library; otherwise, this rule is a noop.
 $(DLLLIBRARY) libpython$(VERSION).dll.a: $(LIBRARY_OBJS)
@@ -461,6 +468,7 @@ $(DLLLIBRARY) libpython$(VERSION).dll.a: $(LIBRARY_OBJS)
 			$(LIBS) $(MODLIBS) $(SYSLIBS) $(LDLAST); \
 	else true; \
 	fi
+endif # end bird hack!	
 
 
 oldsharedmods: $(SHAREDMODS)
@@ -532,10 +540,14 @@ Parser/tokenizer_pgen.o:	$(srcdir)/Parser/tokenizer.c
 Parser/pgenmain.o:	$(srcdir)/Include/parsetok.h
 
 $(AST_H): $(AST_ASDL) $(ASDLGEN_FILES)
+ifndef BOOTSTRAPPING_PYTHON
 	$(ASDLGEN) -h $(AST_H_DIR) $(AST_ASDL)
+endif
 
 $(AST_C): $(AST_ASDL) $(ASDLGEN_FILES)
+ifndef BOOTSTRAPPING_PYTHON
 	$(ASDLGEN) -c $(AST_C_DIR) $(AST_ASDL)
+endif
 
 Python/compile.o Python/symtable.o: $(GRAMMAR_H) $(AST_H)
 
@@ -763,6 +775,9 @@ bininstall:	altbininstall
 	(cd $(DESTDIR)$(BINDIR); $(LN) python$(VERSION)$(EXE) $(PYTHON))
 	-rm -f $(DESTDIR)$(BINDIR)/python-config
 	(cd $(DESTDIR)$(BINDIR); $(LN) -s python$(VERSION)-config python-config)
+	rm -f $(DESTDIR)$(BINDIR)/$(PYTHON); \
+	$(INSTALL_PROGRAM) $(BUILDPYTHON) $(DESTDIR)$(BINDIR)/$(PYTHON); \
+	$(INSTALL_DATA) $(LDLIBRARY) $(DLLLIBRARY) $(DESTDIR)$(LIBDIR); \
 
 # Install the interpreter with $(VERSION) affixed
 # This goes into $(exec_prefix)
@@ -905,11 +920,17 @@ libinstall:	build_all $(srcdir)/Lib/$(PLATDIR)
 	-PYTHONPATH=$(DESTDIR)$(LIBDEST) $(RUNSHARED) \
 		./$(BUILDPYTHON) -Wi -t -c "import lib2to3.pygram, lib2to3.patcomp;lib2to3.patcomp.PatternCompiler()"
 
+ifneq ($(filter os2emx os2knix,$(MACHDEP)),) # bird hack!
+PATH_SEPARATOR = ;
+else
+PATH_SEPARATOR = :
+endif
+				 
 # Create the PLATDIR source directory, if one wasn't distributed..
 $(srcdir)/Lib/$(PLATDIR):
 	mkdir $(srcdir)/Lib/$(PLATDIR)
 	cp $(srcdir)/Lib/plat-generic/regen $(srcdir)/Lib/$(PLATDIR)/regen
-	export PATH; PATH="`pwd`:$$PATH"; \
+	export PATH; PATH="`pwd`$(PATH_SEPARATOR)$$PATH"; \
 	export PYTHONPATH; PYTHONPATH="`pwd`/Lib"; \
 	export DYLD_FRAMEWORK_PATH; DYLD_FRAMEWORK_PATH="`pwd`"; \
 	export EXE; EXE="$(BUILDEXE)"; \
@@ -1005,7 +1026,7 @@ sharedinstall:
 	   	--prefix=$(prefix) \
 		--install-scripts=$(BINDIR) \
 		--install-platlib=$(DESTSHARED) \
-		--root=/$(DESTDIR)
+		--root=$(DESTDIR)
 
 # Here are a couple of targets for MacOSX again, to install a full
 # framework-based Python. frameworkinstall installs everything, the

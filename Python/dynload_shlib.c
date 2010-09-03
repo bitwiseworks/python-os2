@@ -20,11 +20,15 @@
 #include <dlfcn.h>
 #else
 #if defined(PYOS_OS2) && defined(PYCC_GCC)
+#ifdef __KLIBC__
+#error "kLIBC has dlfcn.h and shouldn't get here!"
+#endif
 #include "dlfcn.h"
 #endif
 #endif
 
-#if (defined(__OpenBSD__) || defined(__NetBSD__)) && !defined(__ELF__)
+#if ((defined(__OpenBSD__) || defined(__NetBSD__)) && !defined(__ELF__)) \
+    || (defined(__OS2__) && defined(__KLIBC__))
 #define LEAD_UNDERSCORE "_"
 #else
 #define LEAD_UNDERSCORE ""
@@ -36,7 +40,7 @@ const struct filedescr _PyImport_DynLoadFiletab[] = {
 	{".dll", "rb", C_EXTENSION},
 	{"module.dll", "rb", C_EXTENSION},
 #else
-#if defined(PYOS_OS2) && defined(PYCC_GCC)
+#if (defined(PYOS_OS2) && defined(PYCC_GCC)) || (defined(__OS2__) && defined(__KLIBC__))
 	{".pyd", "rb", C_EXTENSION},
 	{".dll", "rb", C_EXTENSION},
 #else
@@ -125,6 +129,12 @@ dl_funcptr _PyImport_GetDynLoadFunc(const char *fqname, const char *shortname,
 	PyOS_snprintf(pathbuf, sizeof(pathbuf), "python_module_%-.200s", 
 		      shortname);
 	pathname = pathbuf;
+#endif
+
+#if (defined(PYOS_OS2) && defined(PYCC_GCC))
+	// resolve unixroot
+	if (_realrealpath( pathname, pathbuf, sizeof(pathbuf))!=0)
+		pathname = pathbuf;
 #endif
 
 	handle = dlopen(pathname, dlopenflags);

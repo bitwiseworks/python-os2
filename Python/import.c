@@ -1563,6 +1563,9 @@ PyAPI_FUNC(int) _PyImport_IsScript(struct filedescr * fd)
 #include <sys/types.h>
 #include <dirent.h>
 
+#elif defined(__KLIBC__)
+#include <stdlib.h>
+
 #elif defined(PYOS_OS2)
 #define INCL_DOS
 #define INCL_DOSERRORS
@@ -1682,6 +1685,29 @@ case_ok(char *buf, Py_ssize_t len, Py_ssize_t namelen, char *name)
 	return 0;
 
 /* OS/2 */
+#elif defined(__KLIBC__)
+	char canon[MAXPATHLEN+1];
+	size_t canonlen;
+	char *p, *p2;
+
+	if (Py_GETENV("PYTHONCASEOK") != NULL)
+		return 1;
+
+	/* This resolves case differences and return and native OS/2
+	   path. Unfortunately, it'll also resolve symbolic links
+	   while of course will screw up a bit... */
+	if (!_realrealpath(buf, canon, sizeof(canon)))
+		return 0;
+	canonlen = strlen(canon);
+	if (canonlen < namelen)
+		return 0;
+	p = strrchr(canon, SEP);
+	p2 = strrchr(p ? p : canon, ALTSEP);
+	if (p2)
+		p = p2;
+
+	return strncmp(p ? p + 1 : canon, name, namelen) == 0;
+
 #elif defined(PYOS_OS2)
 	HDIR hdir = 1;
 	ULONG srchcnt = 1;

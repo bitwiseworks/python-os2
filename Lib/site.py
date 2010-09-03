@@ -231,7 +231,7 @@ def addusersitepackages(known_paths):
     def joinuser(*args):
         return os.path.expanduser(os.path.join(*args))
 
-    #if sys.platform in ('os2emx', 'riscos'):
+    #if sys.platform in ('os2emx', 'os2knix', 'riscos'):
     #    # Don't know what to put here
     #    USER_BASE = ''
     #    USER_SITE = ''
@@ -262,7 +262,7 @@ def addsitepackages(known_paths):
             continue
         seen.append(prefix)
 
-        if sys.platform in ('os2emx', 'riscos'):
+        if sys.platform in ('os2emx', 'os2knix', 'riscos'):
             sitedirs.append(os.path.join(prefix, "Lib", "site-packages"))
         elif os.sep == '/':
             sitedirs.append(os.path.join(prefix, "lib",
@@ -494,7 +494,9 @@ def main():
         ENABLE_USER_SITE = check_enableusersite()
     known_paths = addusersitepackages(known_paths)
     known_paths = addsitepackages(known_paths)
-    if sys.platform == 'os2emx':
+    if sys.platform == 'os2emx' or sys.platform == 'os2knix':
+        if (sys.path and os.path.basename(sys.path[-1]) == "Modules"):
+            addbuilddir()
         setBEGINLIBPATH()
     setquit()
     setcopyright()

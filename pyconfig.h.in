@@ -1091,5 +1091,12 @@
 #define STRICT_SYSV_CURSES /* Don't use ncurses extensions */
 #endif
 
+#if defined(__EMX__)
+#define PLATFORM "os2knix"
+#define PYOS_OS2 1
+#define PYCC_GCC 1
+#undef HAVE_LINK // YD not working but available
+#endif
+
 #endif /*Py_PYCONFIG_H*/
 

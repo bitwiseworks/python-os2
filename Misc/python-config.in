@@ -44,6 +44,8 @@ elif opt in ('--includes', '--cflags'):
 
 elif opt in ('--libs', '--ldflags'):
     libs = getvar('LIBS').split() + getvar('SYSLIBS').split()
+    # YD ignore libs
+    libs = getvar('SYSLIBS').split()
     libs.append('-lpython'+pyver)
     # add the prefix/lib/pythonX.Y/config dir, but only if there is no
     # shared library in prefix/lib/.

@@ -116,9 +116,24 @@
 #define EXEC_PREFIX PREFIX
 #endif
 
+#ifndef __EMX__
 #ifndef PYTHONPATH
 #define PYTHONPATH PREFIX "/lib/python" VERSION ":" \
               EXEC_PREFIX "/lib/python" VERSION "/lib-dynload"
+#endif
+#else
+//#define PYTHONPATH	"./Lib;./Lib/plat-" PLATFORM \
+//			";./Lib/lib-dynload;./Lib/site-packages"
+// force unixroot
+#define PYTHONPATH PREFIX "/lib/python" VERSION ";" \
+              EXEC_PREFIX "/lib/python" VERSION "/lib-" PLATFORM ";" \
+              EXEC_PREFIX "/lib/python" VERSION "/site-packages" ";" \
+              EXEC_PREFIX "/lib/python" VERSION "/lib-dynload" ";" \
+/* now local (for building) */ \
+              "./lib" ";" \
+              "./lib/plat-" PLATFORM ";" \
+              "./lib/site-packages" ";" \
+              "./lib/lib-dynload"
 #endif
 
 #ifndef LANDMARK
@@ -135,7 +150,7 @@ static void
 reduce(char *dir)
 {
     size_t i = strlen(dir);
-    while (i > 0 && dir[i] != SEP)
+    while (i > 0 && !IS_SEP(dir[i]))
         --i;
     dir[i] = '\0';
 }
@@ -208,11 +223,11 @@ static void
 joinpath(char *buffer, char *stuff)
 {
     size_t n, k;
-    if (stuff[0] == SEP)
+    if (IS_ABSPATH(stuff))
         n = 0;
     else {
         n = strlen(buffer);
-        if (n > 0 && buffer[n-1] != SEP && n < MAXPATHLEN)
+        if (n > 0 && !IS_SEP(buffer[n-1]) && n < MAXPATHLEN)
             buffer[n++] = SEP;
     }
     if (n > MAXPATHLEN)
@@ -229,11 +244,17 @@ joinpath(char *buffer, char *stuff)
 static void
 copy_absolute(char *path, char *p)
 {
-    if (p[0] == SEP)
+    if (IS_ABSPATH(p)) {
         strcpy(path, p);
+#ifdef ALTSEP
+        p = path;
+        while ((p = strchr(p, ALTSEP)))
+            *p++ = SEP;
+#endif
+    }
     else {
         getcwd(path, MAXPATHLEN);
-        if (p[0] == '.' && p[1] == SEP)
+        if (p[0] == '.' && IS_SEP(p[1]))
             p += 2;
         joinpath(path, p);
     }
@@ -245,8 +266,13 @@ absolutize(char *path)
 {
     char buffer[MAXPATHLEN + 1];
 
-    if (path[0] == SEP)
+    if (IS_ABSPATH(path)) {
+#ifdef ALTSEP
+	while ((path = strchr(path, ALTSEP)))
+            *path++ = SEP;
+#endif
         return;
+    }
     copy_absolute(buffer, path);
     strcpy(path, buffer);
 }
@@ -398,7 +424,7 @@ calculate_path(void)
 	 * other way to find a directory to start the search from.  If
 	 * $PATH isn't exported, you lose.
 	 */
-	if (strchr(prog, SEP))
+	if (HAS_ANYSEP(prog))
 		strncpy(progpath, prog, MAXPATHLEN);
 #ifdef __APPLE__
      /* On Mac OS X, if a script uses an interpreter of the form
@@ -441,7 +467,9 @@ calculate_path(void)
 	}
 	else
 		progpath[0] = '\0';
-	if (progpath[0] != SEP)
+#ifndef ALTSEP
+	if (!IS_ABSPATH(progpath))
+#endif
 		absolutize(progpath);
 	strncpy(argv0_path, progpath, MAXPATHLEN);
 	argv0_path[MAXPATHLEN] = '\0';
@@ -487,7 +515,7 @@ calculate_path(void)
         while (linklen != -1) {
             /* It's not null terminated! */
             tmpbuffer[linklen] = '\0';
-            if (tmpbuffer[0] == SEP)
+            if (IS_ABSPATH(tmpbuffer))
                 /* tmpbuffer should never be longer than MAXPATHLEN,
                    but extra check does not hurt */
                 strncpy(argv0_path, tmpbuffer, MAXPATHLEN);
@@ -552,9 +580,9 @@ calculate_path(void)
     prefixsz = strlen(prefix) + 1;
 
     while (1) {
-        char *delim = strchr(defpath, DELIM);
+        char *delim = strchr(defpath, ':'); /* bird: hardcoded DELIM in default path. */
 
-        if (defpath[0] != SEP)
+        if (!IS_ABSPATH(defpath))
             /* Paths are relative to prefix */
             bufsz += prefixsz;
 
@@ -597,18 +625,19 @@ calculate_path(void)
          */
         defpath = pythonpath;
         while (1) {
-            char *delim = strchr(defpath, DELIM);
+            char *delim = strchr(defpath, ':'); /* bird: hardcoded DELIM in default path. */
 
-            if (defpath[0] != SEP) {
+            if (!IS_ABSPATH(defpath)) {
                 strcat(buf, prefix);
                 strcat(buf, separator);
             }
 
             if (delim) {
-                size_t len = delim - defpath + 1;
+                size_t len = delim - defpath;
                 size_t end = strlen(buf) + len;
                 strncat(buf, defpath, len);
-                *(buf + end) = '\0';
+                *(buf + end) = DELIM;   /* bird: correct the DELIM char. */
+                *(buf + end + 1) = '\0';
             }
             else {
                 strcat(buf, defpath);

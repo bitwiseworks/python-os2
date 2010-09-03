@@ -283,7 +283,7 @@ class install (Command):
                                        "exec_prefix/home or install_(plat)base")
 
         # Next, stuff that's wrong (or dubious) only on certain platforms.
-        if os.name != "posix":
+        if os.name != "posix" and os.name != "os2":
             if self.exec_prefix:
                 self.warn("exec-prefix option ignored on this platform")
                 self.exec_prefix = None
@@ -298,7 +298,7 @@ class install (Command):
 
         self.dump_dirs("pre-finalize_{unix,other}")
 
-        if os.name == 'posix':
+        if os.name == 'posix' or os.name == "os2":
             self.finalize_unix()
         else:
             self.finalize_other()

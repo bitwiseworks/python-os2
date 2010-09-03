@@ -157,7 +157,7 @@ _Py_DisplaySourceLine(PyObject *f, const char *filename, int lineno, int indent)
 					strcpy(namebuf, PyString_AsString(v));
 					if (strlen(namebuf) != len)
 						continue; /* v contains '\0' */
-					if (len > 0 && namebuf[len-1] != SEP)
+					if (len > 0 && IS_SEP(namebuf[len-1]))
 						namebuf[len++] = SEP;
 					strcpy(namebuf+len, tail);
 					xfp = fopen(namebuf, "r" PY_STDIOTEXTMODE);

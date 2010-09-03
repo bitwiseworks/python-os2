@@ -259,7 +259,7 @@ class test__mkstemp_inner(TC):
         file = self.do_create()
         mode = stat.S_IMODE(os.stat(file.name).st_mode)
         expected = 0600
-        if sys.platform in ('win32', 'os2emx', 'mac'):
+        if sys.platform in ('win32', 'os2emx', 'os2knix', 'mac'):
             # There's no distinction among 'user', 'group' and 'world';
             # replicate the 'user' bits.
             user = expected >> 6
@@ -478,7 +478,7 @@ class test_mkdtemp(TC):
             mode = stat.S_IMODE(os.stat(dir).st_mode)
             mode &= 0777 # Mask off sticky bits inherited from /tmp
             expected = 0700
-            if sys.platform in ('win32', 'os2emx', 'mac'):
+            if sys.platform in ('win32', 'os2emx', 'os2knix', 'mac'):
                 # There's no distinction among 'user', 'group' and 'world';
                 # replicate the 'user' bits.
                 user = expected >> 6

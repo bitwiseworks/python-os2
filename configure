@@ -697,6 +697,7 @@ DLLLIBRARY
 BLDLIBRARY
 LDLIBRARYDIR
 INSTSONAME
+CONDENSED_VERSION
 RUNSHARED
 LINKCC
 RANLIB
@@ -2105,6 +2106,7 @@ then
 	darwin*) MACHDEP="darwin";;
 	atheos*) MACHDEP="atheos";;
         irix646) MACHDEP="irix6";;
+	os2*|OS/2*|emx*) MACHDEP="os2knix";;
 	'')	MACHDEP="unknown";;
 	esac
 fi
@@ -4012,6 +4014,7 @@ INSTSONAME='$(LDLIBRARY)'
 DLLLIBRARY=''
 LDLIBRARYDIR=''
 RUNSHARED=''
+CONDENSED_VERSION=`echo "${VERSION}" | tr -d .,"`
 
 # LINKCC is the command that links the python executable -- default is $(CC).
 # If CXX is set, and if it is needed to link a main function that was
@@ -4055,7 +4058,7 @@ fi
 if test -z "$enable_shared"
 then
   case $ac_sys_system in
-  CYGWIN* | atheos*)
+  CYGWIN* | atheos* | *OS/2* | *emx* | *os2*)
     enable_shared="yes";;
   *)
     enable_shared="no";;
@@ -4203,6 +4206,12 @@ _ACEOF
     	LDLIBRARY='libpython$(VERSION).dylib'
 	BLDLIBRARY='-L. -lpython$(VERSION)'
 	RUNSHARED='DYLD_LIBRARY_PATH=`pwd`:${DYLD_LIBRARY_PATH}'
+	;;
+    OS/2*|os2*|*emx*)
+	LDLIBRARY='python$(VERSION)_dll.a'
+	BLDLIBRARY='-L. -lpython$(VERSION)'
+	RUNSHARED=BEGINLIBPATH="'`pwd`;$BEGINLIBPATH'"
+        DLLLIBRARY='python${CONDENSED_VERSION}.dll'
 	;;
 
   esac
@@ -4532,6 +4541,7 @@ if test -z "$LN" ; then
 		BeOS*) LN="ln -s";;
 		CYGWIN*) LN="ln -s";;
 		atheos*) LN="ln -s";;
+		OS/2*|os2*|*emx*) LN="ln -s";;
 		*) LN=ln;;
 	esac
 fi
@@ -13191,6 +13201,7 @@ then
 		esac
 		;;
 	CYGWIN*)   SO=.dll;;
+	OS/2*|os2*|*emx*) SO=.dll;;
 	*)	   SO=.so;;
 	esac
 else
@@ -13321,6 +13332,7 @@ then
 	Monterey*) LDSHARED="cc -G -dy -Bdynamic -Bexport -L/usr/lib/ia64l64";;
 	CYGWIN*) LDSHARED="gcc -shared -Wl,--enable-auto-image-base";;
 	atheos*) LDSHARED="gcc -shared";;
+	OS/2*|os2*|*emx*) LDSHARED="gcc -Zdll -Zomf";;
 	*)	LDSHARED="ld";;
 	esac
 fi
@@ -25910,6 +25922,7 @@ BLDLIBRARY!$BLDLIBRARY$ac_delim
 LDLIBRARYDIR!$LDLIBRARYDIR$ac_delim
 INSTSONAME!$INSTSONAME$ac_delim
 RUNSHARED!$RUNSHARED$ac_delim
+CONDENSED_VERSION!$CONDENSED_VERSION$ac_delim
 LINKCC!$LINKCC$ac_delim
 RANLIB!$RANLIB$ac_delim
 AR!$AR$ac_delim
@@ -25927,7 +25940,7 @@ SO!$SO$ac_delim
 LDSHARED!$LDSHARED$ac_delim
 _ACEOF
 
-  if test `sed -n "s/.*$ac_delim\$/X/p" conf$$subs.sed | grep -c X` = 97; then
+  if test `sed -n "s/.*$ac_delim\$/X/p" conf$$subs.sed | grep -c X` = 98; then
     break
   elif $ac_last_try; then
     { { echo "$as_me:$LINENO: error: could not make $CONFIG_STATUS" >&5

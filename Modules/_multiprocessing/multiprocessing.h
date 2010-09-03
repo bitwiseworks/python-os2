@@ -27,10 +27,14 @@
 #  include <sys/socket.h>
 #  include <sys/uio.h>
 #  include <arpa/inet.h>             /* htonl() and ntohl() */
+#ifndef __EMX__
 #  if HAVE_SEM_OPEN
 #    include <semaphore.h>
      typedef sem_t *SEM_HANDLE;
 #  endif
+#else
+#  define SEM_HANDLE HANDLE
+#endif
 #  define HANDLE int
 #  define SOCKET int
 #  define BOOL int

@@ -315,7 +315,7 @@ fcntl_lockf(PyObject *self, PyObject *args)
 			      &lenobj, &startobj, &whence))
 	    return NULL;
 
-#if defined(PYOS_OS2) && defined(PYCC_GCC)
+#if defined(PYOS_OS2) && defined(PYCC_GCC) && !defined(__KLIBC__)
 	PyErr_SetString(PyExc_NotImplementedError,
 			"lockf not supported on OS/2 (EMX)");
 	return NULL;
@@ -373,7 +373,7 @@ fcntl_lockf(PyObject *self, PyObject *args)
 	}
 	Py_INCREF(Py_None);
 	return Py_None;
-#endif  /* defined(PYOS_OS2) && defined(PYCC_GCC) */
+#endif  /* defined(PYOS_OS2) && defined(PYCC_GCC) && !defined(__KLIBC__)*/
 }
 
 PyDoc_STRVAR(lockf_doc,

@@ -549,9 +549,9 @@ extern int fdatasync(int);
   All windows ports, except cygwin, are handled in PC/pyconfig.h.
 
   BeOS and cygwin are the only other autoconf platform requiring special
-  linkage handling and both of these use __declspec().
+  linkage handling and both of these use __declspec(). Ditto for OS/2.
 */
-#if defined(__CYGWIN__) || defined(__BEOS__)
+#if defined(__CYGWIN__) || defined(__BEOS__) || defined(__OS2__)
 #	define HAVE_DECLSPEC_DLL
 #endif
 
@@ -563,7 +563,7 @@ extern int fdatasync(int);
 #			define PyAPI_DATA(RTYPE) extern __declspec(dllexport) RTYPE
 			/* module init functions inside the core need no external linkage */
 			/* except for Cygwin to handle embedding (FIXME: BeOS too?) */
-#			if defined(__CYGWIN__)
+#			if defined(__CYGWIN__) || defined(__OS2__)
 #				define PyMODINIT_FUNC __declspec(dllexport) void
 #			else /* __CYGWIN__ */
 #				define PyMODINIT_FUNC void
@@ -573,10 +573,12 @@ extern int fdatasync(int);
 			/* public Python functions and data are imported */
 			/* Under Cygwin, auto-import functions to prevent compilation */
 			/* failures similar to http://python.org/doc/FAQ.html#3.24 */
-#			if !defined(__CYGWIN__)
+#			if !defined(__CYGWIN__) && !defined(__OS2__)
 #				define PyAPI_FUNC(RTYPE) __declspec(dllimport) RTYPE
 #			endif /* !__CYGWIN__ */
+#			if !defined(__OS2__)
 #			define PyAPI_DATA(RTYPE) extern __declspec(dllimport) RTYPE
+#			endif /* !__OS2__ */
 			/* module init functions outside the core must be exported */
 #			if defined(__cplusplus)
 #				define PyMODINIT_FUNC extern "C" __declspec(dllexport) void

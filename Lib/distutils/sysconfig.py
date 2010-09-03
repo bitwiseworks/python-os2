@@ -90,7 +90,16 @@ def get_python_inc(plat_specific=0, prefix=None):
         else:
             return os.path.join(prefix, "Include")
     elif os.name == "os2":
-        return os.path.join(prefix, "Include")
+        if python_build:
+            base = os.path.dirname(os.path.abspath(sys.executable))
+            if plat_specific:
+                inc_dir = base
+            else:
+                inc_dir = os.path.join(base, "Include")
+                if not os.path.exists(inc_dir):
+                    inc_dir = os.path.join(os.path.dirname(base), "Include")
+            return inc_dir
+        return os.path.join(prefix, "include", "python" + get_python_version())
     else:
         raise DistutilsPlatformError(
             "I don't know where Python installs its C header files "
@@ -144,10 +153,12 @@ def get_python_lib(plat_specific=0, standard_lib=0, prefix=None):
                 return os.path.join(prefix, "Lib", "site-packages")
 
     elif os.name == "os2":
+        libpython = os.path.join(prefix,
+                                 "lib", "python" + get_python_version())
         if standard_lib:
-            return os.path.join(prefix, "Lib")
+            return libpython
         else:
-            return os.path.join(prefix, "Lib", "site-packages")
+            return os.path.join(libpython, "site-packages")
 
     else:
         raise DistutilsPlatformError(
@@ -490,6 +501,36 @@ def _init_mac():
 def _init_os2():
     """Initialize the module as appropriate for OS/2"""
     g = {}
+    # load the installed Makefile:
+    try:
+        filename = get_makefile_filename()
+        parse_makefile(filename, g)
+    except IOError, msg:
+        my_msg = "invalid Python installation: unable to open %s" % filename
+        if hasattr(msg, "strerror"):
+            my_msg = my_msg + " (%s)" % msg.strerror
+
+        raise DistutilsPlatformError(my_msg)
+
+    # load the installed pyconfig.h:
+    try:
+        filename = get_config_h_filename()
+        parse_config_h(file(filename), g)
+    except IOError, msg:
+        my_msg = "invalid Python installation: unable to open %s" % filename
+        if hasattr(msg, "strerror"):
+            my_msg = my_msg + " (%s)" % msg.strerror
+
+        raise DistutilsPlatformError(my_msg)
+
+    # On AIX, there are wrong paths to the linker scripts in the Makefile
+    # -- these paths are relative to the Python source, but when installed
+    # the scripts are in another directory.
+    if python_build:
+        g['LDSHARED'] = g['BLDSHARED']
+
+    # OS/2 module
+
     # set basic install directories
     g['LIBDEST'] = get_python_lib(plat_specific=0, standard_lib=1)
     g['BINLIBDEST'] = get_python_lib(plat_specific=1, standard_lib=1)

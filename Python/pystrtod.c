@@ -2,6 +2,10 @@
 
 #include <Python.h>
 #include <locale.h>
+#ifdef __EMX__
+#include <float.h>
+#endif
+
 
 /* ascii character tests (as opposed to locale tests) */
 #define ISSPACE(c)  ((c) == ' ' || (c) == '\f' || (c) == '\n' || \
@@ -40,6 +44,9 @@
 double
 PyOS_ascii_strtod(const char *nptr, char **endptr)
 {
+#ifdef __EMX__
+_control87(MCW_EM, MCW_EM);
+#endif
 	char *fail_pos;
 	double val = -1.0;
 	struct lconv *locale_data;
@@ -172,6 +179,7 @@ PyOS_ascii_strtod(const char *nptr, char **endptr)
 
 	}
 	else {
+//sigfpe here
 		val = strtod(digits_pos, &fail_pos);
 	}
 

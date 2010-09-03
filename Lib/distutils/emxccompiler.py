@@ -63,10 +63,10 @@ class EMXCCompiler (UnixCCompiler):
 
         # Hard-code GCC because that's what this is all about.
         # XXX optimization, warnings etc. should be customizable.
-        self.set_executables(compiler='gcc -Zomf -Zmt -O3 -fomit-frame-pointer -mprobe -Wall',
-                             compiler_so='gcc -Zomf -Zmt -O3 -fomit-frame-pointer -mprobe -Wall',
-                             linker_exe='gcc -Zomf -Zmt -Zcrtdll',
-                             linker_so='gcc -Zomf -Zmt -Zcrtdll -Zdll')
+        self.set_executables(compiler='gcc -g -O2 -march=i386 -mtune=i686 -fomit-frame-pointer -Wall',
+                             compiler_so='gcc -g -O2 -march=i386 -mtune=i686 -fomit-frame-pointer -Wall',
+                             linker_exe='gcc -Zomf -Zexe',
+                             linker_so='gcc -Zomf -Zdll')
 
         # want the gcc library statically linked (so that we don't have
         # to distribute a version dependent on the compiler we have)
@@ -138,7 +138,7 @@ class EMXCCompiler (UnixCCompiler):
                 "DATA MULTIPLE NONSHARED",
                 "EXPORTS"]
             for sym in export_symbols:
-                contents.append('  "%s"' % sym)
+                contents.append('  "_%s"' % sym)
             self.execute(write_file, (def_file, contents),
                          "writing %s" % def_file)
 
@@ -208,8 +208,7 @@ class EMXCCompiler (UnixCCompiler):
     # override the find_library_file method from UnixCCompiler
     # to deal with file naming/searching differences
     def find_library_file(self, dirs, lib, debug=0):
-        shortlib = '%s.lib' % lib
-        longlib = 'lib%s.lib' % lib    # this form very rare
+        try_names = [lib + ".lib", lib + ".a", "lib" + lib + ".lib", "lib" + lib + ".a"]
 
         # get EMX's default library directory search path
         try:
@@ -217,13 +216,13 @@ class EMXCCompiler (UnixCCompiler):
         except KeyError:
             emx_dirs = []
 
+        #print "dirs:",dirs
         for dir in dirs + emx_dirs:
-            shortlibp = os.path.join(dir, shortlib)
-            longlibp = os.path.join(dir, longlib)
-            if os.path.exists(shortlibp):
-                return shortlibp
-            elif os.path.exists(longlibp):
-                return longlibp
+            for name in try_names:
+                libfile = os.path.join(dir, name)
+                #print "libfile:",libfile
+                if os.path.exists(libfile):
+                    return libfile
 
         # Oops, didn't find it in *any* of 'dirs'
         return None

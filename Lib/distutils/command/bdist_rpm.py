@@ -199,7 +199,7 @@ class bdist_rpm (Command):
             raise DistutilsOptionError, \
                   "--python and --fix-python are mutually exclusive options"
 
-        if os.name != 'posix':
+        if os.name != 'posix' and os.name != 'os2':
             raise DistutilsPlatformError, \
                   ("don't know how to create RPM "
                    "distributions on platform %s" % os.name)
@@ -322,6 +322,7 @@ class bdist_rpm (Command):
         log.info("building RPMs")
         rpm_cmd = ['rpm']
         if os.path.exists('/usr/bin/rpmbuild') or \
+           os.path.exists('/usr/bin/rpmbuild.exe') or \
            os.path.exists('/bin/rpmbuild'):
             rpm_cmd = ['rpmbuild']
         if self.source_only: # what kind of RPMs?
@@ -345,6 +346,8 @@ class bdist_rpm (Command):
         non_src_rpm = "%{arch}/" + nvr_string + ".%{arch}.rpm"
         q_cmd = r"rpm -q --qf '%s %s\n' --specfile '%s'" % (
             src_rpm, non_src_rpm, spec_path)
+        if os.name == 'os2':
+            q_cmd = q_cmd.replace( '%{', '%%{')
 
         out = os.popen(q_cmd)
         binary_rpms = []

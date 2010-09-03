@@ -86,7 +86,7 @@ ProcessingCtrlHandler(DWORD dwCtrlType)
 
 #else /* !MS_WINDOWS */
 
-#if HAVE_FD_TRANSFER
+#if defined(HAVE_FD_TRANSFER) 
 
 /* Functions for transferring file descriptors between processes.
    Reimplements some of the functionality of the fdcred

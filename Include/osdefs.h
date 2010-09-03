@@ -19,6 +19,7 @@ extern "C" {
 #define ALTSEP '/'
 #define MAXPATHLEN 256
 #endif
+#define DRVSEP ':' /* (bird) */
 #define DELIM ';'
 #endif
 #endif
@@ -33,6 +34,34 @@ extern "C" {
 /* Filename separator */
 #ifndef SEP
 #define SEP '/'
+#endif
+
+/* Test if `ch' is a filename separator (bird) */
+#ifdef ALTSEP
+#define IS_SEP(ch) ((ch) == SEP || (ch) == ALTSEP)
+#else
+#define IS_SEP(ch) ((ch) == SEP)
+#endif
+
+/* Test if `path' has a drive letter or not. (bird) */
+#ifdef DRVSEP
+#define HAS_DRV(path) (*(path) && (path)[1] == DRVSEP)
+#else
+#define HAS_DRV(path) 0
+#endif
+
+/* Test if `path' is absolute or not. (bird) */
+#ifdef DRVSEP
+#define IS_ABSPATH(path) (IS_SEP((path)[0]) || HAS_DRV(path))
+#else
+#define IS_ABSPATH(path) (IS_SEP((path)[0]))
+#endif
+
+/* Test if `path' contains any of the path separators including drive letter. (bird) */
+#ifdef ALTSEP
+#define HAS_ANYSEP(path) ( strchr((path), SEP) || strchr((path), ALTSEP) || HAS_DRV(path) )
+#else
+#define HAS_ANYSEP(path) ( strchr((path), SEP) || HAS_DRV(path) )
 #endif
 
 /* Max pathname length */

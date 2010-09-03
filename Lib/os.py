@@ -74,7 +74,9 @@ elif 'os2' in _names:
         from os2 import _exit
     except ImportError:
         pass
-    if sys.version.find('EMX GCC') == -1:
+    if sys.platform == 'os2knix':
+        import os2knixpath as path
+    elif sys.version.find('EMX GCC') == -1:
         import ntpath as path
     else:
         import os2emxpath as path

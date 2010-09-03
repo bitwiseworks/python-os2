@@ -134,7 +134,7 @@ class Popen4(Popen3):
         self.fromchild = os.fdopen(c2pread, 'r', bufsize)
 
 
-if sys.platform[:3] == "win" or sys.platform == "os2emx":
+if sys.platform[:3] == "win" or sys.platform == "os2emx" or sys.platform == "os2knix":
     # Some things don't make sense on non-Unix platforms.
     del Popen3, Popen4
 

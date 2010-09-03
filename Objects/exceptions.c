@@ -1146,7 +1146,7 @@ my_basename(char *name)
     if (name == NULL)
         return "???";
     while (*cp != '\0') {
-        if (*cp == SEP)
+        if (IS_SEP(*cp))
             result = cp + 1;
         ++cp;
     }
