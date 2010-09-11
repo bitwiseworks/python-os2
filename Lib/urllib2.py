@@ -1276,7 +1276,7 @@ class FileHandler(BaseHandler):
         file = req.get_selector()
 
         # YD hack: add again drive name
-        if os.name == 'os2' and len(host)>2 and host[1] == ':':
+        if os.name == 'os2' and len(host)>1 and host[1] == ':':
             file = host + file
             host = ""
 
