@@ -13332,7 +13332,7 @@ then
 	Monterey*) LDSHARED="cc -G -dy -Bdynamic -Bexport -L/usr/lib/ia64l64";;
 	CYGWIN*) LDSHARED="gcc -shared -Wl,--enable-auto-image-base";;
 	atheos*) LDSHARED="gcc -shared";;
-	OS/2*|os2*|*emx*) LDSHARED="gcc -Zdll -Zomf";;
+	OS/2*|os2*|*emx*) LDSHARED="${CC} ${LDFLAGS} -Zdll";;
 	*)	LDSHARED="ld";;
 	esac
 fi
