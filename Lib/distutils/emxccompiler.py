@@ -61,13 +61,6 @@ class EMXCCompiler (UnixCCompiler):
                          (self.gcc_version,
                           self.ld_version) )
 
-        # Hard-code GCC because that's what this is all about.
-        # XXX optimization, warnings etc. should be customizable.
-        self.set_executables(compiler='gcc -g -O2 -march=i386 -mtune=i686 -fomit-frame-pointer -Wall',
-                             compiler_so='gcc -g -O2 -march=i386 -mtune=i686 -fomit-frame-pointer -Wall',
-                             linker_exe='gcc -Zomf -Zexe',
-                             linker_so='gcc -Zomf -Zdll')
-
         # want the gcc library statically linked (so that we don't have
         # to distribute a version dependent on the compiler we have)
         self.dll_libraries=["gcc"]
@@ -216,7 +209,6 @@ class EMXCCompiler (UnixCCompiler):
         except KeyError:
             emx_dirs = []
 
-        #print "dirs:",dirs
         for dir in dirs + emx_dirs:
             for name in try_names:
                 libfile = os.path.join(dir, name)
