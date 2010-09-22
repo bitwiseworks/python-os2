@@ -1099,7 +1099,7 @@ class PyBuildExt(build_ext):
             exts.append( Extension('_curses', ['_cursesmodule.c'],
                                    libraries = curses_libs) )
         elif (self.compiler.find_library_file(lib_dirs, 'ncurses')):
-            curses_libs = ['ncurses']
+            curses_libs = ['ncurses', 'tinfo']
             exts.append( Extension('_curses', ['_cursesmodule.c'],
                                    libraries = curses_libs) )
         elif (self.compiler.find_library_file(lib_dirs, 'curses')
