@@ -341,6 +341,11 @@ def normalize(localename):
         langname = fullname
         encoding = ''
 
+    if sys.platform[:3] == "os2":
+        import _locale
+        langname, encoding = _locale._getdefaultlocale()
+        langname = langname.replace('_euro', '')
+
     # First lookup: fullname (possibly with encoding)
     norm_encoding = encoding.replace('-', '')
     norm_encoding = norm_encoding.replace('_', '')
@@ -522,7 +527,7 @@ def resetlocale(category=LC_ALL):
     """
     _setlocale(category, _build_localename(getdefaultlocale()))
 
-if sys.platform in ('win32', 'darwin', 'mac'):
+if sys.platform in ('win32', 'darwin', 'mac', 'os2knix'):
     # On Win32, this will return the ANSI code page
     # On the Mac, it should return the system encoding;
     # it might return "ascii" instead

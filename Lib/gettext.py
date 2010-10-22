@@ -149,6 +149,13 @@ def _expand_lang(locale):
         mask |= COMPONENT_CODESET
     else:
         codeset = ''
+        
+    # use new os2 code to get current codepage
+    if pos == -1 and os.name == "os2":
+        import _locale
+        codeset = _locale._getdefaultlocale()[1]
+        mask |= COMPONENT_CODESET
+
     pos = locale.find('_')
     if pos >= 0:
         territory = locale[pos:]

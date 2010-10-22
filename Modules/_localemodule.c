@@ -41,6 +41,12 @@ This software comes with no warranty. Use at your own risk.
 #include <windows.h>
 #endif
 
+#if defined(__KLIBC__)
+#define INCL_DOS
+#define INCL_DOSERRORS
+#include <os2.h>
+#endif
+
 #ifdef RISCOS
 char *strdup(const char *);
 #endif
@@ -444,6 +450,27 @@ PyLocale_getdefaultlocale(PyObject* self)
 }
 #endif
 
+#if defined(__KLIBC__)
+static PyObject*
+PyLocale_getdefaultlocale(PyObject* self)
+{
+    char encoding[100];
+    char locale[100];
+    ULONG cp[3];
+    ULONG cplen;
+
+    strcpy( locale, "");
+    if (getenv("LANG"))
+        strcpy( locale, getenv("LANG"));
+
+    strcpy( encoding, "");
+    if (DosQueryCp (sizeof (cp), cp, &cplen) == NO_ERROR)
+        PyOS_snprintf(encoding, sizeof(encoding), "CP%u", cp[0]);
+
+    return Py_BuildValue("ss", locale, encoding);
+}
+#endif
+
 #ifdef HAVE_LANGINFO_H
 #define LANGINFO(X) {#X, X}
 static struct langinfo_constant{
@@ -689,7 +716,7 @@ static struct PyMethodDef PyLocale_Methods[] = {
    METH_VARARGS, strcoll__doc__},
   {"strxfrm", (PyCFunction) PyLocale_strxfrm, 
    METH_VARARGS, strxfrm__doc__},
-#if defined(MS_WINDOWS) || defined(__APPLE__)
+#if defined(MS_WINDOWS) || defined(__APPLE__) || defined(__KLIBC__)
   {"_getdefaultlocale", (PyCFunction) PyLocale_getdefaultlocale, METH_NOARGS},
 #endif
 #ifdef HAVE_LANGINFO_H
