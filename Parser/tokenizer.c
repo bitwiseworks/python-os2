@@ -1292,6 +1292,10 @@ tok_get(register struct tok_state *tok, char **p_start, char **p_end)
 		}
 		while (isalnum(c) || c == '_') {
 			c = tok_nextc(tok);
+#ifdef __KLIBC__
+			if (c == EOF)
+				break;
+#endif
 		}
 		tok_backup(tok, c);
 		*p_start = tok->start;
