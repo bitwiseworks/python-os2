@@ -12713,6 +12713,7 @@ main()
   FILE *f=fopen("conftestval", "w");
   if (!f) exit(1);
   fprintf(f, "%d\n", sizeof(off_t));
+  fclose(f);
   exit(0);
 }
 _ACEOF
@@ -12804,6 +12805,7 @@ main()
   FILE *f=fopen("conftestval", "w");
   if (!f) exit(1);
   fprintf(f, "%d\n", sizeof(time_t));
+  fclose(f);
   exit(0);
 }
 _ACEOF
@@ -12930,6 +12932,7 @@ cat >>conftest.$ac_ext <<_ACEOF
     FILE *f=fopen("conftestval", "w");
     if (!f) exit(1);
     fprintf(f, "%d\n", sizeof(pthread_t));
+    fclose(f);
     exit(0);
   }
 _ACEOF
