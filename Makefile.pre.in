@@ -37,7 +37,7 @@ RANLIB=		@RANLIB@
 SVNVERSION=	@SVNVERSION@
 
 # Shell used by make (some versions default to the login shell, which is bad)
-SHELL=		/bin/sh
+SHELL=		@SHELL@
 
 # Use this to make a link between python$(VERSION) and python in $(BINDIR)
 LN=		@LN@
