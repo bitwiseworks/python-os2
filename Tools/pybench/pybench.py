@@ -1,4 +1,4 @@
-#!/usr/local/bin/python -O
+#!/usr/bin/python -O
 
 """ A Python Benchmark Suite
 

@@ -1,4 +1,4 @@
-#!/usr/local/bin/python
+#!/usr/bin/python
 """Recursively zap all .pyc and .pyo files"""
 import os
 import sys
