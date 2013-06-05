@@ -15,6 +15,7 @@ __all__ = ["normcase","isabs","join","splitdrive","split","splitext",
            "basename","dirname","commonprefix","getsize","getmtime",
            "getatime","getctime", "islink","exists","lexists","isdir","isfile",
            "ismount","walk","expanduser","expandvars","normpath","abspath",
+           "samefile","sameopenfile","samestat",
            "splitunc","curdir","pardir","sep","pathsep","defpath","altsep",
            "extsep","devnull","realpath","supports_unicode_filenames"]
 
@@ -97,10 +98,6 @@ def dirname(p):
     return split(p)[0]
 
 
-# alias exists to lexists
-lexists = exists
-
-
 # Is a path a directory?
 
 # Is a path a mount point?  Either a root (with or without drive letter)
@@ -149,7 +146,102 @@ def abspath(path):
         path = join(os.getcwd(), path)
     return normpath(path)
 
-# realpath is a no-op on systems without islink support
-realpath = abspath
+
+# Return a canonical path (i.e. the absolute location of a file on the
+# filesystem).
+
+def realpath(filename):
+    """Return the canonical path of the specified filename, eliminating any
+symbolic links encountered in the path."""
+    if isabs(filename):
+        bits = ['/'] + filename.split('/')[1:]
+    else:
+        bits = [''] + filename.split('/')
+
+    for i in range(2, len(bits)+1):
+        component = join(*bits[0:i])
+        # Resolve symbolic links.
+        if islink(component):
+            resolved = _resolve_link(component)
+            if resolved is None:
+                # Infinite loop -- return original component + rest of the path
+                return abspath(join(*([component] + bits[i:])))
+            else:
+                newpath = join(*([resolved] + bits[i:]))
+                return realpath(newpath)
+
+    return abspath(filename)
+
+
+def _resolve_link(path):
+    """Internal helper function.  Takes a path and follows symlinks
+    until we either arrive at something that isn't a symlink, or
+    encounter a path we've seen before (meaning that there's a loop).
+    """
+    paths_seen = []
+    while islink(path):
+        if path in paths_seen:
+            # Already seen this path, so we must have a symlink loop
+            return None
+        paths_seen.append(path)
+        # Resolve where the link points to
+        resolved = os.readlink(path)
+        if not isabs(resolved):
+            dir = dirname(path)
+            path = normpath(join(dir, resolved))
+        else:
+            path = normpath(resolved)
+    return path
+
+
+# Is a path a symbolic link?
+# This will always return false on systems where os.lstat doesn't exist.
+
+def islink(path):
+    """Test whether a path is a symbolic link"""
+    try:
+        st = os.lstat(path)
+    except (os.error, AttributeError):
+        return False
+    return stat.S_ISLNK(st.st_mode)
+
+# Being true for dangling symbolic links is also useful.
+
+def lexists(path):
+    """Test whether a path exists.  Returns True for broken symbolic links"""
+    try:
+        st = os.lstat(path)
+    except os.error:
+        return False
+    return True
+
+
+# Are two filenames really pointing to the same file?
+
+def samefile(f1, f2):
+    """Test whether two pathnames reference the same actual file"""
+    s1 = os.stat(f1)
+    s2 = os.stat(f2)
+    return samestat(s1, s2)
+
+
+# Are two open files really referencing the same file?
+# (Not necessarily the same file descriptor!)
+
+def sameopenfile(fp1, fp2):
+    """Test whether two open file objects reference the same file"""
+    s1 = os.fstat(fp1)
+    s2 = os.fstat(fp2)
+    return samestat(s1, s2)
+
+
+# Are two stat buffers (obtained from stat, fstat or lstat)
+# describing the same file?
+
+def samestat(s1, s2):
+    """Test whether two stat buffers reference the same file"""
+    return s1.st_ino == s2.st_ino and \
+           s1.st_dev == s2.st_dev
+
 
 supports_unicode_filenames = False
