@@ -384,7 +384,9 @@ class PyBuildExt(build_ext):
 
         # Check for OS/2 which may have libraries in non-standard locations
         if platform == 'os2knix':
+            lib_dirs += ['/@unixroot/usr/lib']
             lib_dirs += os.getenv('LIBRARY_PATH', '').split(os.pathsep)
+            inc_dirs += ['/@unixroot/usr/include']
             inc_dirs += os.getenv('C_INCLUDE_PATH', '').split(os.pathsep)
         # OSF/1 and Unixware have some stuff in /usr/ccs/lib (like -ldb)
         if platform in ['osf1', 'unixware7', 'openunix8']:
