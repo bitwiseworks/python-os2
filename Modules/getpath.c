@@ -116,24 +116,9 @@
 #define EXEC_PREFIX PREFIX
 #endif
 
-#ifndef __EMX__
 #ifndef PYTHONPATH
 #define PYTHONPATH PREFIX "/lib/python" VERSION ":" \
               EXEC_PREFIX "/lib/python" VERSION "/lib-dynload"
-#endif
-#else
-//#define PYTHONPATH	"./Lib;./Lib/plat-" PLATFORM \
-//			";./Lib/lib-dynload;./Lib/site-packages"
-// force unixroot
-#define PYTHONPATH PREFIX "/lib/python" VERSION ":" \
-              EXEC_PREFIX "/lib/python" VERSION "/lib-" PLATFORM ":" \
-              EXEC_PREFIX "/lib/python" VERSION "/site-packages" ":" \
-              EXEC_PREFIX "/lib/python" VERSION "/lib-dynload" ":" \
-/* now local (for building) */ \
-              "./lib" ":" \
-              "./lib/plat-" PLATFORM ":" \
-              "./lib/site-packages" ":" \
-              "./lib/lib-dynload"
 #endif
 
 #ifndef LANDMARK
@@ -659,7 +644,6 @@ calculate_path(void)
      * If we're loading relative to the build directory,
      * return the compiled-in defaults instead.
      */
-#ifndef __KLIBC__ // YD force hardcoded build prefix
     if (pfound > 0) {
         reduce(prefix);
         reduce(prefix);
@@ -669,10 +653,8 @@ calculate_path(void)
 		strcpy(prefix, separator);
     }
     else
-#endif
         strncpy(prefix, PREFIX, MAXPATHLEN);
 
-#ifndef __KLIBC__ // YD force hardcoded build exec_prefix
     if (efound > 0) {
         reduce(exec_prefix);
         reduce(exec_prefix);
@@ -681,7 +663,6 @@ calculate_path(void)
 		strcpy(exec_prefix, separator);
     }
     else
-#endif
         strncpy(exec_prefix, EXEC_PREFIX, MAXPATHLEN);
 }
 

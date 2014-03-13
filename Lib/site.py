@@ -262,8 +262,13 @@ def addsitepackages(known_paths):
             continue
         seen.append(prefix)
 
-        if sys.platform in ('os2emx', 'os2knix', 'riscos'):
+        if sys.platform in ('os2emx', 'riscos'):
             sitedirs.append(os.path.join(prefix, "Lib", "site-packages"))
+        elif sys.platform == 'os2knix':
+            sitedirs.append(os.path.join(prefix, "lib",
+                                        "python" + sys.version[:3],
+                                        "site-packages"))
+            sitedirs.append(os.path.join(prefix, "lib", "site-packages"))
         elif os.sep == '/':
             sitedirs.append(os.path.join(prefix, "lib",
                                         "python" + sys.version[:3],
@@ -487,17 +492,15 @@ def main():
 
     abs__file__()
     known_paths = removeduppaths()
-    if (os.name == "posix" and sys.path and
-        os.path.basename(sys.path[-1]) == "Modules"):
+    if ((os.name == "posix" or os.name == "os2") and
+        sys.path and os.path.basename(sys.path[-1]) == "Modules"):
         addbuilddir()
+        if (os.name == "os2"):
+            setBEGINLIBPATH()
     if ENABLE_USER_SITE is None:
         ENABLE_USER_SITE = check_enableusersite()
     known_paths = addusersitepackages(known_paths)
     known_paths = addsitepackages(known_paths)
-    if sys.platform == 'os2emx' or sys.platform == 'os2knix':
-        if (sys.path and os.path.basename(sys.path[-1]) == "Modules"):
-            addbuilddir()
-        setBEGINLIBPATH()
     setquit()
     setcopyright()
     sethelper()
