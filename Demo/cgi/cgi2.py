@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 """CGI test 2 - basic use of cgi module."""
 

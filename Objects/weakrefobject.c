@@ -52,14 +52,13 @@ clear_weakref(PyWeakReference *self)
 {
     PyObject *callback = self->wr_callback;
 
-    if (PyWeakref_GET_OBJECT(self) != Py_None) {
-        PyWeakReference **list = GET_WEAKREFS_LISTPTR(
-            PyWeakref_GET_OBJECT(self));
+    if (self->wr_object != Py_None) {
+        PyWeakReference **list = GET_WEAKREFS_LISTPTR(self->wr_object);
 
         if (*list == self)
-	    /* If 'self' is the end of the list (and thus self->wr_next == NULL)
-	       then the weakref list itself (and thus the value of *list) will
-	       end up being set to NULL. */
+            /* If 'self' is the end of the list (and thus self->wr_next == NULL)
+               then the weakref list itself (and thus the value of *list) will
+               end up being set to NULL. */
             *list = self->wr_next;
         self->wr_object = Py_None;
         if (self->wr_prev != NULL)
@@ -161,21 +160,29 @@ weakref_repr(PyWeakReference *self)
         PyOS_snprintf(buffer, sizeof(buffer), "<weakref at %p; dead>", self);
     }
     else {
-	char *name = NULL;
-	PyObject *nameobj = PyObject_GetAttrString(PyWeakref_GET_OBJECT(self),
-						   "__name__");
-	if (nameobj == NULL)
-		PyErr_Clear();
-	else if (PyString_Check(nameobj))
-		name = PyString_AS_STRING(nameobj);
-        PyOS_snprintf(buffer, sizeof(buffer),
-		      name ? "<weakref at %p; to '%.50s' at %p (%s)>"
-		           : "<weakref at %p; to '%.50s' at %p>",
-		      self,
-		      Py_TYPE(PyWeakref_GET_OBJECT(self))->tp_name,
-		      PyWeakref_GET_OBJECT(self),
-		      name);
-	Py_XDECREF(nameobj);
+        char *name = NULL;
+        PyObject *nameobj = PyObject_GetAttrString(PyWeakref_GET_OBJECT(self),
+                                                   "__name__");
+        if (nameobj == NULL)
+                PyErr_Clear();
+        else if (PyString_Check(nameobj))
+                name = PyString_AS_STRING(nameobj);
+        if (name != NULL) {
+            PyOS_snprintf(buffer, sizeof(buffer),
+                          "<weakref at %p; to '%.50s' at %p (%s)>",
+                          self,
+                          Py_TYPE(PyWeakref_GET_OBJECT(self))->tp_name,
+                          PyWeakref_GET_OBJECT(self),
+                          name);
+        }
+        else {
+            PyOS_snprintf(buffer, sizeof(buffer),
+                          "<weakref at %p; to '%.50s' at %p>",
+                          self,
+                          Py_TYPE(PyWeakref_GET_OBJECT(self))->tp_name,
+                          PyWeakref_GET_OBJECT(self));
+        }
+        Py_XDECREF(nameobj);
     }
     return PyString_FromString(buffer);
 }
@@ -187,15 +194,19 @@ weakref_repr(PyWeakReference *self)
 static PyObject *
 weakref_richcompare(PyWeakReference* self, PyWeakReference* other, int op)
 {
-    if (op != Py_EQ || self->ob_type != other->ob_type) {
+    if ((op != Py_EQ && op != Py_NE) || self->ob_type != other->ob_type) {
         Py_INCREF(Py_NotImplemented);
         return Py_NotImplemented;
     }
     if (PyWeakref_GET_OBJECT(self) == Py_None
         || PyWeakref_GET_OBJECT(other) == Py_None) {
-        PyObject *res = self==other ? Py_True : Py_False;
-        Py_INCREF(res);
-        return res;
+        int res = (self == other);
+        if (op == Py_NE)
+            res = !res;
+        if (res)
+            Py_RETURN_TRUE;
+        else
+            Py_RETURN_FALSE;
     }
     return PyObject_RichCompare(PyWeakref_GET_OBJECT(self),
                                 PyWeakref_GET_OBJECT(other), op);
@@ -337,10 +348,10 @@ _PyWeakref_RefType = {
     sizeof(PyWeakReference),
     0,
     weakref_dealloc,            /*tp_dealloc*/
-    0,	                        /*tp_print*/
+    0,                          /*tp_print*/
     0,                          /*tp_getattr*/
     0,                          /*tp_setattr*/
-    0,	                        /*tp_compare*/
+    0,                          /*tp_compare*/
     (reprfunc)weakref_repr,     /*tp_repr*/
     0,                          /*tp_as_number*/
     0,                          /*tp_as_sequence*/
@@ -356,7 +367,7 @@ _PyWeakref_RefType = {
     0,                          /*tp_doc*/
     (traverseproc)gc_traverse,  /*tp_traverse*/
     (inquiry)gc_clear,          /*tp_clear*/
-    (richcmpfunc)weakref_richcompare,	/*tp_richcompare*/
+    (richcmpfunc)weakref_richcompare,   /*tp_richcompare*/
     0,                          /*tp_weaklistoffset*/
     0,                          /*tp_iter*/
     0,                          /*tp_iternext*/
@@ -436,9 +447,9 @@ proxy_checkref(PyWeakReference *proxy)
 #define WRAP_METHOD(method, special) \
     static PyObject * \
     method(PyObject *proxy) { \
-	    UNWRAP(proxy); \
-		return PyObject_CallMethod(proxy, special, ""); \
-	}
+            UNWRAP(proxy); \
+                return PyObject_CallMethod(proxy, special, ""); \
+        }
 
 
 /* direct slots */
@@ -452,9 +463,9 @@ proxy_repr(PyWeakReference *proxy)
 {
     char buf[160];
     PyOS_snprintf(buf, sizeof(buf),
-		  "<weakproxy at %p to %.100s at %p>", proxy,
-		  Py_TYPE(PyWeakref_GET_OBJECT(proxy))->tp_name,
-		  PyWeakref_GET_OBJECT(proxy));
+                  "<weakproxy at %p to %.100s at %p>", proxy,
+                  Py_TYPE(PyWeakref_GET_OBJECT(proxy))->tp_name,
+                  PyWeakref_GET_OBJECT(proxy));
     return PyString_FromString(buf);
 }
 
@@ -604,8 +615,8 @@ WRAP_METHOD(proxy_unicode, "__unicode__");
 
 
 static PyMethodDef proxy_methods[] = {
-	{"__unicode__", (PyCFunction)proxy_unicode, METH_NOARGS},
-	{NULL, NULL}
+        {"__unicode__", (PyCFunction)proxy_unicode, METH_NOARGS},
+        {NULL, NULL}
 };
 
 
@@ -677,20 +688,20 @@ _PyWeakref_ProxyType = {
     0,
     /* methods */
     (destructor)proxy_dealloc,          /* tp_dealloc */
-    0,				        /* tp_print */
-    0,				        /* tp_getattr */
-    0, 				        /* tp_setattr */
-    proxy_compare,		        /* tp_compare */
-    (reprfunc)proxy_repr,	        /* tp_repr */
-    &proxy_as_number,		        /* tp_as_number */
-    &proxy_as_sequence,		        /* tp_as_sequence */
-    &proxy_as_mapping,		        /* tp_as_mapping */
-    0,	                                /* tp_hash */
-    0,	                                /* tp_call */
+    0,                                  /* tp_print */
+    0,                                  /* tp_getattr */
+    0,                                  /* tp_setattr */
+    proxy_compare,                      /* tp_compare */
+    (reprfunc)proxy_repr,               /* tp_repr */
+    &proxy_as_number,                   /* tp_as_number */
+    &proxy_as_sequence,                 /* tp_as_sequence */
+    &proxy_as_mapping,                  /* tp_as_mapping */
+    0,                                  /* tp_hash */
+    0,                                  /* tp_call */
     proxy_str,                          /* tp_str */
     proxy_getattr,                      /* tp_getattro */
     (setattrofunc)proxy_setattr,        /* tp_setattro */
-    0,				        /* tp_as_buffer */
+    0,                                  /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC
     | Py_TPFLAGS_CHECKTYPES,            /* tp_flags */
     0,                                  /* tp_doc */
@@ -700,7 +711,7 @@ _PyWeakref_ProxyType = {
     0,                                  /* tp_weaklistoffset */
     (getiterfunc)proxy_iter,            /* tp_iter */
     (iternextfunc)proxy_iternext,       /* tp_iternext */
-	proxy_methods,                      /* tp_methods */
+        proxy_methods,                      /* tp_methods */
 };
 
 
@@ -712,20 +723,20 @@ _PyWeakref_CallableProxyType = {
     0,
     /* methods */
     (destructor)proxy_dealloc,          /* tp_dealloc */
-    0,				        /* tp_print */
-    0,				        /* tp_getattr */
-    0, 				        /* tp_setattr */
-    proxy_compare,		        /* tp_compare */
-    (unaryfunc)proxy_repr,	        /* tp_repr */
-    &proxy_as_number,		        /* tp_as_number */
-    &proxy_as_sequence,		        /* tp_as_sequence */
-    &proxy_as_mapping,		        /* tp_as_mapping */
-    0,	                                /* tp_hash */
-    proxy_call,	                        /* tp_call */
-    proxy_str,	                        /* tp_str */
+    0,                                  /* tp_print */
+    0,                                  /* tp_getattr */
+    0,                                  /* tp_setattr */
+    proxy_compare,                      /* tp_compare */
+    (unaryfunc)proxy_repr,              /* tp_repr */
+    &proxy_as_number,                   /* tp_as_number */
+    &proxy_as_sequence,                 /* tp_as_sequence */
+    &proxy_as_mapping,                  /* tp_as_mapping */
+    0,                                  /* tp_hash */
+    proxy_call,                         /* tp_call */
+    proxy_str,                          /* tp_str */
     proxy_getattr,                      /* tp_getattro */
     (setattrofunc)proxy_setattr,        /* tp_setattro */
-    0,				        /* tp_as_buffer */
+    0,                                  /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC
     | Py_TPFLAGS_CHECKTYPES,            /* tp_flags */
     0,                                  /* tp_doc */
@@ -748,7 +759,7 @@ PyWeakref_NewRef(PyObject *ob, PyObject *callback)
 
     if (!PyType_SUPPORTS_WEAKREFS(Py_TYPE(ob))) {
         PyErr_Format(PyExc_TypeError,
-		     "cannot create weak reference to '%s' object",
+                     "cannot create weak reference to '%s' object",
                      Py_TYPE(ob)->tp_name);
         return NULL;
     }
@@ -807,7 +818,7 @@ PyWeakref_NewProxy(PyObject *ob, PyObject *callback)
 
     if (!PyType_SUPPORTS_WEAKREFS(Py_TYPE(ob))) {
         PyErr_Format(PyExc_TypeError,
-		     "cannot create weak reference to '%s' object",
+                     "cannot create weak reference to '%s' object",
                      Py_TYPE(ob)->tp_name);
         return NULL;
     }
@@ -932,7 +943,7 @@ PyObject_ClearWeakRefs(PyObject *object)
         else {
             PyObject *tuple;
             Py_ssize_t i = 0;
-    
+
             tuple = PyTuple_New(count * 2);
             if (tuple == NULL) {
                 if (restore_error)

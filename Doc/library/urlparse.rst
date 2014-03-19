@@ -13,10 +13,13 @@
    pair: relative; URL
 
 .. note::
-   The :mod:`urlparse` module is renamed to :mod:`urllib.parse` in Python 3.0.
+   The :mod:`urlparse` module is renamed to :mod:`urllib.parse` in Python 3.
    The :term:`2to3` tool will automatically adapt imports when converting
-   your sources to 3.0.
+   your sources to Python 3.
 
+**Source code:** :source:`Lib/urlparse.py`
+
+--------------
 
 This module defines a standard interface to break Uniform Resource Locator (URL)
 strings up in components (addressing scheme, network location, path etc.), to
@@ -24,11 +27,11 @@ combine the components back into a URL string, and to convert a "relative URL"
 to an absolute URL given a "base URL."
 
 The module has been designed to match the Internet RFC on Relative Uniform
-Resource Locators (and discovered a bug in an earlier draft!). It supports the
-following URL schemes: ``file``, ``ftp``, ``gopher``, ``hdl``, ``http``,
-``https``, ``imap``, ``mailto``, ``mms``, ``news``,  ``nntp``, ``prospero``,
-``rsync``, ``rtsp``, ``rtspu``,  ``sftp``, ``shttp``, ``sip``, ``sips``,
-``snews``, ``svn``,  ``svn+ssh``, ``telnet``, ``wais``.
+Resource Locators. It supports the following URL schemes: ``file``, ``ftp``,
+``gopher``, ``hdl``, ``http``, ``https``, ``imap``, ``mailto``, ``mms``,
+``news``,  ``nntp``, ``prospero``, ``rsync``, ``rtsp``, ``rtspu``,  ``sftp``,
+``shttp``, ``sip``, ``sips``, ``snews``, ``svn``,  ``svn+ssh``, ``telnet``,
+``wais``.
 
 .. versionadded:: 2.5
    Support for the ``sftp`` and ``sips`` schemes.
@@ -36,7 +39,7 @@ following URL schemes: ``file``, ``ftp``, ``gopher``, ``hdl``, ``http``,
 The :mod:`urlparse` module defines the following functions:
 
 
-.. function:: urlparse(urlstring[, default_scheme[, allow_fragments]])
+.. function:: urlparse(urlstring[, scheme[, allow_fragments]])
 
    Parse a URL into six components, returning a 6-tuple.  This corresponds to the
    general structure of a URL: ``scheme://netloc/path;parameters?query#fragment``.
@@ -58,7 +61,24 @@ The :mod:`urlparse` module defines the following functions:
       >>> o.geturl()
       'http://www.cwi.nl:80/%7Eguido/Python.html'
 
-   If the *default_scheme* argument is specified, it gives the default addressing
+
+   Following the syntax specifications in :rfc:`1808`, urlparse recognizes
+   a netloc only if it is properly introduced by '//'.  Otherwise the
+   input is presumed to be a relative URL and thus to start with
+   a path component.
+
+       >>> from urlparse import urlparse
+       >>> urlparse('//www.cwi.nl:80/%7Eguido/Python.html')
+       ParseResult(scheme='', netloc='www.cwi.nl:80', path='/%7Eguido/Python.html',
+                  params='', query='', fragment='')
+       >>> urlparse('www.cwi.nl/%7Eguido/Python.html')
+       ParseResult(scheme='', netloc='', path='www.cwi.nl/%7Eguido/Python.html',
+                  params='', query='', fragment='')
+       >>> urlparse('help/Python.html')
+       ParseResult(scheme='', netloc='', path='help/Python.html', params='',
+                  query='', fragment='')
+
+   If the *scheme* argument is specified, it gives the default addressing
    scheme, to be used only if the URL does not specify one.  The default value for
    this argument is the empty string.
 
@@ -101,6 +121,10 @@ The :mod:`urlparse` module defines the following functions:
    .. versionchanged:: 2.5
       Added attributes to return value.
 
+   .. versionchanged:: 2.7
+      Added IPv6 URL parsing capabilities.
+
+
 .. function:: parse_qs(qs[, keep_blank_values[, strict_parsing]])
 
    Parse a query string given as a string argument (data of type
@@ -109,7 +133,7 @@ The :mod:`urlparse` module defines the following functions:
    values are lists of values for each name.
 
    The optional argument *keep_blank_values* is a flag indicating whether blank
-   values in URL encoded queries should be treated as blank strings.   A true value
+   values in percent-encoded queries should be treated as blank strings.   A true value
    indicates that blanks should be retained as  blank strings.  The default false
    value indicates that blank values are to be ignored and treated as if they were
    not included.
@@ -132,7 +156,7 @@ The :mod:`urlparse` module defines the following functions:
    name, value pairs.
 
    The optional argument *keep_blank_values* is a flag indicating whether blank
-   values in URL encoded queries should be treated as blank strings.   A true value
+   values in percent-encoded queries should be treated as blank strings.   A true value
    indicates that blanks should be retained as  blank strings.  The default false
    value indicates that blank values are to be ignored and treated as if they were
    not included.
@@ -157,7 +181,7 @@ The :mod:`urlparse` module defines the following functions:
    equivalent).
 
 
-.. function:: urlsplit(urlstring[, default_scheme[, allow_fragments]])
+.. function:: urlsplit(urlstring[, scheme[, allow_fragments]])
 
    This is similar to :func:`urlparse`, but does not split the params from the URL.
    This should generally be used instead of :func:`urlparse` if the more recent URL
@@ -251,17 +275,29 @@ The :mod:`urlparse` module defines the following functions:
 
 .. seealso::
 
-   :rfc:`1738` - Uniform Resource Locators (URL)
-      This specifies the formal syntax and semantics of absolute URLs.
+   :rfc:`3986` - Uniform Resource Identifiers
+      This is the current standard (STD66). Any changes to urlparse module
+      should conform to this. Certain deviations could be observed, which are
+      mostly due backward compatiblity purposes and for certain de-facto
+      parsing requirements as commonly observed in major browsers.
+
+   :rfc:`2732` - Format for Literal IPv6 Addresses in URL's.
+      This specifies the parsing requirements of IPv6 URLs.
+
+   :rfc:`2396` - Uniform Resource Identifiers (URI): Generic Syntax
+      Document describing the generic syntactic requirements for both Uniform Resource
+      Names (URNs) and Uniform Resource Locators (URLs).
+
+   :rfc:`2368` - The mailto URL scheme.
+      Parsing requirements for mailto url schemes.
 
    :rfc:`1808` - Relative Uniform Resource Locators
       This Request For Comments includes the rules for joining an absolute and a
       relative URL, including a fair number of "Abnormal Examples" which govern the
       treatment of border cases.
 
-   :rfc:`2396` - Uniform Resource Identifiers (URI): Generic Syntax
-      Document describing the generic syntactic requirements for both Uniform Resource
-      Names (URNs) and Uniform Resource Locators (URLs).
+   :rfc:`1738` - Uniform Resource Locators (URL)
+      This specifies the formal syntax and semantics of absolute URLs.
 
 
 .. _urlparse-result-object:

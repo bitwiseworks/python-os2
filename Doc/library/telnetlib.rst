@@ -1,4 +1,3 @@
-
 :mod:`telnetlib` --- Telnet client
 ==================================
 
@@ -8,6 +7,10 @@
 
 
 .. index:: single: protocol; Telnet
+
+**Source code:** :source:`Lib/telnetlib.py`
+
+--------------
 
 The :mod:`telnetlib` module provides a :class:`Telnet` class that implements the
 Telnet protocol.  See :rfc:`854` for details about the protocol. In addition, it
@@ -28,16 +31,11 @@ Character), EL (Erase Line), GA (Go Ahead), SB (Subnegotiation Begin).
    :class:`Telnet` represents a connection to a Telnet server. The instance is
    initially not connected by default; the :meth:`open` method must be used to
    establish a connection.  Alternatively, the host name and optional port
-   and timeout can be passed to the constructor, in which case the connection to
-   the server will be established before the constructor returns.  The optional
-   *timeout* parameter specifies a timeout in seconds for the connection attempt (if
-   not specified, the global default timeout setting will be used).
-
    number can be passed to the constructor, to, in which case the connection to
-   the server will be established before the constructor returns. The optional
+   the server will be established before the constructor returns.  The optional
    *timeout* parameter specifies a timeout in seconds for blocking operations
-   like the connection attempt (if not specified, or passed as None, the global
-   default timeout setting will be used).
+   like the connection attempt (if not specified, the global default timeout
+   setting will be used).
 
    Do not reopen an already connected instance.
 
@@ -191,7 +189,7 @@ Telnet Objects
    Read until one from a list of a regular expressions matches.
 
    The first argument is a list of regular expressions, either compiled
-   (:class:`re.RegexObject` instances) or uncompiled (strings). The optional second
+   (:class:`regex objects <re-objects>`) or uncompiled (strings). The optional second
    argument is a timeout, in seconds; the default is to block indefinitely.
 
    Return a tuple of three items: the index in the list of the first regular
@@ -203,8 +201,8 @@ Telnet Objects
    received so far (may be the empty string if a timeout happened).
 
    If a regular expression ends with a greedy match (such as ``.*``) or if more
-   than one expression can match the same input, the results are indeterministic,
-   and may depend on the I/O timing.
+   than one expression can match the same input, the results are
+   non-deterministic, and may depend on the I/O timing.
 
 
 .. method:: Telnet.set_option_negotiation_callback(callback)

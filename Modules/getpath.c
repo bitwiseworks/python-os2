@@ -216,7 +216,7 @@ joinpath(char *buffer, char *stuff)
             buffer[n++] = SEP;
     }
     if (n > MAXPATHLEN)
-    	Py_FatalError("buffer overflow in getpath.c's joinpath()");
+        Py_FatalError("buffer overflow in getpath.c's joinpath()");
     k = strlen(stuff);
     if (n + k > MAXPATHLEN)
         k = MAXPATHLEN - n;
@@ -238,7 +238,11 @@ copy_absolute(char *path, char *p)
 #endif
     }
     else {
-        getcwd(path, MAXPATHLEN);
+        if (!getcwd(path, MAXPATHLEN)) {
+            /* unable to get the current directory */
+            strcpy(path, p);
+            return;
+        }
         if (p[0] == '.' && IS_SEP(p[1]))
             p += 2;
         joinpath(path, p);
@@ -342,12 +346,27 @@ search_for_exec_prefix(char *argv0_path, char *home)
         return 1;
     }
 
-    /* Check to see if argv[0] is in the build directory */
+    /* Check to see if argv[0] is in the build directory. "pybuilddir.txt"
+       is written by setup.py and contains the relative path to the location
+       of shared library modules. */
     strcpy(exec_prefix, argv0_path);
-    joinpath(exec_prefix, "Modules/Setup");
+    joinpath(exec_prefix, "pybuilddir.txt");
     if (isfile(exec_prefix)) {
-        reduce(exec_prefix);
-        return -1;
+      FILE *f = fopen(exec_prefix, "r");
+      if (f == NULL)
+	errno = 0;
+      else {
+	char rel_builddir_path[MAXPATHLEN+1];
+	size_t n;
+	n = fread(rel_builddir_path, 1, MAXPATHLEN, f);
+	rel_builddir_path[n] = '\0';
+	fclose(f);
+	if (n >= 0) {
+	  strcpy(exec_prefix, argv0_path);
+	  joinpath(exec_prefix, rel_builddir_path);
+	  return -1;
+	}
+      }
     }
 
     /* Search from argv0_path, until root is found */
@@ -404,13 +423,13 @@ calculate_path(void)
 #endif
 #endif
 
-	/* If there is no slash in the argv0 path, then we have to
-	 * assume python is on the user's $PATH, since there's no
-	 * other way to find a directory to start the search from.  If
-	 * $PATH isn't exported, you lose.
-	 */
-	if (HAS_ANYSEP(prog))
-		strncpy(progpath, prog, MAXPATHLEN);
+        /* If there is no slash in the argv0 path, then we have to
+         * assume python is on the user's $PATH, since there's no
+         * other way to find a directory to start the search from.  If
+         * $PATH isn't exported, you lose.
+         */
+        if (HAS_ANYSEP(prog))
+                strncpy(progpath, prog, MAXPATHLEN);
 #ifdef __APPLE__
      /* On Mac OS X, if a script uses an interpreter of the form
       * "#!/opt/python2.3/bin/python", the kernel only passes "python"
@@ -425,46 +444,46 @@ calculate_path(void)
      else if(0 == _NSGetExecutablePath(progpath, &nsexeclength) && progpath[0] == SEP)
        ;
 #endif /* __APPLE__ */
-	else if (path) {
-		while (1) {
-			char *delim = strchr(path, DELIM);
+        else if (path) {
+                while (1) {
+                        char *delim = strchr(path, DELIM);
 
-			if (delim) {
-				size_t len = delim - path;
-				if (len > MAXPATHLEN)
-					len = MAXPATHLEN;
-				strncpy(progpath, path, len);
-				*(progpath + len) = '\0';
-			}
-			else
-				strncpy(progpath, path, MAXPATHLEN);
+                        if (delim) {
+                                size_t len = delim - path;
+                                if (len > MAXPATHLEN)
+                                        len = MAXPATHLEN;
+                                strncpy(progpath, path, len);
+                                *(progpath + len) = '\0';
+                        }
+                        else
+                                strncpy(progpath, path, MAXPATHLEN);
 
-			joinpath(progpath, prog);
-			if (isxfile(progpath))
-				break;
+                        joinpath(progpath, prog);
+                        if (isxfile(progpath))
+                                break;
 
-			if (!delim) {
-				progpath[0] = '\0';
-				break;
-			}
-			path = delim + 1;
-		}
-	}
-	else
-		progpath[0] = '\0';
+                        if (!delim) {
+                                progpath[0] = '\0';
+                                break;
+                        }
+                        path = delim + 1;
+                }
+        }
+        else
+                progpath[0] = '\0';
 #ifndef ALTSEP
-	if (!IS_ABSPATH(progpath))
+        if (!IS_ABSPATH(progpath) && progpath[0] != '\0')
 #endif
-		absolutize(progpath);
-	strncpy(argv0_path, progpath, MAXPATHLEN);
-	argv0_path[MAXPATHLEN] = '\0';
+                absolutize(progpath);
+        strncpy(argv0_path, progpath, MAXPATHLEN);
+        argv0_path[MAXPATHLEN] = '\0';
 
 #ifdef WITH_NEXT_FRAMEWORK
-	/* On Mac OS X we have a special case if we're running from a framework.
-	** This is because the python home should be set relative to the library,
-	** which is in the framework, not relative to the executable, which may
-	** be outside of the framework. Except when we're in the build directory...
-	*/
+        /* On Mac OS X we have a special case if we're running from a framework.
+        ** This is because the python home should be set relative to the library,
+        ** which is in the framework, not relative to the executable, which may
+        ** be outside of the framework. Except when we're in the build directory...
+        */
     pythonModule = NSModuleForSymbol(NSLookupAndBindSymbol("_Py_Initialize"));
     /* Use dylib functions to find out where the framework was loaded from */
     buf = (char *)NSLibraryNameForModule(pythonModule);
@@ -484,7 +503,7 @@ calculate_path(void)
         if (!ismodule(argv0_path)) {
                 /* We are in the build directory so use the name of the
                    executable - we know that the absolute path is passed */
-                strncpy(argv0_path, prog, MAXPATHLEN);
+                strncpy(argv0_path, progpath, MAXPATHLEN);
         }
         else {
                 /* Use the location of the library as the progpath */
@@ -538,7 +557,7 @@ calculate_path(void)
     else
         strncpy(zip_path, PREFIX, MAXPATHLEN);
     joinpath(zip_path, "lib/python00.zip");
-    bufsz = strlen(zip_path);	/* Replace "00" with version */
+    bufsz = strlen(zip_path);   /* Replace "00" with version */
     zip_path[bufsz - 6] = VERSION[0];
     zip_path[bufsz - 5] = VERSION[2];
 
@@ -647,10 +666,10 @@ calculate_path(void)
     if (pfound > 0) {
         reduce(prefix);
         reduce(prefix);
-	/* The prefix is the root directory, but reduce() chopped
-	 * off the "/". */
-	if (!prefix[0])
-		strcpy(prefix, separator);
+        /* The prefix is the root directory, but reduce() chopped
+         * off the "/". */
+        if (!prefix[0])
+                strcpy(prefix, separator);
     }
     else
         strncpy(prefix, PREFIX, MAXPATHLEN);
@@ -659,8 +678,8 @@ calculate_path(void)
         reduce(exec_prefix);
         reduce(exec_prefix);
         reduce(exec_prefix);
-	if (!exec_prefix[0])
-		strcpy(exec_prefix, separator);
+        if (!exec_prefix[0])
+                strcpy(exec_prefix, separator);
     }
     else
         strncpy(exec_prefix, EXEC_PREFIX, MAXPATHLEN);

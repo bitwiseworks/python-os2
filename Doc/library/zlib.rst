@@ -19,9 +19,7 @@ order.  This documentation doesn't attempt to cover all of the permutations;
 consult the zlib manual at http://www.zlib.net/manual.html for authoritative
 information.
 
-For reading and writing ``.gz`` files see the :mod:`gzip` module. For
-other archive formats, see the :mod:`bz2`, :mod:`zipfile`, and
-:mod:`tarfile` modules.
+For reading and writing ``.gz`` files see the :mod:`gzip` module.
 
 The available exception and functions in this module are:
 
@@ -64,18 +62,34 @@ The available exception and functions in this module are:
 .. function:: compress(string[, level])
 
    Compresses the data in *string*, returning a string contained compressed data.
-   *level* is an integer from ``1`` to ``9`` controlling the level of compression;
+   *level* is an integer from ``0`` to ``9`` controlling the level of compression;
    ``1`` is fastest and produces the least compression, ``9`` is slowest and
-   produces the most.  The default value is ``6``.  Raises the :exc:`error`
-   exception if any error occurs.
+   produces the most.  ``0`` is no compression.  The default value is ``6``.
+   Raises the :exc:`error` exception if any error occurs.
 
 
-.. function:: compressobj([level])
+.. function:: compressobj([level[, method[, wbits[, memlevel[, strategy]]]]])
 
    Returns a compression object, to be used for compressing data streams that won't
-   fit into memory at once.  *level* is an integer from ``1`` to ``9`` controlling
+   fit into memory at once.  *level* is an integer from ``0`` to ``9`` controlling
    the level of compression; ``1`` is fastest and produces the least compression,
-   ``9`` is slowest and produces the most.  The default value is ``6``.
+   ``9`` is slowest and produces the most.  ``0`` is no compression.  The default
+   value is ``6``.
+
+   *method* is the compression algorithm. Currently, the only supported value is
+   ``DEFLATED``.
+
+   *wbits* is the base two logarithm of the size of the window buffer. This
+   should be an integer from ``8`` to ``15``. Higher values give better
+   compression, but use more memory. The default is 15.
+
+   *memlevel* controls the amount of memory used for internal compression state.
+   Valid values range from ``1`` to ``9``. Higher values using more memory,
+   but are faster and produce smaller output. The default is 8.
+
+   *strategy* is used to tune the compression algorithm. Possible values are
+   ``Z_DEFAULT_STRATEGY``, ``Z_FILTERED``, and ``Z_HUFFMAN_ONLY``. The default
+   is ``Z_DEFAULT_STRATEGY``.
 
 
 .. function:: crc32(data[, value])
@@ -115,22 +129,24 @@ The available exception and functions in this module are:
 
    Decompresses the data in *string*, returning a string containing the
    uncompressed data.  The *wbits* parameter controls the size of the window
-   buffer.  If *bufsize* is given, it is used as the initial size of the output
+   buffer, and is discussed further below.
+   If *bufsize* is given, it is used as the initial size of the output
    buffer.  Raises the :exc:`error` exception if any error occurs.
 
    The absolute value of *wbits* is the base two logarithm of the size of the
    history buffer (the "window size") used when compressing data.  Its absolute
    value should be between 8 and 15 for the most recent versions of the zlib
    library, larger values resulting in better compression at the expense of greater
-   memory usage.  The default value is 15.  When *wbits* is negative, the standard
-   :program:`gzip` header is suppressed; this is an undocumented feature of the
-   zlib library, used for compatibility with :program:`unzip`'s compression file
-   format.
+   memory usage.  When decompressing a stream, *wbits* must not be smaller
+   than the size originally used to compress the stream; using a too-small
+   value will result in an exception. The default value is therefore the
+   highest value, 15.  When *wbits* is negative, the standard
+   :program:`gzip` header is suppressed.
 
    *bufsize* is the initial size of the buffer used to hold decompressed data.  If
    more space is required, the buffer size will be increased as needed, so you
    don't have to get this value exactly right; tuning it will only save a few calls
-   to :cfunc:`malloc`.  The default size is 16384.
+   to :c:func:`malloc`.  The default size is 16384.
 
 
 .. function:: decompressobj([wbits])

@@ -7,12 +7,7 @@ import os
 import sys
 import string
 
-from configHandler import idleConf
-
-import AutoCompleteWindow
-from HyperParser import HyperParser
-
-import __main__
+from idlelib.configHandler import idleConf
 
 # This string includes all chars that may be in a file name (without a path
 # separator)
@@ -22,6 +17,11 @@ ID_CHARS = string.ascii_letters + string.digits + "_"
 
 # These constants represent the two different types of completions
 COMPLETE_ATTRIBUTES, COMPLETE_FILES = range(1, 2+1)
+
+from idlelib import AutoCompleteWindow
+from idlelib.HyperParser import HyperParser
+
+import __main__
 
 SEPS = os.sep
 if os.altsep:  # e.g. '/' on Windows...
@@ -156,12 +156,9 @@ class AutoComplete:
         if not comp_lists[0]:
             return
         self.autocompletewindow = self._make_autocomplete_window()
-        self.autocompletewindow.show_window(comp_lists,
-                                            "insert-%dc" % len(comp_start),
-                                            complete,
-                                            mode,
-                                            userWantsWin)
-        return True
+        return not self.autocompletewindow.show_window(
+                comp_lists, "insert-%dc" % len(comp_start),
+                complete, mode, userWantsWin)
 
     def fetch_completions(self, what, mode):
         """Return a pair of lists of completions for something. The first list
@@ -190,20 +187,18 @@ class AutoComplete:
                     bigl = eval("dir()", namespace)
                     bigl.sort()
                     if "__all__" in bigl:
-                        smalll = eval("__all__", namespace)
-                        smalll.sort()
+                        smalll = sorted(eval("__all__", namespace))
                     else:
-                        smalll = filter(lambda s: s[:1] != '_', bigl)
+                        smalll = [s for s in bigl if s[:1] != '_']
                 else:
                     try:
                         entity = self.get_entity(what)
                         bigl = dir(entity)
                         bigl.sort()
                         if "__all__" in bigl:
-                            smalll = entity.__all__
-                            smalll.sort()
+                            smalll = sorted(entity.__all__)
                         else:
-                            smalll = filter(lambda s: s[:1] != '_', bigl)
+                            smalll = [s for s in bigl if s[:1] != '_']
                     except:
                         return [], []
 
@@ -214,7 +209,7 @@ class AutoComplete:
                     expandedpath = os.path.expanduser(what)
                     bigl = os.listdir(expandedpath)
                     bigl.sort()
-                    smalll = filter(lambda s: s[:1] != '.', bigl)
+                    smalll = [s for s in bigl if s[:1] != '.']
                 except OSError:
                     return [], []
 

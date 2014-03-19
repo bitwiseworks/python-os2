@@ -1,10 +1,12 @@
-
 :mod:`random` --- Generate pseudo-random numbers
 ================================================
 
 .. module:: random
    :synopsis: Generate pseudo-random numbers with various common distributions.
 
+**Source code:** :source:`Lib/random.py`
+
+--------------
 
 This module implements pseudo-random number generators for various
 distributions.
@@ -52,7 +54,18 @@ known to fail some stringent randomness tests.  See the references below for a
 recent variant that repairs these flaws.
 
 .. versionchanged:: 2.3
-   Substituted MersenneTwister for Wichmann-Hill.
+   MersenneTwister replaced Wichmann-Hill as the default generator.
+
+The :mod:`random` module also provides the :class:`SystemRandom` class which
+uses the system function :func:`os.urandom` to generate random numbers
+from sources provided by the operating system.
+
+.. warning::
+
+   The pseudo-random generators of this module should not be used for
+   security purposes.  Use :func:`os.urandom` or :class:`SystemRandom` if
+   you require a cryptographically secure pseudo-random number generator.
+
 
 Bookkeeping functions:
 
@@ -69,10 +82,6 @@ Bookkeeping functions:
    .. versionchanged:: 2.4
       formerly, operating system resources were not used.
 
-   If *x* is not ``None`` or an int or long, ``hash(x)`` is used instead. If *x* is
-   an int or long, *x* is used directly.
-
-
 .. function:: getstate()
 
    Return an object capturing the current internal state of the generator.  This
@@ -88,7 +97,7 @@ Bookkeeping functions:
 
    *state* should have been obtained from a previous call to :func:`getstate`, and
    :func:`setstate` restores the internal state of the generator to what it was at
-   the time :func:`setstate` was called.
+   the time :func:`getstate` was called.
 
    .. versionadded:: 2.1
 
@@ -122,7 +131,8 @@ Bookkeeping functions:
 Functions for integers:
 
 
-.. function:: randrange([start,] stop[, step])
+.. function:: randrange(stop)
+              randrange(start, stop[, step])
 
    Return a randomly selected element from ``range(start, stop, step)``.  This is
    equivalent to ``choice(range(start, stop, step))``, but doesn't actually build a
@@ -194,6 +204,7 @@ be found in any statistics text.
    The end-point value ``b`` may or may not be included in the range
    depending on floating-point rounding in the equation ``a + (b-a) * random()``.
 
+
 .. function:: triangular(low, high, mode)
 
    Return a random floating point number *N* such that ``low <= N <= high`` and
@@ -223,6 +234,12 @@ be found in any statistics text.
 
    Gamma distribution.  (*Not* the gamma function!)  Conditions on the
    parameters are ``alpha > 0`` and ``beta > 0``.
+
+   The probability distribution function is::
+
+                 x ** (alpha - 1) * math.exp(-x / beta)
+       pdf(x) =  --------------------------------------
+                   math.gamma(alpha) * beta ** alpha
 
 
 .. function:: gauss(mu, sigma)
