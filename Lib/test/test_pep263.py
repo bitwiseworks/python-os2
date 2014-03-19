@@ -30,6 +30,35 @@ class PEP263Test(unittest.TestCase):
         self.assertEqual(d['a'], d['b'])
         self.assertEqual(len(d['a']), len(d['b']))
 
+    def test_issue7820(self):
+        # Ensure that check_bom() restores all bytes in the right order if
+        # check_bom() fails in pydebug mode: a buffer starts with the first
+        # byte of a valid BOM, but next bytes are different
+
+        # one byte in common with the UTF-16-LE BOM
+        self.assertRaises(SyntaxError, eval, '\xff\x20')
+
+        # two bytes in common with the UTF-8 BOM
+        self.assertRaises(SyntaxError, eval, '\xef\xbb\x20')
+
+    def test_error_message(self):
+        compile('# -*- coding: iso-8859-15 -*-\n', 'dummy', 'exec')
+        compile('\xef\xbb\xbf\n', 'dummy', 'exec')
+        compile('\xef\xbb\xbf# -*- coding: utf-8 -*-\n', 'dummy', 'exec')
+        with self.assertRaisesRegexp(SyntaxError, 'fake'):
+            compile('# -*- coding: fake -*-\n', 'dummy', 'exec')
+        with self.assertRaisesRegexp(SyntaxError, 'iso-8859-15'):
+            compile('\xef\xbb\xbf# -*- coding: iso-8859-15 -*-\n',
+                    'dummy', 'exec')
+        with self.assertRaisesRegexp(SyntaxError, 'BOM'):
+            compile('\xef\xbb\xbf# -*- coding: iso-8859-15 -*-\n',
+                    'dummy', 'exec')
+        with self.assertRaisesRegexp(SyntaxError, 'fake'):
+            compile('\xef\xbb\xbf# -*- coding: fake -*-\n', 'dummy', 'exec')
+        with self.assertRaisesRegexp(SyntaxError, 'BOM'):
+            compile('\xef\xbb\xbf# -*- coding: fake -*-\n', 'dummy', 'exec')
+
+
 def test_main():
     test_support.run_unittest(PEP263Test)
 

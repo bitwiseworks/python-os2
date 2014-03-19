@@ -21,7 +21,7 @@
   ghost@aladdin.com
 
  */
-/* $Id: md5.h 43594 2006-04-03 16:27:50Z matthias.klose $ */
+/* $Id$ */
 /*
   Independent implementation of MD5 (RFC 1321).
 
@@ -79,7 +79,7 @@ extern "C"
 void md5_init(md5_state_t *pms);
 
 /* Append a string to the message. */
-void md5_append(md5_state_t *pms, const md5_byte_t *data, int nbytes);
+void md5_append(md5_state_t *pms, const md5_byte_t *data, unsigned int nbytes);
 
 /* Finish the message and return the digest. */
 void md5_finish(md5_state_t *pms, md5_byte_t digest[16]);

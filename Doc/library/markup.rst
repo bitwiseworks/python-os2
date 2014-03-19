@@ -1,4 +1,3 @@
-
 .. _markup:
 
 **********************************
@@ -26,7 +25,8 @@ definition of the Python bindings for the DOM and SAX interfaces.
    htmlparser.rst
    sgmllib.rst
    htmllib.rst
-   pyexpat.rst
+   xml.rst
+   xml.etree.elementtree.rst
    xml.dom.rst
    xml.dom.minidom.rst
    xml.dom.pulldom.rst
@@ -34,11 +34,4 @@ definition of the Python bindings for the DOM and SAX interfaces.
    xml.sax.handler.rst
    xml.sax.utils.rst
    xml.sax.reader.rst
-   xml.etree.elementtree.rst
-
-.. seealso::
-
-   `Python/XML Libraries <http://pyxml.sourceforge.net/>`_
-      Home page for the PyXML package, containing an extension of :mod:`xml` package
-      bundled with Python.
-
+   pyexpat.rst

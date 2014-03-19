@@ -9,7 +9,6 @@
 #include "structmember.h"
 #include "osdefs.h"
 
-#define MAKE_IT_NONE(x) (x) = Py_None; Py_INCREF(Py_None);
 #define EXC_MODULE_NAME "exceptions."
 
 /* NOTE: If the exception class hierarchy changes, don't forget to update
@@ -218,7 +217,7 @@ BaseException_setstate(PyObject *self, PyObject *state)
 static PyMethodDef BaseException_methods[] = {
    {"__reduce__", (PyCFunction)BaseException_reduce, METH_NOARGS },
    {"__setstate__", (PyCFunction)BaseException_setstate, METH_O },
-#ifdef Py_USING_UNICODE   
+#ifdef Py_USING_UNICODE
    {"__unicode__", (PyCFunction)BaseException_unicode, METH_NOARGS },
 #endif
    {NULL, NULL, 0, NULL},
@@ -237,7 +236,7 @@ BaseException_getitem(PyBaseExceptionObject *self, Py_ssize_t index)
 
 static PyObject *
 BaseException_getslice(PyBaseExceptionObject *self,
-			Py_ssize_t start, Py_ssize_t stop)
+                        Py_ssize_t start, Py_ssize_t stop)
 {
     if (PyErr_WarnPy3k("__getslice__ not supported for exception "
                        "classes in 3.x; use args attribute", 1) < 0)
@@ -307,7 +306,8 @@ BaseException_set_args(PyBaseExceptionObject *self, PyObject *val)
         return -1;
     }
     seq = PySequence_Tuple(val);
-    if (!seq) return -1;
+    if (!seq)
+        return -1;
     Py_CLEAR(self->args);
     self->args = seq;
     return 0;
@@ -317,7 +317,7 @@ static PyObject *
 BaseException_get_message(PyBaseExceptionObject *self)
 {
     PyObject *msg;
-    
+
     /* if "message" is in self->dict, accessing a user-set message attribute */
     if (self->dict &&
         (msg = PyDict_GetItemString(self->dict, "message"))) {
@@ -349,11 +349,10 @@ BaseException_set_message(PyBaseExceptionObject *self, PyObject *val)
             if (PyDict_DelItemString(self->dict, "message") < 0)
                 return -1;
         }
-        Py_XDECREF(self->message);
-        self->message = NULL;
+        Py_CLEAR(self->message);
         return 0;
     }
-    
+
     /* else set it in __dict__, but may need to create the dict first */
     if (self->dict == NULL) {
         self->dict = PyDict_New();
@@ -367,7 +366,7 @@ static PyGetSetDef BaseException_getset[] = {
     {"__dict__", (getter)BaseException_get_dict, (setter)BaseException_set_dict},
     {"args", (getter)BaseException_get_args, (setter)BaseException_set_args},
     {"message", (getter)BaseException_get_message,
-	    (setter)BaseException_set_message},
+            (setter)BaseException_set_message},
     {NULL},
 };
 
@@ -394,7 +393,7 @@ static PyTypeObject _PyExc_BaseException = {
     PyObject_GenericSetAttr,    /*tp_setattro*/
     0,                          /*tp_as_buffer*/
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC |
-    	Py_TPFLAGS_BASE_EXC_SUBCLASS,  /*tp_flags*/
+        Py_TPFLAGS_BASE_EXC_SUBCLASS,  /*tp_flags*/
     PyDoc_STR("Common base class for all exceptions"), /* tp_doc */
     (traverseproc)BaseException_traverse, /* tp_traverse */
     (inquiry)BaseException_clear, /* tp_clear */
@@ -774,7 +773,8 @@ EnvironmentError_reduce(PyEnvironmentErrorObject *self)
      * file name given to EnvironmentError. */
     if (PyTuple_GET_SIZE(args) == 2 && self->filename) {
         args = PyTuple_New(3);
-        if (!args) return NULL;
+        if (!args)
+            return NULL;
 
         tmp = PyTuple_GET_ITEM(self->args, 0);
         Py_INCREF(tmp);
@@ -1072,7 +1072,8 @@ SyntaxError_init(PySyntaxErrorObject *self, PyObject *args, PyObject *kwds)
     if (lenargs == 2) {
         info = PyTuple_GET_ITEM(args, 1);
         info = PySequence_Tuple(info);
-        if (!info) return -1;
+        if (!info)
+            return -1;
 
         if (PyTuple_GET_SIZE(info) != 4) {
             /* not a very good error message, but it's what Python 2.4 gives */
@@ -1168,9 +1169,11 @@ SyntaxError_str(PySyntaxErrorObject *self)
         str = PyObject_Str(self->msg);
     else
         str = PyObject_Str(Py_None);
-    if (!str) return NULL;
+    if (!str)
+        return NULL;
     /* Don't fiddle with non-string return (shouldn't happen anyway) */
-    if (!PyString_Check(str)) return str;
+    if (!PyString_Check(str))
+        return str;
 
     /* XXX -- do all the additional formatting with filename and
        lineno here */
@@ -1785,9 +1788,6 @@ PyUnicodeDecodeError_Create(
     const char *encoding, const char *object, Py_ssize_t length,
     Py_ssize_t start, Py_ssize_t end, const char *reason)
 {
-    assert(length < INT_MAX);
-    assert(start < INT_MAX);
-    assert(end < INT_MAX);
     return PyObject_CallFunction(PyExc_UnicodeDecodeError, "ss#nns",
                                  encoding, object, length, start, end, reason);
 }
@@ -2050,28 +2050,6 @@ static PyMethodDef functions[] = {
     if (PyDict_SetItemString(bdict, # TYPE, PyExc_ ## TYPE)) \
         Py_FatalError("Module dictionary insertion problem.");
 
-#if defined _MSC_VER && _MSC_VER >= 1400 && defined(__STDC_SECURE_LIB__)
-/* crt variable checking in VisualStudio .NET 2005 */
-#include <crtdbg.h>
-
-static int	prevCrtReportMode;
-static _invalid_parameter_handler	prevCrtHandler;
-
-/* Invalid parameter handler.  Sets a ValueError exception */
-static void
-InvalidParameterHandler(
-    const wchar_t * expression,
-    const wchar_t * function,
-    const wchar_t * file,
-    unsigned int line,
-    uintptr_t pReserved)
-{
-    /* Do nothing, allow execution to continue.  Usually this
-     * means that the CRT will set errno to EINVAL
-     */
-}
-#endif
-
 
 PyMODINIT_FUNC
 _PyExc_Init(void)
@@ -2137,7 +2115,8 @@ _PyExc_Init(void)
 
     m = Py_InitModule4("exceptions", functions, exceptions_doc,
         (PyObject *)NULL, PYTHON_API_VERSION);
-    if (m == NULL) return;
+    if (m == NULL)
+        return;
 
     bltinmod = PyImport_ImportModule("__builtin__");
     if (bltinmod == NULL)
@@ -2205,49 +2184,36 @@ _PyExc_Init(void)
 
     PyExc_MemoryErrorInst = BaseException_new(&_PyExc_MemoryError, NULL, NULL);
     if (!PyExc_MemoryErrorInst)
-        Py_FatalError("Cannot pre-allocate MemoryError instance\n");
+        Py_FatalError("Cannot pre-allocate MemoryError instance");
 
     PyExc_RecursionErrorInst = BaseException_new(&_PyExc_RuntimeError, NULL, NULL);
     if (!PyExc_RecursionErrorInst)
-	Py_FatalError("Cannot pre-allocate RuntimeError instance for "
-			"recursion errors");
+        Py_FatalError("Cannot pre-allocate RuntimeError instance for "
+                        "recursion errors");
     else {
-	PyBaseExceptionObject *err_inst =
-	    (PyBaseExceptionObject *)PyExc_RecursionErrorInst;
-	PyObject *args_tuple;
-	PyObject *exc_message;
-	exc_message = PyString_FromString("maximum recursion depth exceeded");
-	if (!exc_message)
-	    Py_FatalError("cannot allocate argument for RuntimeError "
-			    "pre-allocation");
-	args_tuple = PyTuple_Pack(1, exc_message);
-	if (!args_tuple)
-	    Py_FatalError("cannot allocate tuple for RuntimeError "
-			    "pre-allocation");
-	Py_DECREF(exc_message);
-	if (BaseException_init(err_inst, args_tuple, NULL))
-	    Py_FatalError("init of pre-allocated RuntimeError failed");
-	Py_DECREF(args_tuple);
+        PyBaseExceptionObject *err_inst =
+            (PyBaseExceptionObject *)PyExc_RecursionErrorInst;
+        PyObject *args_tuple;
+        PyObject *exc_message;
+        exc_message = PyString_FromString("maximum recursion depth exceeded");
+        if (!exc_message)
+            Py_FatalError("cannot allocate argument for RuntimeError "
+                            "pre-allocation");
+        args_tuple = PyTuple_Pack(1, exc_message);
+        if (!args_tuple)
+            Py_FatalError("cannot allocate tuple for RuntimeError "
+                            "pre-allocation");
+        Py_DECREF(exc_message);
+        if (BaseException_init(err_inst, args_tuple, NULL))
+            Py_FatalError("init of pre-allocated RuntimeError failed");
+        Py_DECREF(args_tuple);
     }
-
     Py_DECREF(bltinmod);
-
-#if defined _MSC_VER && _MSC_VER >= 1400 && defined(__STDC_SECURE_LIB__)
-    /* Set CRT argument error handler */
-    prevCrtHandler = _set_invalid_parameter_handler(InvalidParameterHandler);
-    /* turn off assertions in debug mode */
-    prevCrtReportMode = _CrtSetReportMode(_CRT_ASSERT, 0);
-#endif
 }
 
 void
 _PyExc_Fini(void)
 {
-    Py_XDECREF(PyExc_MemoryErrorInst);
-    PyExc_MemoryErrorInst = NULL;
-#if defined _MSC_VER && _MSC_VER >= 1400 && defined(__STDC_SECURE_LIB__)
-    /* reset CRT error handling */
-    _set_invalid_parameter_handler(prevCrtHandler);
-    _CrtSetReportMode(_CRT_ASSERT, prevCrtReportMode);
-#endif
+    Py_CLEAR(PyExc_MemoryErrorInst);
+    Py_CLEAR(PyExc_RecursionErrorInst);
 }

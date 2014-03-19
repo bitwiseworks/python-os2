@@ -4,7 +4,9 @@
 Programming FAQ
 ===============
 
-.. contents::
+.. only:: html
+
+   .. contents::
 
 General Questions
 =================
@@ -171,37 +173,38 @@ tick of the interpreter's mainloop using highly optimized C implementations.
 Thus to get the same effect as::
 
    L2 = []
-   for i in range[3]:
+   for i in range(3):
        L2.append(L1[i])
 
 it is much shorter and far faster to use ::
 
-   L2 = list(L1[:3]) # "list" is redundant if L1 is a list.
+   L2 = list(L1[:3])  # "list" is redundant if L1 is a list.
 
 Note that the functionally-oriented built-in functions such as :func:`map`,
 :func:`zip`, and friends can be a convenient accelerator for loops that
 perform a single task.  For example to pair the elements of two lists
 together::
 
-   >>> zip([1,2,3], [4,5,6])
+   >>> zip([1, 2, 3], [4, 5, 6])
    [(1, 4), (2, 5), (3, 6)]
 
 or to compute a number of sines::
 
-   >>> map( math.sin, (1,2,3,4))
-   [0.841470984808, 0.909297426826, 0.14112000806,   -0.756802495308]
+   >>> map(math.sin, (1, 2, 3, 4))
+   [0.841470984808, 0.909297426826, 0.14112000806, -0.756802495308]
 
 The operation completes very quickly in such cases.
 
-Other examples include the ``join()`` and ``split()`` methods of string objects.
+Other examples include the ``join()`` and ``split()`` :ref:`methods
+of string objects <string-methods>`.
 For example if s1..s7 are large (10K+) strings then
 ``"".join([s1,s2,s3,s4,s5,s6,s7])`` may be far faster than the more obvious
 ``s1+s2+s3+s4+s5+s6+s7``, since the "summation" will compute many
 subexpressions, whereas ``join()`` does all the copying in one pass.  For
-manipulating strings, use the ``replace()`` method on string objects. Use
-regular expressions only when you're not dealing with constant string patterns.
-Consider using the string formatting operations ``string % tuple`` and ``string
-% dictionary``.
+manipulating strings, use the ``replace()`` and the ``format()`` :ref:`methods
+on string objects <string-methods>`.  Use regular expressions only when you're
+not dealing with constant string patterns.  You may still use :ref:`the old %
+operations <string-formatting>` ``string % tuple`` and ``string % dictionary``.
 
 Be sure to use the :meth:`list.sort` built-in method to do sorting, and see the
 `sorting mini-HOWTO <http://wiki.python.org/moin/HowTo/Sorting>`_ for examples
@@ -211,7 +214,7 @@ sorting in all but the most extreme circumstances.
 Another common trick is to "push loops into functions or methods."  For example
 suppose you have a program that runs slowly and you use the profiler to
 determine that a Python function ``ff()`` is being called lots of times.  If you
-notice that ``ff ()``::
+notice that ``ff()``::
 
    def ff(x):
        ... # do something with x computing result...
@@ -332,24 +335,6 @@ actually modifying the value of the variable in the outer scope:
    >>> print x
    11
 
-In Python3, you can do a similar thing in a nested scope using the
-:keyword:`nonlocal` keyword:
-
-.. doctest::
-   :options: +SKIP
-
-   >>> def foo():
-   ...    x = 10
-   ...    def bar():
-   ...        nonlocal x
-   ...        print x
-   ...        x += 1
-   ...    bar()
-   ...    print x
-   >>> foo()
-   10
-   11
-
 
 What are the rules for local and global variables in Python?
 ------------------------------------------------------------
@@ -367,6 +352,58 @@ for all global references, you'd be using ``global`` all the time.  You'd have
 to declare as global every reference to a built-in function or to a component of
 an imported module.  This clutter would defeat the usefulness of the ``global``
 declaration for identifying side-effects.
+
+
+Why do lambdas defined in a loop with different values all return the same result?
+----------------------------------------------------------------------------------
+
+Assume you use a for loop to define a few different lambdas (or even plain
+functions), e.g.::
+
+   >>> squares = []
+   >>> for x in range(5):
+   ...    squares.append(lambda: x**2)
+
+This gives you a list that contains 5 lambdas that calculate ``x**2``.  You
+might expect that, when called, they would return, respectively, ``0``, ``1``,
+``4``, ``9``, and ``16``.  However, when you actually try you will see that
+they all return ``16``::
+
+   >>> squares[2]()
+   16
+   >>> squares[4]()
+   16
+
+This happens because ``x`` is not local to the lambdas, but is defined in
+the outer scope, and it is accessed when the lambda is called --- not when it
+is defined.  At the end of the loop, the value of ``x`` is ``4``, so all the
+functions now return ``4**2``, i.e. ``16``.  You can also verify this by
+changing the value of ``x`` and see how the results of the lambdas change::
+
+   >>> x = 8
+   >>> squares[2]()
+   64
+
+In order to avoid this, you need to save the values in variables local to the
+lambdas, so that they don't rely on the value of the global ``x``::
+
+   >>> squares = []
+   >>> for x in range(5):
+   ...    squares.append(lambda n=x: n**2)
+
+Here, ``n=x`` creates a new variable ``n`` local to the lambda and computed
+when the lambda is defined so that it has the same value that ``x`` had at
+that point in the loop.  This means that the value of ``n`` will be ``0``
+in the first lambda, ``1`` in the second, ``2`` in the third, and so on.
+Therefore each lambda will now return the correct result::
+
+   >>> squares[2]()
+   4
+   >>> squares[4]()
+   16
+
+Note that this behaviour is not peculiar to lambdas, but applies to regular
+functions too.
 
 
 How do I share global variables across modules?
@@ -412,7 +449,7 @@ using multiple imports per line uses less screen space.
 
 It's good practice if you import modules in the following order:
 
-1. standard library modules -- e.g. ``sys``, ``os``, ``getopt``, ``re``)
+1. standard library modules -- e.g. ``sys``, ``os``, ``getopt``, ``re``
 2. third-party library modules (anything installed in Python's site-packages
    directory) -- e.g. mx.DateTime, ZODB, PIL.Image, etc.
 3. locally-developed modules
@@ -421,7 +458,7 @@ Never use relative package imports.  If you're writing code that's in the
 ``package.sub.m1`` module and want to import ``package.sub.m2``, do not just
 write ``import m2``, even though it's legal.  Write ``from package.sub import
 m2`` instead.  Relative imports can lead to a module being initialized twice,
-leading to confusing bugs.
+leading to confusing bugs.  See :pep:`328` for details.
 
 It is sometimes necessary to move imports to a function or class to avoid
 problems with circular imports.  Gordon McMillan says:
@@ -484,6 +521,31 @@ In the unlikely case that you care about Python versions older than 2.0, use
        kwargs['width'] = '14.3c'
        ...
        apply(g, (x,)+args, kwargs)
+
+
+.. index::
+   single: argument; difference from parameter
+   single: parameter; difference from argument
+
+.. _faq-argument-vs-parameter:
+
+What is the difference between arguments and parameters?
+--------------------------------------------------------
+
+:term:`Parameters <parameter>` are defined by the names that appear in a
+function definition, whereas :term:`arguments <argument>` are the values
+actually passed to a function when calling it.  Parameters define what types of
+arguments a function can accept.  For example, given the function definition::
+
+   def func(foo, bar=None, **kwargs):
+       pass
+
+*foo*, *bar* and *kwargs* are parameters of ``func``.  However, when calling
+``func``, for example::
+
+   func(42, bar=314, extra=somevar)
+
+the values ``42``, ``314``, and ``somevar`` are arguments.
 
 
 How do I write a function with output parameters (call by reference)?
@@ -649,9 +711,9 @@ callable. Consider the following code::
    a = B()
    b = a
    print b
-   <__main__.A instance at 016D07CC>
+   <__main__.A instance at 0x16D07CC>
    print a
-   <__main__.A instance at 016D07CC>
+   <__main__.A instance at 0x16D07CC>
 
 Arguably the class has a name: even though it is bound to two names and invoked
 through the name B the created instance is still reported as an instance of
@@ -681,16 +743,16 @@ What's up with the comma operator's precedence?
 Comma is not an operator in Python.  Consider this session::
 
     >>> "a" in "b", "a"
-    (False, '1')
+    (False, 'a')
 
 Since the comma is not an operator, but a separator between expressions the
 above is evaluated as if you had entered::
 
-    >>> ("a" in "b"), "a"
+    ("a" in "b"), "a"
 
 not::
 
-    >>> "a" in ("5", "a")
+    "a" in ("b", "a")
 
 The same is true of the various assignment operators (``=``, ``+=`` etc).  They
 are not truly operators but syntactic delimiters in assignment statements.
@@ -709,52 +771,6 @@ Yes, this feature was added in Python 2.5. The syntax would be as follows::
 
 For versions previous to 2.5 the answer would be 'No'.
 
-.. XXX remove rest?
-
-In many cases you can mimic ``a ? b : c`` with ``a and b or c``, but there's a
-flaw: if *b* is zero (or empty, or ``None`` -- anything that tests false) then
-*c* will be selected instead.  In many cases you can prove by looking at the
-code that this can't happen (e.g. because *b* is a constant or has a type that
-can never be false), but in general this can be a problem.
-
-Tim Peters (who wishes it was Steve Majewski) suggested the following solution:
-``(a and [b] or [c])[0]``.  Because ``[b]`` is a singleton list it is never
-false, so the wrong path is never taken; then applying ``[0]`` to the whole
-thing gets the *b* or *c* that you really wanted.  Ugly, but it gets you there
-in the rare cases where it is really inconvenient to rewrite your code using
-'if'.
-
-The best course is usually to write a simple ``if...else`` statement.  Another
-solution is to implement the ``?:`` operator as a function::
-
-   def q(cond, on_true, on_false):
-       if cond:
-           if not isfunction(on_true):
-               return on_true
-           else:
-               return apply(on_true)
-       else:
-           if not isfunction(on_false):
-               return on_false
-           else:
-               return apply(on_false)
-
-In most cases you'll pass b and c directly: ``q(a, b, c)``.  To avoid evaluating
-b or c when they shouldn't be, encapsulate them within a lambda function, e.g.:
-``q(a, lambda: b, lambda: c)``.
-
-It has been asked *why* Python has no if-then-else expression.  There are
-several answers: many languages do just fine without one; it can easily lead to
-less readable code; no sufficiently "Pythonic" syntax has been discovered; a
-search of the standard library found remarkably few places where using an
-if-then-else expression would make the code more understandable.
-
-In 2002, :pep:`308` was written proposing several possible syntaxes and the
-community was asked to vote on the issue.  The vote was inconclusive.  Most
-people liked one of the syntaxes, but also hated other syntaxes; many votes
-implied that people preferred no ternary operator rather than having a syntax
-they hated.
-
 
 Is it possible to write obfuscated one-liners in Python?
 --------------------------------------------------------
@@ -767,7 +783,7 @@ Yes.  Usually this is done by nesting :keyword:`lambda` within
    map(lambda x,y=y:y%x,range(2,int(pow(y,0.5)+1))),1),range(2,1000)))
 
    # First 10 Fibonacci numbers
-   print map(lambda x,f=lambda x,f:(x<=1) or (f(x-1,f)+f(x-2,f)): f(x,f),
+   print map(lambda x,f=lambda x,f:(f(x-1,f)+f(x-2,f)) if x>1 else 1: f(x,f),
    range(10))
 
    # Mandelbrot set
@@ -793,10 +809,11 @@ Numbers and strings
 How do I specify hexadecimal and octal integers?
 ------------------------------------------------
 
-To specify an octal digit, precede the octal value with a zero.  For example, to
-set the variable "a" to the octal value "10" (8 in decimal), type::
+To specify an octal digit, precede the octal value with a zero, and then a lower
+or uppercase "o".  For example, to set the variable "a" to the octal value "10"
+(8 in decimal), type::
 
-   >>> a = 010
+   >>> a = 0o10
    >>> a
    8
 
@@ -812,23 +829,29 @@ or uppercase.  For example, in the Python interpreter::
    178
 
 
-Why does -22 / 10 return -3?
-----------------------------
+Why does -22 // 10 return -3?
+-----------------------------
 
 It's primarily driven by the desire that ``i % j`` have the same sign as ``j``.
 If you want that, and also want::
 
-    i == (i / j) * j + (i % j)
+    i == (i // j) * j + (i % j)
 
 then integer division has to return the floor.  C also requires that identity to
-hold, and then compilers that truncate ``i / j`` need to make ``i % j`` have the
-same sign as ``i``.
+hold, and then compilers that truncate ``i // j`` need to make ``i % j`` have
+the same sign as ``i``.
 
 There are few real use cases for ``i % j`` when ``j`` is negative.  When ``j``
 is positive, there are many, and in virtually all of them it's more useful for
 ``i % j`` to be ``>= 0``.  If the clock says 10 now, what did it say 200 hours
 ago?  ``-190 % 12 == 2`` is useful; ``-190 % 12 == -10`` is a bug waiting to
 bite.
+
+.. note::
+
+   On Python 2, ``a / b`` returns the same as ``a // b`` if
+   ``__future__.division`` is not in effect.  This is also known as "classic"
+   division.
 
 
 How do I convert a string to a number?
@@ -861,10 +884,11 @@ How do I convert a number to a string?
 
 To convert, e.g., the number 144 to the string '144', use the built-in type
 constructor :func:`str`.  If you want a hexadecimal or octal representation, use
-the built-in functions ``hex()`` or ``oct()``.  For fancy formatting, use
-:ref:`the % operator <string-formatting>` on strings, e.g. ``"%04d" % 144``
-yields ``'0144'`` and ``"%.3f" % (1/3.0)`` yields ``'0.333'``.  See the library
-reference manual for details.
+the built-in functions :func:`hex` or :func:`oct`.  For fancy formatting, see
+the :ref:`formatstrings` section, e.g. ``"{:04d}".format(144)`` yields
+``'0144'`` and ``"{:.3f}".format(1/3)`` yields ``'0.333'``.  You may also use
+:ref:`the % operator <string-formatting>` on strings.  See the library reference
+manual for details.
 
 
 How do I modify a string in place?
@@ -873,6 +897,7 @@ How do I modify a string in place?
 You can't, because strings are immutable.  If you need an object with this
 ability, try converting the string to a list or use the array module::
 
+   >>> import io
    >>> s = "Hello, world"
    >>> a = list(s)
    >>> print a
@@ -886,7 +911,7 @@ ability, try converting the string to a list or use the array module::
    >>> print a
    array('c', 'Hello, world')
    >>> a[0] = 'y' ; print a
-   array('c', 'yello world')
+   array('c', 'yello, world')
    >>> a.tostring()
    'yello, world'
 
@@ -953,7 +978,7 @@ Is there an equivalent to Perl's chomp() for removing trailing newlines from str
 -------------------------------------------------------------------------------------
 
 Starting with Python 2.2, you can use ``S.rstrip("\r\n")`` to remove all
-occurences of any line terminator from the end of the string ``S`` without
+occurrences of any line terminator from the end of the string ``S`` without
 removing other trailing whitespace.  If the string ``S`` represents more than
 one line, with several empty lines at the end, the line terminators for all the
 blank lines will be removed::
@@ -962,12 +987,12 @@ blank lines will be removed::
    ...          "\r\n"
    ...          "\r\n")
    >>> lines.rstrip("\n\r")
-   "line 1 "
+   'line 1 '
 
 Since this is typically only desired when reading text one line at a time, using
 ``S.rstrip()`` this way works well.
 
-For older versions of Python, There are two partial substitutes:
+For older versions of Python, there are two partial substitutes:
 
 - If you want to remove all trailing whitespace, use the ``rstrip()`` method of
   string objects.  This removes all trailing whitespace, not just a single
@@ -988,8 +1013,8 @@ and then convert decimal strings to numeric values using :func:`int` or
 :func:`float`.  ``split()`` supports an optional "sep" parameter which is useful
 if the line uses something other than whitespace as a separator.
 
-For more complicated input parsing, regular expressions more powerful than C's
-:cfunc:`sscanf` and better suited for the task.
+For more complicated input parsing, regular expressions are more powerful
+than C's :c:func:`sscanf` and better suited for the task.
 
 
 What does 'UnicodeError: ASCII [decoding,encoding] error: ordinal not in range(128)' mean?
@@ -1093,26 +1118,26 @@ See the Python Cookbook for a long discussion of many ways to do this:
 If you don't mind reordering the list, sort it and then scan from the end of the
 list, deleting duplicates as you go::
 
-   if List:
-       List.sort()
-       last = List[-1]
-       for i in range(len(List)-2, -1, -1):
-           if last == List[i]:
-               del List[i]
+   if mylist:
+       mylist.sort()
+       last = mylist[-1]
+       for i in range(len(mylist)-2, -1, -1):
+           if last == mylist[i]:
+               del mylist[i]
            else:
-               last = List[i]
+               last = mylist[i]
 
 If all elements of the list may be used as dictionary keys (i.e. they are all
 hashable) this is often faster ::
 
    d = {}
-   for x in List:
-       d[x] = x
-   List = d.values()
+   for x in mylist:
+       d[x] = 1
+   mylist = list(d.keys())
 
 In Python 2.5 and later, the following is possible instead::
 
-   List = list(set(List))
+   mylist = list(set(mylist))
 
 This converts the list into a set, thereby removing duplicates, and then back
 into a list.
@@ -1148,7 +1173,7 @@ How do I create a multidimensional list?
 
 You probably tried to make a multidimensional array like this::
 
-   A = [[None] * 2] * 3
+   >>> A = [[None] * 2] * 3
 
 This looks correct if you print it::
 
@@ -1180,7 +1205,7 @@ use a list comprehension::
    A = [[None] * w for i in range(h)]
 
 Or, you can use an extension that provides a matrix datatype; `Numeric Python
-<http://numpy.scipy.org/>`_ is the best known.
+<http://www.numpy.org/>`_ is the best known.
 
 
 How do I apply a method to a sequence of objects?
@@ -1188,7 +1213,7 @@ How do I apply a method to a sequence of objects?
 
 Use a list comprehension::
 
-   result = [obj.method() for obj in List]
+   result = [obj.method() for obj in mylist]
 
 More generically, you can try the following function::
 
@@ -1197,6 +1222,92 @@ More generically, you can try the following function::
        nobjects = len(objects)
        methods = map(getattr, objects, [method]*nobjects)
        return map(apply, methods, [arguments]*nobjects)
+
+
+Why does a_tuple[i] += ['item'] raise an exception when the addition works?
+---------------------------------------------------------------------------
+
+This is because of a combination of the fact that augmented assignment
+operators are *assignment* operators, and the difference between mutable and
+immutable objects in Python.
+
+This discussion applies in general when augmented assignment operators are
+applied to elements of a tuple that point to mutable objects, but we'll use
+a ``list`` and ``+=`` as our exemplar.
+
+If you wrote::
+
+   >>> a_tuple = (1, 2)
+   >>> a_tuple[0] += 1
+   Traceback (most recent call last):
+      ...
+   TypeError: 'tuple' object does not support item assignment
+
+The reason for the exception should be immediately clear: ``1`` is added to the
+object ``a_tuple[0]`` points to (``1``), producing the result object, ``2``,
+but when we attempt to assign the result of the computation, ``2``, to element
+``0`` of the tuple, we get an error because we can't change what an element of
+a tuple points to.
+
+Under the covers, what this augmented assignment statement is doing is
+approximately this::
+
+   >>> result = a_tuple[0] + 1
+   >>> a_tuple[0] = result
+   Traceback (most recent call last):
+     ...
+   TypeError: 'tuple' object does not support item assignment
+
+It is the assignment part of the operation that produces the error, since a
+tuple is immutable.
+
+When you write something like::
+
+   >>> a_tuple = (['foo'], 'bar')
+   >>> a_tuple[0] += ['item']
+   Traceback (most recent call last):
+     ...
+   TypeError: 'tuple' object does not support item assignment
+
+The exception is a bit more surprising, and even more surprising is the fact
+that even though there was an error, the append worked::
+
+    >>> a_tuple[0]
+    ['foo', 'item']
+
+To see why this happens, you need to know that (a) if an object implements an
+``__iadd__`` magic method, it gets called when the ``+=`` augmented assignment
+is executed, and its return value is what gets used in the assignment statement;
+and (b) for lists, ``__iadd__`` is equivalent to calling ``extend`` on the list
+and returning the list.  That's why we say that for lists, ``+=`` is a
+"shorthand" for ``list.extend``::
+
+    >>> a_list = []
+    >>> a_list += [1]
+    >>> a_list
+    [1]
+
+This is equivalent to::
+
+    >>> result = a_list.__iadd__([1])
+    >>> a_list = result
+
+The object pointed to by a_list has been mutated, and the pointer to the
+mutated object is assigned back to ``a_list``.  The end result of the
+assignment is a no-op, since it is a pointer to the same object that ``a_list``
+was previously pointing to, but the assignment still happens.
+
+Thus, in our tuple example what is happening is equivalent to::
+
+   >>> result = a_tuple[0].__iadd__(['item'])
+   >>> a_tuple[0] = result
+   Traceback (most recent call last):
+     ...
+   TypeError: 'tuple' object does not support item assignment
+
+The ``__iadd__`` succeeds, and thus the list is extended, but even though
+``result`` points to the same object that ``a_tuple[0]`` already points to,
+that final assignment still results in an error, because tuples are immutable.
 
 
 Dictionaries
@@ -1213,23 +1324,17 @@ some changes and then compare it with some other printed dictionary.  In this
 case, use the ``pprint`` module to pretty-print the dictionary; the items will
 be presented in order sorted by the key.
 
-A more complicated solution is to subclass ``UserDict.UserDict`` to create a
+A more complicated solution is to subclass ``dict`` to create a
 ``SortedDict`` class that prints itself in a predictable order.  Here's one
 simpleminded implementation of such a class::
 
-   import UserDict, string
-
-   class SortedDict(UserDict.UserDict):
+   class SortedDict(dict):
        def __repr__(self):
-           result = []
-           append = result.append
-           keys = self.data.keys()
-           keys.sort()
-           for k in keys:
-               append("%s: %s" % (`k`, `self.data[k]`))
-           return "{%s}" % string.join(result, ", ")
+           keys = sorted(self.keys())
+           result = ("{!r}: {!r}".format(k, self[k]) for k in keys)
+           return "{{{}}}".format(", ".join(result))
 
-     __str__ = __repr__
+       __str__ = __repr__
 
 This will work for many common situations you might encounter, though it's far
 from a perfect solution. The largest flaw is that if some values in the
@@ -1251,14 +1356,14 @@ The ``key`` argument is new in Python 2.4, for older versions this kind of
 sorting is quite simple to do with list comprehensions.  To sort a list of
 strings by their uppercase values::
 
-  tmp1 = [(x.upper(), x) for x in L] # Schwartzian transform
+  tmp1 = [(x.upper(), x) for x in L]  # Schwartzian transform
   tmp1.sort()
   Usorted = [x[1] for x in tmp1]
 
 To sort by the integer value of a subfield extending from positions 10-15 in
 each string::
 
-  tmp2 = [(int(s[10:15]), s) for s in L] # Schwartzian transform
+  tmp2 = [(int(s[10:15]), s) for s in L]  # Schwartzian transform
   tmp2.sort()
   Isorted = [x[1] for x in tmp2]
 
@@ -1295,8 +1400,8 @@ out the element you want. ::
 
 An alternative for the last step is::
 
-   result = []
-   for p in pairs: result.append(p[1])
+   >>> result = []
+   >>> for p in pairs: result.append(p[1])
 
 If you find this more legible, you might prefer to use this instead of the final
 list comprehension.  However, it is almost twice as slow for long lists.  Why?
@@ -1364,7 +1469,7 @@ particular behaviour, instead of checking the object's class and doing a
 different thing based on what class it is.  For example, if you have a function
 that does something::
 
-   def search (obj):
+   def search(obj):
        if isinstance(obj, Mailbox):
            # ... code to search a mailbox
        elif isinstance(obj, Document):
@@ -1467,8 +1572,8 @@ of resources) which base class to use.  Example::
 How do I create static class data and static class methods?
 -----------------------------------------------------------
 
-Static data (in the sense of C++ or Java) is easy; static methods (again in the
-sense of C++ or Java) are not supported directly.
+Both static data and static methods (in the sense of C++ or Java) are supported
+in Python.
 
 For static data, simply define a class attribute.  To assign a new value to the
 attribute, you have to explicitly use the class name in the assignment::
@@ -1487,9 +1592,9 @@ C)`` holds, unless overridden by ``c`` itself or by some class on the base-class
 search path from ``c.__class__`` back to ``C``.
 
 Caution: within a method of C, an assignment like ``self.count = 42`` creates a
-new and unrelated instance vrbl named "count" in ``self``'s own dict.  Rebinding
-of a class-static data name must always specify the class whether inside a
-method or not::
+new and unrelated instance named "count" in ``self``'s own dict.  Rebinding of a
+class-static data name must always specify the class whether inside a method or
+not::
 
    C.count = 314
 
@@ -1619,6 +1724,32 @@ You can program the class's constructor to keep track of all instances by
 keeping a list of weak references to each instance.
 
 
+Why does the result of ``id()`` appear to be not unique?
+--------------------------------------------------------
+
+The :func:`id` builtin returns an integer that is guaranteed to be unique during
+the lifetime of the object.  Since in CPython, this is the object's memory
+address, it happens frequently that after an object is deleted from memory, the
+next freshly created object is allocated at the same position in memory.  This
+is illustrated by this example:
+
+>>> id(1000)
+13901272
+>>> id(2000)
+13901272
+
+The two ids belong to different integer objects that are created before, and
+deleted immediately after execution of the ``id()`` call.  To be sure that
+objects whose id you want to examine are still alive, create another reference
+to the object:
+
+>>> a = 1000; b = 2000
+>>> id(a)
+13901272
+>>> id(b)
+13891296
+
+
 Modules
 =======
 
@@ -1636,13 +1767,13 @@ file is automatic if you're importing a module and Python has the ability
 (permissions, free space, etc...) to write the compiled module back to the
 directory.
 
-Running Python on a top level script is not considered an import and no ``.pyc``
-will be created.  For example, if you have a top-level module ``abc.py`` that
-imports another module ``xyz.py``, when you run abc, ``xyz.pyc`` will be created
-since xyz is imported, but no ``abc.pyc`` file will be created since ``abc.py``
-isn't being imported.
+Running Python on a top level script is not considered an import and no
+``.pyc`` will be created.  For example, if you have a top-level module
+``foo.py`` that imports another module ``xyz.py``, when you run ``foo``,
+``xyz.pyc`` will be created since ``xyz`` is imported, but no ``foo.pyc`` file
+will be created since ``foo.py`` isn't being imported.
 
-If you need to create abc.pyc -- that is, to create a .pyc file for a module
+If you need to create ``foo.pyc`` -- that is, to create a ``.pyc`` file for a module
 that is not imported -- you can, using the :mod:`py_compile` and
 :mod:`compileall` modules.
 
@@ -1650,9 +1781,9 @@ The :mod:`py_compile` module can manually compile any module.  One way is to use
 the ``compile()`` function in that module interactively::
 
    >>> import py_compile
-   >>> py_compile.compile('abc.py')
+   >>> py_compile.compile('foo.py')                 # doctest: +SKIP
 
-This will write the ``.pyc`` to the same location as ``abc.py`` (or you can
+This will write the ``.pyc`` to the same location as ``foo.py`` (or you can
 override that with the optional parameter ``cfile``).
 
 You can also automatically compile all files in a directory or directories using

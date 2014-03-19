@@ -169,9 +169,33 @@ typedef struct {
 
 
 static void parser_free(PyST_Object *st);
+static PyObject* parser_sizeof(PyST_Object *, void *);
 static int parser_compare(PyST_Object *left, PyST_Object *right);
 static PyObject *parser_getattr(PyObject *self, char *name);
+static PyObject* parser_compilest(PyST_Object *, PyObject *, PyObject *);
+static PyObject* parser_isexpr(PyST_Object *, PyObject *, PyObject *);
+static PyObject* parser_issuite(PyST_Object *, PyObject *, PyObject *);
+static PyObject* parser_st2list(PyST_Object *, PyObject *, PyObject *);
+static PyObject* parser_st2tuple(PyST_Object *, PyObject *, PyObject *);
 
+#define PUBLIC_METHOD_TYPE (METH_VARARGS|METH_KEYWORDS)
+
+static PyMethodDef
+parser_methods[] = {
+    {"compile",         (PyCFunction)parser_compilest,  PUBLIC_METHOD_TYPE,
+        PyDoc_STR("Compile this ST object into a code object.")},
+    {"isexpr",          (PyCFunction)parser_isexpr,     PUBLIC_METHOD_TYPE,
+        PyDoc_STR("Determines if this ST object was created from an expression.")},
+    {"issuite",         (PyCFunction)parser_issuite,    PUBLIC_METHOD_TYPE,
+        PyDoc_STR("Determines if this ST object was created from a suite.")},
+    {"tolist",          (PyCFunction)parser_st2list,    PUBLIC_METHOD_TYPE,
+        PyDoc_STR("Creates a list-tree representation of this ST.")},
+    {"totuple",         (PyCFunction)parser_st2tuple,   PUBLIC_METHOD_TYPE,
+        PyDoc_STR("Creates a tuple-tree representation of this ST.")},
+    {"__sizeof__",      (PyCFunction)parser_sizeof,     METH_NOARGS,
+        PyDoc_STR("Returns size in memory, in bytes.")},
+    {NULL, NULL, 0, NULL}
+};
 
 static
 PyTypeObject PyST_Type = {
@@ -200,7 +224,14 @@ PyTypeObject PyST_Type = {
     Py_TPFLAGS_DEFAULT,                 /* tp_flags             */
 
     /* __doc__ */
-    "Intermediate representation of a Python parse tree."
+    "Intermediate representation of a Python parse tree.",
+    0,                                  /* tp_traverse */
+    0,                                  /* tp_clear */
+    0,                                  /* tp_richcompare */
+    0,                                  /* tp_weaklistoffset */
+    0,                                  /* tp_iter */
+    0,                                  /* tp_iternext */
+    parser_methods,                     /* tp_methods */
 };  /* PyST_Type */
 
 
@@ -319,10 +350,14 @@ parser_st2tuple(PyST_Object *self, PyObject *args, PyObject *kw)
         int lineno = 0;
         int col_offset = 0;
         if (line_option != NULL) {
-            lineno = (PyObject_IsTrue(line_option) != 0) ? 1 : 0;
+            lineno = PyObject_IsTrue(line_option);
+            if (lineno < 0)
+                return NULL;
         }
         if (col_option != NULL) {
-            col_offset = (PyObject_IsTrue(col_option) != 0) ? 1 : 0;
+            col_offset = PyObject_IsTrue(col_option);
+            if (col_offset < 0)
+                return NULL;
         }
         /*
          *  Convert ST into a tuple representation.  Use Guido's function,
@@ -370,10 +405,14 @@ parser_st2list(PyST_Object *self, PyObject *args, PyObject *kw)
         int lineno = 0;
         int col_offset = 0;
         if (line_option != 0) {
-            lineno = PyObject_IsTrue(line_option) ? 1 : 0;
+            lineno = PyObject_IsTrue(line_option);
+            if (lineno < 0)
+                return NULL;
         }
-        if (col_option != NULL) {
-            col_offset = (PyObject_IsTrue(col_option) != 0) ? 1 : 0;
+        if (col_option != 0) {
+            col_offset = PyObject_IsTrue(col_option);
+            if (col_offset < 0)
+                return NULL;
         }
         /*
          *  Convert ST into a tuple representation.  Use Guido's function,
@@ -494,25 +533,6 @@ parser_issuite(PyST_Object *self, PyObject *args, PyObject *kw)
 }
 
 
-#define PUBLIC_METHOD_TYPE (METH_VARARGS|METH_KEYWORDS)
-
-static PyMethodDef
-parser_methods[] = {
-    {"compile",         (PyCFunction)parser_compilest,  PUBLIC_METHOD_TYPE,
-        PyDoc_STR("Compile this ST object into a code object.")},
-    {"isexpr",          (PyCFunction)parser_isexpr,     PUBLIC_METHOD_TYPE,
-        PyDoc_STR("Determines if this ST object was created from an expression.")},
-    {"issuite",         (PyCFunction)parser_issuite,    PUBLIC_METHOD_TYPE,
-        PyDoc_STR("Determines if this ST object was created from a suite.")},
-    {"tolist",          (PyCFunction)parser_st2list,    PUBLIC_METHOD_TYPE,
-        PyDoc_STR("Creates a list-tree representation of this ST.")},
-    {"totuple",         (PyCFunction)parser_st2tuple,   PUBLIC_METHOD_TYPE,
-        PyDoc_STR("Creates a tuple-tree representation of this ST.")},
-
-    {NULL, NULL, 0, NULL}
-};
-
-
 static PyObject*
 parser_getattr(PyObject *self, char *name)
 {
@@ -555,8 +575,8 @@ parser_do_parse(PyObject *args, PyObject *kw, char *argspec, int type)
                                                       ? eval_input : file_input,
                                                       &err, &flags);
 
-	if (n) {
-	    res = parser_newstobject(n, type);
+        if (n) {
+            res = parser_newstobject(n, type);
             if (res)
                 ((PyST_Object *)res)->st_flags.cf_flags = flags & PyCF_MASK;
         }
@@ -678,7 +698,7 @@ parser_tuple2st(PyST_Object *self, PyObject *args, PyObject *kw)
             err_string("parse tree does not use a valid start symbol");
         }
     }
-    /*  Make sure we throw an exception on all errors.  We should never
+    /*  Make sure we raise an exception on all errors.  We should never
      *  get this, but we'd do well to be sure something is done.
      */
     if (st == NULL && !PyErr_Occurred())
@@ -693,6 +713,15 @@ parser_tuple2ast(PyST_Object *self, PyObject *args, PyObject *kw)
     if (PyErr_WarnPy3k("tuple2ast is removed in 3.x; use tuple2st", 1) < 0)
         return NULL;
     return parser_tuple2st(self, args, kw);
+}
+
+static PyObject *
+parser_sizeof(PyST_Object *st, void *unused)
+{
+    Py_ssize_t res;
+
+    res = sizeof(PyST_Object) + _PyNode_SizeOf(st->st_node);
+    return PyLong_FromSsize_t(res);
 }
 
 
@@ -767,7 +796,7 @@ build_node_children(PyObject *tuple, node *root, int *line_num)
                         PyErr_Format(parser_error,
                                      "third item in terminal node must be an"
                                      " integer, found %s",
-				     Py_TYPE(temp)->tp_name);
+                                     Py_TYPE(temp)->tp_name);
                         Py_DECREF(o);
                         Py_DECREF(temp);
                         return 0;
@@ -784,7 +813,7 @@ build_node_children(PyObject *tuple, node *root, int *line_num)
         else if (!ISNONTERMINAL(type)) {
             /*
              *  It has to be one or the other; this is an error.
-             *  Throw an exception.
+             *  Raise an exception.
              */
             PyObject *err = Py_BuildValue("os", elem, "unknown node type.");
             PyErr_SetObject(parser_error, err);
@@ -834,7 +863,7 @@ build_node_tree(PyObject *tuple)
     if (ISTERMINAL(num)) {
         /*
          *  The tuple is simple, but it doesn't start with a start symbol.
-         *  Throw an exception now and be done with it.
+         *  Raise an exception now and be done with it.
          */
         tuple = Py_BuildValue("os", tuple,
                     "Illegal syntax-tree; cannot start with terminal symbol.");
@@ -935,14 +964,14 @@ VALIDATER(term);                VALIDATER(factor);
 VALIDATER(atom);                VALIDATER(lambdef);
 VALIDATER(trailer);             VALIDATER(subscript);
 VALIDATER(subscriptlist);       VALIDATER(sliceop);
-VALIDATER(exprlist);            VALIDATER(dictmaker);
+VALIDATER(exprlist);            VALIDATER(dictorsetmaker);
 VALIDATER(arglist);             VALIDATER(argument);
 VALIDATER(listmaker);           VALIDATER(yield_stmt);
-VALIDATER(testlist1);           VALIDATER(gen_for);
-VALIDATER(gen_iter);            VALIDATER(gen_if);
-VALIDATER(testlist_gexp);	VALIDATER(yield_expr);
-VALIDATER(yield_or_testlist);	VALIDATER(or_test);
-VALIDATER(old_test); 		VALIDATER(old_lambdef);
+VALIDATER(testlist1);           VALIDATER(comp_for);
+VALIDATER(comp_iter);           VALIDATER(comp_if);
+VALIDATER(testlist_comp);       VALIDATER(yield_expr);
+VALIDATER(yield_or_testlist);   VALIDATER(or_test);
+VALIDATER(old_test);            VALIDATER(old_lambdef);
 
 #undef VALIDATER
 
@@ -1031,7 +1060,7 @@ validate_class(node *tree)
 {
     int nch = NCH(tree);
     int res = (validate_ntype(tree, classdef) &&
-	       	((nch == 4) || (nch == 6) || (nch == 7)));
+                ((nch == 4) || (nch == 6) || (nch == 7)));
 
     if (res) {
         res = (validate_name(CHILD(tree, 0), "class")
@@ -1042,17 +1071,17 @@ validate_class(node *tree)
     else {
         (void) validate_numnodes(tree, 4, "class");
     }
-	
+
     if (res) {
-	if (nch == 7) {
-		res = ((validate_lparen(CHILD(tree, 2)) &&
-			validate_testlist(CHILD(tree, 3)) &&
-			validate_rparen(CHILD(tree, 4))));
-	}
-	else if (nch == 6) {
-		res = (validate_lparen(CHILD(tree,2)) &&
-			validate_rparen(CHILD(tree,3)));
-	}
+        if (nch == 7) {
+                res = ((validate_lparen(CHILD(tree, 2)) &&
+                        validate_testlist(CHILD(tree, 3)) &&
+                        validate_rparen(CHILD(tree, 4))));
+        }
+        else if (nch == 6) {
+                res = (validate_lparen(CHILD(tree,2)) &&
+                        validate_rparen(CHILD(tree,3)));
+        }
     }
     return (res);
 }
@@ -1342,17 +1371,17 @@ validate_list_iter(node *tree)
     return res;
 }
 
-/*  gen_iter:  gen_for | gen_if
+/*  comp_iter:  comp_for | comp_if
  */
 static int
-validate_gen_iter(node *tree)
+validate_comp_iter(node *tree)
 {
-    int res = (validate_ntype(tree, gen_iter)
-               && validate_numnodes(tree, 1, "gen_iter"));
-    if (res && TYPE(CHILD(tree, 0)) == gen_for)
-        res = validate_gen_for(CHILD(tree, 0));
+    int res = (validate_ntype(tree, comp_iter)
+               && validate_numnodes(tree, 1, "comp_iter"));
+    if (res && TYPE(CHILD(tree, 0)) == comp_for)
+        res = validate_comp_for(CHILD(tree, 0));
     else
-        res = validate_gen_if(CHILD(tree, 0));
+        res = validate_comp_if(CHILD(tree, 0));
 
     return res;
 }
@@ -1379,18 +1408,18 @@ validate_list_for(node *tree)
     return res;
 }
 
-/*  gen_for:  'for' exprlist 'in' test [gen_iter]
+/*  comp_for:  'for' exprlist 'in' test [comp_iter]
  */
 static int
-validate_gen_for(node *tree)
+validate_comp_for(node *tree)
 {
     int nch = NCH(tree);
     int res;
 
     if (nch == 5)
-        res = validate_gen_iter(CHILD(tree, 4));
+        res = validate_comp_iter(CHILD(tree, 4));
     else
-        res = validate_numnodes(tree, 4, "gen_for");
+        res = validate_numnodes(tree, 4, "comp_for");
 
     if (res)
         res = (validate_name(CHILD(tree, 0), "for")
@@ -1421,19 +1450,19 @@ validate_list_if(node *tree)
     return res;
 }
 
-/*  gen_if:  'if' old_test [gen_iter]
+/*  comp_if:  'if' old_test [comp_iter]
  */
 static int
-validate_gen_if(node *tree)
+validate_comp_if(node *tree)
 {
     int nch = NCH(tree);
     int res;
 
     if (nch == 3)
-        res = validate_gen_iter(CHILD(tree, 2));
+        res = validate_comp_iter(CHILD(tree, 2));
     else
-        res = validate_numnodes(tree, 2, "gen_if");
-    
+        res = validate_numnodes(tree, 2, "comp_if");
+
     if (res)
         res = (validate_name(CHILD(tree, 0), "if")
                && validate_old_test(CHILD(tree, 1)));
@@ -1593,10 +1622,10 @@ validate_compound_stmt(node *tree)
 static int
 validate_yield_or_testlist(node *tree)
 {
-	if (TYPE(tree) == yield_expr) 
-		return validate_yield_expr(tree);
-	else
-		return validate_testlist(tree);
+        if (TYPE(tree) == yield_expr)
+                return validate_yield_expr(tree);
+        else
+                return validate_testlist(tree);
 }
 
 static int
@@ -1611,7 +1640,7 @@ validate_expr_stmt(node *tree)
     if (res && nch == 3
         && TYPE(CHILD(tree, 1)) == augassign) {
         res = validate_numnodes(CHILD(tree, 1), 1, "augassign")
-		&& validate_yield_or_testlist(CHILD(tree, 2));
+                && validate_yield_or_testlist(CHILD(tree, 2));
 
         if (res) {
             char *s = STR(CHILD(CHILD(tree, 1), 0));
@@ -1629,7 +1658,7 @@ validate_expr_stmt(node *tree)
                    || strcmp(s, ">>=") == 0
                    || strcmp(s, "**=") == 0);
             if (!res)
-                err_string("illegal augmmented assignment operator");
+                err_string("illegal augmented assignment operator");
         }
     }
     else {
@@ -1837,14 +1866,14 @@ validate_dotted_as_name(node *tree)
 static int
 validate_dotted_as_names(node *tree)
 {
-	int nch = NCH(tree);
-	int res = is_odd(nch) && validate_dotted_as_name(CHILD(tree, 0));
-	int i;
+        int nch = NCH(tree);
+        int res = is_odd(nch) && validate_dotted_as_name(CHILD(tree, 0));
+        int i;
 
-	for (i = 1; res && (i < nch); i += 2)
-	    res = (validate_comma(CHILD(tree, i))
-		   && validate_dotted_as_name(CHILD(tree, i + 1)));
-	return (res);
+        for (i = 1; res && (i < nch); i += 2)
+            res = (validate_comma(CHILD(tree, i))
+                   && validate_dotted_as_name(CHILD(tree, i + 1)));
+        return (res);
 }
 
 
@@ -1857,8 +1886,8 @@ validate_import_as_names(node *tree)
     int i;
 
     for (i = 1; res && (i + 1 < nch); i += 2)
-	res = (validate_comma(CHILD(tree, i))
-	       && validate_import_as_name(CHILD(tree, i + 1)));
+        res = (validate_comma(CHILD(tree, i))
+               && validate_import_as_name(CHILD(tree, i + 1)));
     return (res);
 }
 
@@ -1867,13 +1896,13 @@ validate_import_as_names(node *tree)
 static int
 validate_import_name(node *tree)
 {
-	return (validate_ntype(tree, import_name)
-		&& validate_numnodes(tree, 2, "import_name")
-		&& validate_name(CHILD(tree, 0), "import")
-		&& validate_dotted_as_names(CHILD(tree, 1)));
+        return (validate_ntype(tree, import_name)
+                && validate_numnodes(tree, 2, "import_name")
+                && validate_name(CHILD(tree, 0), "import")
+                && validate_dotted_as_names(CHILD(tree, 1)));
 }
 
-/* Helper function to count the number of leading dots in 
+/* Helper function to count the number of leading dots in
  * 'from ...module import name'
  */
 static int
@@ -1881,35 +1910,36 @@ count_from_dots(node *tree)
 {
         int i;
         for (i = 1; i < NCH(tree); i++)
-		if (TYPE(CHILD(tree, i)) != DOT)
-			break;
+                if (TYPE(CHILD(tree, i)) != DOT)
+                        break;
         return i-1;
 }
 
-/* 'from' ('.'* dotted_name | '.') 'import' ('*' | '(' import_as_names ')' |
- *     import_as_names
+/* import_from: ('from' ('.'* dotted_name | '.'+)
+ *               'import' ('*' | '(' import_as_names ')' | import_as_names))
  */
 static int
 validate_import_from(node *tree)
 {
-	int nch = NCH(tree);
-	int ndots = count_from_dots(tree);
-	int havename = (TYPE(CHILD(tree, ndots + 1)) == dotted_name);
-	int offset = ndots + havename;
-	int res = validate_ntype(tree, import_from)
-		&& (nch >= 4 + ndots)
-		&& validate_name(CHILD(tree, 0), "from")
-		&& (!havename || validate_dotted_name(CHILD(tree, ndots + 1)))
-		&& validate_name(CHILD(tree, offset + 1), "import");
+        int nch = NCH(tree);
+        int ndots = count_from_dots(tree);
+        int havename = (TYPE(CHILD(tree, ndots + 1)) == dotted_name);
+        int offset = ndots + havename;
+        int res = validate_ntype(tree, import_from)
+                && (offset >= 1)
+                && (nch >= 3 + offset)
+                && validate_name(CHILD(tree, 0), "from")
+                && (!havename || validate_dotted_name(CHILD(tree, ndots + 1)))
+                && validate_name(CHILD(tree, offset + 1), "import");
 
-	if (res && TYPE(CHILD(tree, offset + 2)) == LPAR)
-	    res = ((nch == offset + 5)
-		   && validate_lparen(CHILD(tree, offset + 2))
-		   && validate_import_as_names(CHILD(tree, offset + 3))
-		   && validate_rparen(CHILD(tree, offset + 4)));
-	else if (res && TYPE(CHILD(tree, offset + 2)) != STAR)
-	    res = validate_import_as_names(CHILD(tree, offset + 2));
-	return (res);
+        if (res && TYPE(CHILD(tree, offset + 2)) == LPAR)
+            res = ((nch == offset + 5)
+                   && validate_lparen(CHILD(tree, offset + 2))
+                   && validate_import_as_names(CHILD(tree, offset + 3))
+                   && validate_rparen(CHILD(tree, offset + 4)));
+        else if (res && TYPE(CHILD(tree, offset + 2)) != STAR)
+            res = validate_import_as_names(CHILD(tree, offset + 2));
+        return (res);
 }
 
 
@@ -1921,9 +1951,9 @@ validate_import_stmt(node *tree)
     int res = validate_numnodes(tree, 1, "import_stmt");
 
     if (res) {
-	int ntype = TYPE(CHILD(tree, 0));
+        int ntype = TYPE(CHILD(tree, 0));
 
-	if (ntype == import_name || ntype == import_from)
+        if (ntype == import_name || ntype == import_from)
             res = validate_node(CHILD(tree, 0));
         else {
             res = 0;
@@ -2092,14 +2122,14 @@ validate_try(node *tree)
         return (res);
     }
     /* try/except statement: skip past except_clause sections */
-    while (res && (TYPE(CHILD(tree, pos)) == except_clause)) {
+    while (res && pos < nch && (TYPE(CHILD(tree, pos)) == except_clause)) {
         res = (validate_except_clause(CHILD(tree, pos))
                && validate_colon(CHILD(tree, pos + 1))
                && validate_suite(CHILD(tree, pos + 2)));
         pos += 3;
     }
     /* skip else clause */
-    if (res && (TYPE(CHILD(tree, pos)) == NAME) &&
+    if (res && pos < nch && (TYPE(CHILD(tree, pos)) == NAME) &&
         (strcmp(STR(CHILD(tree, pos)), "else") == 0)) {
         res = (validate_colon(CHILD(tree, pos + 1))
                && validate_suite(CHILD(tree, pos + 2)));
@@ -2126,10 +2156,13 @@ validate_except_clause(node *tree)
 
     if (res && (nch > 1))
         res = validate_test(CHILD(tree, 1));
-    if (res && (nch == 4))
-        res = (validate_comma(CHILD(tree, 2))
-               && validate_test(CHILD(tree, 3)));
-
+    if (res && (nch == 4)) {
+        if (TYPE(CHILD(tree, 2)) == NAME)
+            res = validate_name(CHILD(tree, 2), "as");
+        else
+            res = validate_comma(CHILD(tree, 2));
+        res = res && validate_test(CHILD(tree, 3));
+    }
     return (res);
 }
 
@@ -2456,11 +2489,11 @@ validate_atom(node *tree)
                    && (validate_rparen(CHILD(tree, nch - 1))));
 
             if (res && (nch == 3)) {
-		if (TYPE(CHILD(tree, 1))==yield_expr)
-			res = validate_yield_expr(CHILD(tree, 1));
-		else
-                	res = validate_testlist_gexp(CHILD(tree, 1));
-	    }
+                if (TYPE(CHILD(tree, 1))==yield_expr)
+                        res = validate_yield_expr(CHILD(tree, 1));
+                else
+                        res = validate_testlist_comp(CHILD(tree, 1));
+            }
             break;
           case LSQB:
             if (nch == 2)
@@ -2478,7 +2511,7 @@ validate_atom(node *tree)
                    && validate_ntype(CHILD(tree, nch - 1), RBRACE));
 
             if (res && (nch == 3))
-                res = validate_dictmaker(CHILD(tree, 1));
+                res = validate_dictorsetmaker(CHILD(tree, 1));
             break;
           case BACKQUOTE:
             res = ((nch == 3)
@@ -2539,26 +2572,26 @@ validate_listmaker(node *tree)
     return ok;
 }
 
-/*  testlist_gexp:
- *    test ( gen_for | (',' test)* [','] )
+/*  testlist_comp:
+ *    test ( comp_for | (',' test)* [','] )
  */
 static int
-validate_testlist_gexp(node *tree)
+validate_testlist_comp(node *tree)
 {
     int nch = NCH(tree);
     int ok = nch;
 
     if (nch == 0)
-        err_string("missing child nodes of testlist_gexp");
+        err_string("missing child nodes of testlist_comp");
     else {
         ok = validate_test(CHILD(tree, 0));
     }
 
     /*
-     *  gen_for | (',' test)* [',']
+     *  comp_for | (',' test)* [',']
      */
-    if (nch == 2 && TYPE(CHILD(tree, 1)) == gen_for)
-        ok = validate_gen_for(CHILD(tree, 1));
+    if (nch == 2 && TYPE(CHILD(tree, 1)) == comp_for)
+        ok = validate_comp_for(CHILD(tree, 1));
     else {
         /*  (',' test)* [',']  */
         int i = 1;
@@ -2571,7 +2604,7 @@ validate_testlist_gexp(node *tree)
             ok = validate_comma(CHILD(tree, i));
         else if (i != nch) {
             ok = 0;
-            err_string("illegal trailing nodes for testlist_gexp");
+            err_string("illegal trailing nodes for testlist_comp");
         }
     }
     return ok;
@@ -2586,17 +2619,17 @@ validate_decorator(node *tree)
     int ok;
     int nch = NCH(tree);
     ok = (validate_ntype(tree, decorator) &&
-	  (nch == 3 || nch == 5 || nch == 6) &&
-	  validate_at(CHILD(tree, 0)) &&
-	  validate_dotted_name(CHILD(tree, 1)) &&
-	  validate_newline(RCHILD(tree, -1)));
+          (nch == 3 || nch == 5 || nch == 6) &&
+          validate_at(CHILD(tree, 0)) &&
+          validate_dotted_name(CHILD(tree, 1)) &&
+          validate_newline(RCHILD(tree, -1)));
 
     if (ok && nch != 3) {
-	ok = (validate_lparen(CHILD(tree, 2)) &&
-	      validate_rparen(RCHILD(tree, -2)));
+        ok = (validate_lparen(CHILD(tree, 2)) &&
+              validate_rparen(RCHILD(tree, -2)));
 
-	if (ok && nch == 6)
-	    ok = validate_arglist(CHILD(tree, 3));
+        if (ok && nch == 6)
+            ok = validate_arglist(CHILD(tree, 3));
     }
 
     return ok;
@@ -2608,50 +2641,53 @@ validate_decorator(node *tree)
 static int
 validate_decorators(node *tree)
 {
-    int i, nch, ok; 
+    int i, nch, ok;
     nch = NCH(tree);
     ok = validate_ntype(tree, decorators) && nch >= 1;
 
     for (i = 0; ok && i < nch; ++i)
-	ok = validate_decorator(CHILD(tree, i));
+        ok = validate_decorator(CHILD(tree, i));
 
     return ok;
 }
 
-/*  with_var
-with_var: 'as' expr
+/*  with_item:
+ *   test ['as' expr]
  */
 static int
-validate_with_var(node *tree)
+validate_with_item(node *tree)
 {
     int nch = NCH(tree);
-    int ok = (validate_ntype(tree, with_var)
-        && (nch == 2)
-        && validate_name(CHILD(tree, 0), "as")
-        && validate_expr(CHILD(tree, 1)));
-   return ok;
+    int ok = (validate_ntype(tree, with_item)
+              && (nch == 1 || nch == 3)
+              && validate_test(CHILD(tree, 0)));
+    if (ok && nch == 3)
+        ok = (validate_name(CHILD(tree, 1), "as")
+              && validate_expr(CHILD(tree, 2)));
+    return ok;
 }
 
-/*  with_stmt
- *           0      1       2       -2   -1
-with_stmt: 'with' test [ with_var ] ':' suite
+/*  with_stmt:
+ *    0      1          ...             -2   -1
+ *   'with' with_item (',' with_item)* ':' suite
  */
 static int
 validate_with_stmt(node *tree)
 {
+    int i;
     int nch = NCH(tree);
     int ok = (validate_ntype(tree, with_stmt)
-        && ((nch == 4) || (nch == 5))
+        && (nch % 2 == 0)
         && validate_name(CHILD(tree, 0), "with")
-        && validate_test(CHILD(tree, 1))
-        && (nch == 4 || validate_with_var(CHILD(tree, 2))) 
         && validate_colon(RCHILD(tree, -2))
         && validate_suite(RCHILD(tree, -1)));
-   return ok;
+    for (i = 1; ok && i < nch - 2; i += 2)
+        ok = validate_with_item(CHILD(tree, i));
+    return ok;
 }
 
 /*  funcdef:
- *      
+ *
  *     -5   -4         -3  -2    -1
  *  'def' NAME parameters ':' suite
  */
@@ -2660,12 +2696,12 @@ validate_funcdef(node *tree)
 {
     int nch = NCH(tree);
     int ok = (validate_ntype(tree, funcdef)
-	       && (nch == 5)
-	       && validate_name(RCHILD(tree, -5), "def")
-	       && validate_ntype(RCHILD(tree, -4), NAME)
-	       && validate_colon(RCHILD(tree, -2))
-	       && validate_parameters(RCHILD(tree, -3))
-	       && validate_suite(RCHILD(tree, -1)));
+               && (nch == 5)
+               && validate_name(RCHILD(tree, -5), "def")
+               && validate_ntype(RCHILD(tree, -4), NAME)
+               && validate_colon(RCHILD(tree, -2))
+               && validate_parameters(RCHILD(tree, -3))
+               && validate_suite(RCHILD(tree, -1)));
     return ok;
 }
 
@@ -2676,14 +2712,15 @@ validate_funcdef(node *tree)
 static int
 validate_decorated(node *tree)
 {
-  int nch = NCH(tree);
-  int ok = (validate_ntype(tree, decorated)
-	    && (nch == 2)
-	    && validate_decorators(RCHILD(tree, -2))
-	    && (validate_funcdef(RCHILD(tree, -1))
-		|| validate_class(RCHILD(tree, -1)))
-	    );
-  return ok;
+    int nch = NCH(tree);
+    int ok = (validate_ntype(tree, decorated)
+              && (nch == 2)
+              && validate_decorators(RCHILD(tree, -2)));
+    if (TYPE(RCHILD(tree, -1)) == funcdef)
+        ok = ok && validate_funcdef(RCHILD(tree, -1));
+    else
+        ok = ok && validate_class(RCHILD(tree, -1));
+    return ok;
 }
 
 static int
@@ -2743,7 +2780,7 @@ validate_arglist(node *tree)
         for (i=0; i<nch; i++) {
             if (TYPE(CHILD(tree, i)) == argument) {
                 node *ch = CHILD(tree, i);
-                if (NCH(ch) == 2 && TYPE(CHILD(ch, 1)) == gen_for) {
+                if (NCH(ch) == 2 && TYPE(CHILD(ch, 1)) == comp_for) {
                     err_string("need '(', ')' for generator expression");
                     return 0;
                 }
@@ -2810,7 +2847,7 @@ validate_arglist(node *tree)
 
 /*  argument:
  *
- *  [test '='] test [gen_for]
+ *  [test '='] test [comp_for]
  */
 static int
 validate_argument(node *tree)
@@ -2821,7 +2858,7 @@ validate_argument(node *tree)
                && validate_test(CHILD(tree, 0)));
 
     if (res && (nch == 2))
-        res = validate_gen_for(CHILD(tree, 1));
+        res = validate_comp_for(CHILD(tree, 1));
     else if (res && (nch == 3))
         res = (validate_equal(CHILD(tree, 1))
                && validate_test(CHILD(tree, 2)));
@@ -2962,33 +2999,84 @@ validate_exprlist(node *tree)
 }
 
 
+/*
+ * dictorsetmaker:
+ *
+ * (test ':' test (comp_for | (',' test ':' test)* [','])) |
+ * (test (comp_for | (',' test)* [',']))
+ */
 static int
-validate_dictmaker(node *tree)
+validate_dictorsetmaker(node *tree)
 {
     int nch = NCH(tree);
-    int res = (validate_ntype(tree, dictmaker)
-               && (nch >= 3)
-               && validate_test(CHILD(tree, 0))
-               && validate_colon(CHILD(tree, 1))
-               && validate_test(CHILD(tree, 2)));
+    int ok = validate_ntype(tree, dictorsetmaker);
+    int i = 0;
+    int check_trailing_comma = 0;
 
-    if (res && ((nch % 4) == 0))
-        res = validate_comma(CHILD(tree, --nch));
-    else if (res)
-        res = ((nch % 4) == 3);
+    assert(nch > 0);
 
-    if (res && (nch > 3)) {
-        int pos = 3;
-        /*  ( ',' test ':' test )*  */
-        while (res && (pos < nch)) {
-            res = (validate_comma(CHILD(tree, pos))
-                   && validate_test(CHILD(tree, pos + 1))
-                   && validate_colon(CHILD(tree, pos + 2))
-                   && validate_test(CHILD(tree, pos + 3)));
-            pos += 4;
+    if (ok && (nch == 1 || TYPE(CHILD(tree, 1)) == COMMA)) {
+        /* We got a set:
+         *     test (',' test)* [',']
+         */
+        ok = validate_test(CHILD(tree, i++));
+        while (ok && nch - i >= 2) {
+            ok = (validate_comma(CHILD(tree, i))
+                   && validate_test(CHILD(tree, i+1)));
+            i += 2;
+        }
+        check_trailing_comma = 1;
+    }
+    else if (ok && TYPE(CHILD(tree, 1)) == comp_for) {
+        /* We got a set comprehension:
+         *     test comp_for
+         */
+        ok = (validate_test(CHILD(tree, 0))
+              && validate_comp_for(CHILD(tree, 1)));
+    }
+    else if (ok && NCH(tree) > 3 && TYPE(CHILD(tree, 3)) == comp_for) {
+        /* We got a dict comprehension:
+         *     test ':' test comp_for
+         */
+        ok = (validate_test(CHILD(tree, 0))
+              && validate_colon(CHILD(tree, 1))
+              && validate_test(CHILD(tree, 2))
+              && validate_comp_for(CHILD(tree, 3)));
+    }
+    else if (ok) {
+        /* We got a dict:
+         *     test ':' test (',' test ':' test)* [',']
+         */
+        if (nch >= 3) {
+            ok = (validate_test(CHILD(tree, i))
+                  && validate_colon(CHILD(tree, i+1))
+                  && validate_test(CHILD(tree, i+2)));
+            i += 3;
+        }
+        else {
+            ok = 0;
+            err_string("illegal number of nodes for dictorsetmaker");
+        }
+
+        while (ok && nch - i >= 4) {
+            ok = (validate_comma(CHILD(tree, i))
+                  && validate_test(CHILD(tree, i+1))
+                  && validate_colon(CHILD(tree, i+2))
+                  && validate_test(CHILD(tree, i+3)));
+            i += 4;
+        }
+        check_trailing_comma = 1;
+    }
+    if (ok && check_trailing_comma) {
+        if (i == nch-1)
+            ok = validate_comma(CHILD(tree, i));
+        else if (i != nch) {
+            ok = 0;
+            err_string("illegal trailing nodes for dictorsetmaker");
         }
     }
-    return (res);
+
+    return ok;
 }
 
 
@@ -3032,9 +3120,9 @@ validate_node(node *tree)
           case classdef:
             res = validate_class(tree);
             break;
-	  case decorated:
-	    res = validate_decorated(tree);
-	    break;
+          case decorated:
+            res = validate_decorated(tree);
+            break;
             /*
              *  "Trivial" parse tree nodes.
              *  (Why did I call these trivial?)
@@ -3106,12 +3194,12 @@ validate_node(node *tree)
           case import_stmt:
             res = validate_import_stmt(tree);
             break;
-	  case import_name:
-	    res = validate_import_name(tree);
-	    break;
-	  case import_from:
-	    res = validate_import_from(tree);
-	    break;
+          case import_name:
+            res = validate_import_name(tree);
+            break;
+          case import_from:
+            res = validate_import_from(tree);
+            break;
           case global_stmt:
             res = validate_global_stmt(tree);
             break;
@@ -3347,7 +3435,7 @@ initparser(void)
     Py_TYPE(&PyST_Type) = &PyType_Type;
     module = Py_InitModule("parser", parser_functions);
     if (module == NULL)
-    	return;
+        return;
 
     if (parser_error == 0)
         parser_error = PyErr_NewException("parser.ParserError", NULL, NULL);

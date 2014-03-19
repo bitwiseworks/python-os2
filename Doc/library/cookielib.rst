@@ -8,13 +8,14 @@
 
 .. note::
    The :mod:`cookielib` module has been renamed to :mod:`http.cookiejar` in
-   Python 3.0.  The :term:`2to3` tool will automatically adapt imports when
-   converting your sources to 3.0.
-
+   Python 3.  The :term:`2to3` tool will automatically adapt imports when
+   converting your sources to Python 3.
 
 .. versionadded:: 2.4
 
+**Source code:** :source:`Lib/cookielib.py`
 
+--------------
 
 The :mod:`cookielib` module defines classes for automatic handling of HTTP
 cookies.  It is useful for accessing web sites that require small pieces of data
@@ -120,10 +121,6 @@ The following classes are provided:
    Module :mod:`Cookie`
       HTTP cookie classes, principally useful for server-side code.  The
       :mod:`cookielib` and :mod:`Cookie` modules do not depend on each other.
-
-   http://wwwsearch.sf.net/ClientCookie/
-      Extensions to this module, including a class for reading Microsoft Internet
-      Explorer cookies on Windows.
 
    http://wp.netscape.com/newsref/std/cookie_spec.html
       The specification of the original Netscape cookie protocol.  Though this is
@@ -310,11 +307,8 @@ contained :class:`Cookie` objects.
 FileCookieJar subclasses and co-operation with web browsers
 -----------------------------------------------------------
 
-The following :class:`CookieJar` subclasses are provided for reading and writing
-.  Further :class:`CookieJar` subclasses, including one that reads Microsoft
-Internet Explorer cookies, are available at
-http://wwwsearch.sf.net/ClientCookie/.
-
+The following :class:`CookieJar` subclasses are provided for reading and
+writing .
 
 .. class:: MozillaCookieJar(filename, delayload=None, policy=None)
 
@@ -757,7 +751,7 @@ cookies (assumes Unix/Netscape convention for location of the cookies file)::
 
    import os, cookielib, urllib2
    cj = cookielib.MozillaCookieJar()
-   cj.load(os.path.join(os.environ["HOME"], ".netscape/cookies.txt"))
+   cj.load(os.path.join(os.path.expanduser("~"), ".netscape", "cookies.txt"))
    opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
    r = opener.open("http://example.com/")
 

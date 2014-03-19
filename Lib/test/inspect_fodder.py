@@ -15,7 +15,7 @@ def eggs(x, y):
     fr = inspect.currentframe()
     st = inspect.stack()
     p = x
-    q = y / 0
+    q = y // 0
 
 # line 20
 class StupidGit:
@@ -48,6 +48,8 @@ class StupidGit:
 # line 48
 class MalodorousPervert(StupidGit):
     pass
+
+Tit = MalodorousPervert
 
 class ParrotDroppings:
     pass

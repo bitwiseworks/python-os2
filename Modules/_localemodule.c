@@ -32,10 +32,6 @@ This software comes with no warranty. Use at your own risk.
 #include <wchar.h>
 #endif
 
-#if defined(__APPLE__)
-#include <CoreFoundation/CoreFoundation.h>
-#endif
-
 #if defined(MS_WINDOWS)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -62,8 +58,8 @@ copy_grouping(char* s)
     PyObject *result, *val = NULL;
 
     if (s[0] == '\0')
-        /* empty string: no grouping at all */
-        return PyList_New(0);
+    /* empty string: no grouping at all */
+    return PyList_New(0);
 
     for (i = 0; s[i] != '\0' && s[i] != CHAR_MAX; i++)
         ; /* nothing */
@@ -167,24 +163,32 @@ PyLocale_setlocale(PyObject* self, PyObject* args)
     if (!PyArg_ParseTuple(args, "i|z:setlocale", &category, &locale))
         return NULL;
 
+#if defined(MS_WINDOWS)
+    if (category < LC_MIN || category > LC_MAX)
+    {
+        PyErr_SetString(Error, "invalid locale category");
+        return NULL;
+    }
+#endif
+
     if (locale) {
-        /* set locale */
-        result = setlocale(category, locale);
-        if (!result) {
-            /* operation failed, no setting was changed */
-            PyErr_SetString(Error, "unsupported locale setting");
-            return NULL;
-        }
-        result_object = PyString_FromString(result);
-        if (!result_object)
-            return NULL;
-        /* record changes to LC_CTYPE */
-        if (category == LC_CTYPE || category == LC_ALL)
-            fixup_ulcase();
+    /* set locale */
+    result = setlocale(category, locale);
+    if (!result) {
+        /* operation failed, no setting was changed */
+        PyErr_SetString(Error, "unsupported locale setting");
+        return NULL;
+    }
+    result_object = PyString_FromString(result);
+    if (!result_object)
+        return NULL;
+    /* record changes to LC_CTYPE */
+    if (category == LC_CTYPE || category == LC_ALL)
+        fixup_ulcase();
         /* things that got wrong up to here are ignored */
         PyErr_Clear();
     } else {
-        /* get locale */
+    /* get locale */
         result = setlocale(category, NULL);
         if (!result) {
             PyErr_SetString(Error, "locale query failed");
@@ -272,7 +276,7 @@ PyLocale_strcoll(PyObject* self, PyObject* args)
 {
 #if !defined(HAVE_WCSCOLL) || !defined(Py_USING_UNICODE)
     char *s1,*s2;
-    
+
     if (!PyArg_ParseTuple(args, "ss:strcoll", &s1, &s2))
         return NULL;
     return PyInt_FromLong(strcoll(s1, s2));
@@ -280,7 +284,7 @@ PyLocale_strcoll(PyObject* self, PyObject* args)
     PyObject *os1, *os2, *result = NULL;
     wchar_t *ws1 = NULL, *ws2 = NULL;
     int rel1 = 0, rel2 = 0, len1, len2;
-    
+
     if (!PyArg_UnpackTuple(args, "strcoll", 2, 2, &os1, &os2))
         return NULL;
     /* If both arguments are byte strings, use strcoll.  */
@@ -293,9 +297,9 @@ PyLocale_strcoll(PyObject* self, PyObject* args)
     }
     /* Convert the non-unicode argument to unicode. */
     if (!PyUnicode_Check(os1)) {
-        os1 = PyUnicode_FromObject(os1);
-        if (!os1)
-            return NULL;
+    os1 = PyUnicode_FromObject(os1);
+    if (!os1)
+        return NULL;
         rel1 = 1;
     }
     if (!PyUnicode_Check(os2)) {
@@ -305,7 +309,7 @@ PyLocale_strcoll(PyObject* self, PyObject* args)
                 Py_DECREF(os1);
             }
             return NULL;
-        } 
+        }
         rel2 = 1;
     }
     /* Convert the unicode strings to wchar[]. */
@@ -412,44 +416,12 @@ PyLocale_getdefaultlocale(PyObject* self)
 }
 #endif
 
-#if defined(__APPLE__)
-/*
-** Find out what the current script is.
-** Donated by Fredrik Lundh.
-*/
-static char *mac_getscript(void)
-{
-    CFStringEncoding enc = CFStringGetSystemEncoding();
-    static CFStringRef name = NULL;
-    /* Return the code name for the encodings for which we have codecs. */
-    switch(enc) {
-    case kCFStringEncodingMacRoman: return "mac-roman";
-    case kCFStringEncodingMacGreek: return "mac-greek";
-    case kCFStringEncodingMacCyrillic: return "mac-cyrillic";
-    case kCFStringEncodingMacTurkish: return "mac-turkish";
-    case kCFStringEncodingMacIcelandic: return "mac-icelandic";
-    /* XXX which one is mac-latin2? */
-    }
-    if (!name) {
-        /* This leaks an object. */
-        name = CFStringConvertEncodingToIANACharSetName(enc);
-    }
-    return (char *)CFStringGetCStringPtr(name, 0); 
-}
-
-static PyObject*
-PyLocale_getdefaultlocale(PyObject* self)
-{
-    return Py_BuildValue("Os", Py_None, mac_getscript());
-}
-#endif
-
 #ifdef HAVE_LANGINFO_H
 #define LANGINFO(X) {#X, X}
 static struct langinfo_constant{
-	char* name;
-	int value;
-} langinfo_constants[] = 
+    char* name;
+    int value;
+} langinfo_constants[] =
 {
     /* These constants should exist on any langinfo implementation */
     LANGINFO(DAY_1),
@@ -562,7 +534,7 @@ PyLocale_nl_langinfo(PyObject* self, PyObject* args)
 {
     int item, i;
     if (!PyArg_ParseTuple(args, "i:nl_langinfo", &item))
-        return NULL;
+    return NULL;
     /* Check whether this is a supported constant. GNU libc sometimes
        returns numeric values in the char* return value, which would
        crash PyString_FromString.  */
@@ -587,10 +559,10 @@ PyDoc_STRVAR(gettext__doc__,
 static PyObject*
 PyIntl_gettext(PyObject* self, PyObject *args)
 {
-	char *in;
-	if (!PyArg_ParseTuple(args, "s", &in))
-		return 0;
-	return PyString_FromString(gettext(in));
+    char *in;
+    if (!PyArg_ParseTuple(args, "s", &in))
+        return 0;
+    return PyString_FromString(gettext(in));
 }
 
 PyDoc_STRVAR(dgettext__doc__,
@@ -600,10 +572,10 @@ PyDoc_STRVAR(dgettext__doc__,
 static PyObject*
 PyIntl_dgettext(PyObject* self, PyObject *args)
 {
-	char *domain, *in;
-	if (!PyArg_ParseTuple(args, "zs", &domain, &in))
-		return 0;
-	return PyString_FromString(dgettext(domain, in));
+    char *domain, *in;
+    if (!PyArg_ParseTuple(args, "zs", &domain, &in))
+        return 0;
+    return PyString_FromString(dgettext(domain, in));
 }
 
 PyDoc_STRVAR(dcgettext__doc__,
@@ -613,11 +585,11 @@ PyDoc_STRVAR(dcgettext__doc__,
 static PyObject*
 PyIntl_dcgettext(PyObject *self, PyObject *args)
 {
-	char *domain, *msgid;
-	int category;
-	if (!PyArg_ParseTuple(args, "zsi", &domain, &msgid, &category))
-		return 0;
-	return PyString_FromString(dcgettext(domain,msgid,category));
+    char *domain, *msgid;
+    int category;
+    if (!PyArg_ParseTuple(args, "zsi", &domain, &msgid, &category))
+        return 0;
+    return PyString_FromString(dcgettext(domain,msgid,category));
 }
 
 PyDoc_STRVAR(textdomain__doc__,
@@ -627,15 +599,15 @@ PyDoc_STRVAR(textdomain__doc__,
 static PyObject*
 PyIntl_textdomain(PyObject* self, PyObject* args)
 {
-	char *domain;
-	if (!PyArg_ParseTuple(args, "z", &domain))
-		return 0;
-	domain = textdomain(domain);
-	if (!domain) {
-		PyErr_SetFromErrno(PyExc_OSError);
-		return NULL;
-	}
-	return PyString_FromString(domain);
+    char *domain;
+    if (!PyArg_ParseTuple(args, "z", &domain))
+        return 0;
+    domain = textdomain(domain);
+    if (!domain) {
+        PyErr_SetFromErrno(PyExc_OSError);
+        return NULL;
+    }
+    return PyString_FromString(domain);
 }
 
 PyDoc_STRVAR(bindtextdomain__doc__,
@@ -645,19 +617,19 @@ PyDoc_STRVAR(bindtextdomain__doc__,
 static PyObject*
 PyIntl_bindtextdomain(PyObject* self,PyObject*args)
 {
-	char *domain, *dirname;
-	if (!PyArg_ParseTuple(args, "sz", &domain, &dirname))
-		return 0;
-	if (!strlen(domain)) {
-		PyErr_SetString(Error, "domain must be a non-empty string");
-		return 0;
-	}
-	dirname = bindtextdomain(domain, dirname);
-	if (!dirname) {
-		PyErr_SetFromErrno(PyExc_OSError);
-		return NULL;
-	}
-	return PyString_FromString(dirname);
+    char *domain, *dirname;
+    if (!PyArg_ParseTuple(args, "sz", &domain, &dirname))
+        return 0;
+    if (!strlen(domain)) {
+        PyErr_SetString(Error, "domain must be a non-empty string");
+        return 0;
+    }
+    dirname = bindtextdomain(domain, dirname);
+    if (!dirname) {
+        PyErr_SetFromErrno(PyExc_OSError);
+        return NULL;
+    }
+    return PyString_FromString(dirname);
 }
 
 #ifdef HAVE_BIND_TEXTDOMAIN_CODESET
@@ -668,28 +640,28 @@ PyDoc_STRVAR(bind_textdomain_codeset__doc__,
 static PyObject*
 PyIntl_bind_textdomain_codeset(PyObject* self,PyObject*args)
 {
-	char *domain,*codeset;
-	if (!PyArg_ParseTuple(args, "sz", &domain, &codeset))
-		return NULL;
-	codeset = bind_textdomain_codeset(domain, codeset);
-	if (codeset)
-		return PyString_FromString(codeset);
-	Py_RETURN_NONE;
+    char *domain,*codeset;
+    if (!PyArg_ParseTuple(args, "sz", &domain, &codeset))
+        return NULL;
+    codeset = bind_textdomain_codeset(domain, codeset);
+    if (codeset)
+        return PyString_FromString(codeset);
+    Py_RETURN_NONE;
 }
 #endif
 
 #endif
 
 static struct PyMethodDef PyLocale_Methods[] = {
-  {"setlocale", (PyCFunction) PyLocale_setlocale, 
+  {"setlocale", (PyCFunction) PyLocale_setlocale,
    METH_VARARGS, setlocale__doc__},
-  {"localeconv", (PyCFunction) PyLocale_localeconv, 
+  {"localeconv", (PyCFunction) PyLocale_localeconv,
    METH_NOARGS, localeconv__doc__},
-  {"strcoll", (PyCFunction) PyLocale_strcoll, 
+  {"strcoll", (PyCFunction) PyLocale_strcoll,
    METH_VARARGS, strcoll__doc__},
-  {"strxfrm", (PyCFunction) PyLocale_strxfrm, 
+  {"strxfrm", (PyCFunction) PyLocale_strxfrm,
    METH_VARARGS, strxfrm__doc__},
-#if defined(MS_WINDOWS) || defined(__APPLE__)
+#if defined(MS_WINDOWS)
   {"_getdefaultlocale", (PyCFunction) PyLocale_getdefaultlocale, METH_NOARGS},
 #endif
 #ifdef HAVE_LANGINFO_H
@@ -711,7 +683,7 @@ static struct PyMethodDef PyLocale_Methods[] = {
   {"bind_textdomain_codeset",(PyCFunction)PyIntl_bind_textdomain_codeset,
    METH_VARARGS, bind_textdomain_codeset__doc__},
 #endif
-#endif  
+#endif
   {NULL, NULL}
 };
 
@@ -725,7 +697,7 @@ init_locale(void)
 
     m = Py_InitModule("_locale", PyLocale_Methods);
     if (m == NULL)
-    	return;
+    return;
 
     d = PyModule_GetDict(m);
 
@@ -772,13 +744,13 @@ init_locale(void)
 
 #ifdef HAVE_LANGINFO_H
     for (i = 0; langinfo_constants[i].name; i++) {
-	    PyModule_AddIntConstant(m, langinfo_constants[i].name,
-				    langinfo_constants[i].value);
+        PyModule_AddIntConstant(m, langinfo_constants[i].name,
+                                langinfo_constants[i].value);
     }
 #endif
 }
 
-/* 
+/*
 Local variables:
 c-basic-offset: 4
 indent-tabs-mode: nil

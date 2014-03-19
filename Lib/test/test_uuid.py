@@ -1,5 +1,6 @@
-from unittest import TestCase
+import unittest
 from test import test_support
+import os
 import uuid
 
 def importable(name):
@@ -9,7 +10,7 @@ def importable(name):
     except:
         return False
 
-class TestUUID(TestCase):
+class TestUUID(unittest.TestCase):
     last_node = None
     source2node = {}
 
@@ -281,15 +282,9 @@ class TestUUID(TestCase):
         badtype(lambda: setattr(u, 'node', 0))
 
     def check_node(self, node, source):
-        individual_group_bit = (node >> 40L) & 1
-        universal_local_bit = (node >> 40L) & 2
-        message = "%012x doesn't look like a real MAC address" % node
-        self.assertEqual(individual_group_bit, 0, message)
-        self.assertEqual(universal_local_bit, 0, message)
-        self.assertNotEqual(node, 0, message)
-        self.assertNotEqual(node, 0xffffffffffffL, message)
-        self.assert_(0 <= node, message)
-        self.assert_(node < (1L << 48), message)
+        message = "%012x is not an RFC 4122 node ID" % node
+        self.assertTrue(0 < node, message)
+        self.assertTrue(node < (1L << 48), message)
 
         TestUUID.source2node[source] = node
         if TestUUID.last_node:
@@ -305,58 +300,43 @@ class TestUUID(TestCase):
         else:
             TestUUID.last_node = node
 
+    @unittest.skipUnless(os.name == 'posix', 'requires Posix')
     def test_ifconfig_getnode(self):
-        import sys
-        print >>sys.__stdout__, \
-"""    WARNING: uuid._ifconfig_getnode is unreliable on many platforms.
-        It is disabled until the code and/or test can be fixed properly."""
-        return
+        node = uuid._ifconfig_getnode()
+        if node is not None:
+            self.check_node(node, 'ifconfig')
 
-        import os
-        if os.name == 'posix':
-            node = uuid._ifconfig_getnode()
-            if node is not None:
-                self.check_node(node, 'ifconfig')
-
+    @unittest.skipUnless(os.name == 'nt', 'requires Windows')
     def test_ipconfig_getnode(self):
-        import os
-        if os.name == 'nt':
-            node = uuid._ipconfig_getnode()
-            if node is not None:
-                self.check_node(node, 'ipconfig')
+        node = uuid._ipconfig_getnode()
+        if node is not None:
+            self.check_node(node, 'ipconfig')
 
+    @unittest.skipUnless(importable('win32wnet'), 'requires win32wnet')
+    @unittest.skipUnless(importable('netbios'), 'requires netbios')
     def test_netbios_getnode(self):
-        if importable('win32wnet') and importable('netbios'):
-            self.check_node(uuid._netbios_getnode(), 'netbios')
+        self.check_node(uuid._netbios_getnode(), 'netbios')
 
     def test_random_getnode(self):
         node = uuid._random_getnode()
-        self.assert_(0 <= node)
-        self.assert_(node < (1L <<48))
+        # Least significant bit of first octet must be set.
+        self.assertTrue(node & 0x010000000000)
+        self.assertTrue(node < (1L << 48))
 
+    @unittest.skipUnless(os.name == 'posix', 'requires Posix')
+    @unittest.skipUnless(importable('ctypes'), 'requires ctypes')
     def test_unixdll_getnode(self):
-        import sys
-        print >>sys.__stdout__, \
-"""    WARNING: uuid._unixdll_getnode is unreliable on many platforms.
-        It is disabled until the code and/or test can be fixed properly."""
-        return
-
-        import os
-        if importable('ctypes') and os.name == 'posix':
+        try: # Issues 1481, 3581: _uuid_generate_time() might be None.
             self.check_node(uuid._unixdll_getnode(), 'unixdll')
+        except TypeError:
+            pass
 
+    @unittest.skipUnless(os.name == 'nt', 'requires Windows')
+    @unittest.skipUnless(importable('ctypes'), 'requires ctypes')
     def test_windll_getnode(self):
-        import os
-        if importable('ctypes') and os.name == 'nt':
-            self.check_node(uuid._windll_getnode(), 'windll')
+        self.check_node(uuid._windll_getnode(), 'windll')
 
     def test_getnode(self):
-        import sys
-        print >>sys.__stdout__, \
-"""    WARNING: uuid.getnode is unreliable on many platforms.
-        It is disabled until the code and/or test can be fixed properly."""
-        return
-
         node1 = uuid.getnode()
         self.check_node(node1, "getnode1")
 
@@ -366,13 +346,8 @@ class TestUUID(TestCase):
 
         self.assertEqual(node1, node2)
 
+    @unittest.skipUnless(importable('ctypes'), 'requires ctypes')
     def test_uuid1(self):
-        # uuid1 requires ctypes.
-        try:
-            import ctypes
-        except ImportError:
-            return
-
         equal = self.assertEqual
 
         # Make sure uuid1() generates UUIDs that are actually version 1.
@@ -425,13 +400,8 @@ class TestUUID(TestCase):
             equal(u, uuid.UUID(v))
             equal(str(u), v)
 
+    @unittest.skipUnless(importable('ctypes'), 'requires ctypes')
     def test_uuid4(self):
-        # uuid4 requires ctypes.
-        try:
-            import ctypes
-        except ImportError:
-            return
-
         equal = self.assertEqual
 
         # Make sure uuid4() generates UUIDs that are actually version 4.
@@ -462,6 +432,31 @@ class TestUUID(TestCase):
             equal(u.version, 5)
             equal(u, uuid.UUID(v))
             equal(str(u), v)
+
+    @unittest.skipUnless(os.name == 'posix', 'requires Posix')
+    def testIssue8621(self):
+        # On at least some versions of OSX uuid.uuid4 generates
+        # the same sequence of UUIDs in the parent and any
+        # children started using fork.
+        fds = os.pipe()
+        pid = os.fork()
+        if pid == 0:
+            os.close(fds[0])
+            value = uuid.uuid4()
+            os.write(fds[1], value.hex)
+            os._exit(0)
+
+        else:
+            os.close(fds[1])
+            self.addCleanup(os.close, fds[0])
+            parent_value = uuid.uuid4().hex
+            os.waitpid(pid, 0)
+            child_value = os.read(fds[0], 100)
+
+            self.assertNotEqual(parent_value, child_value)
+
+
+
 
 
 def test_main():

@@ -3,9 +3,11 @@ About these documents
 =====================
 
 
-These documents are generated from `reStructuredText
-<http://docutils.sf.net/rst.html>`_ sources by *Sphinx*, a document processor
-specifically written for the Python documentation.
+These documents are generated from `reStructuredText`_ sources by `Sphinx`_, a
+document processor specifically written for the Python documentation.
+
+.. _reStructuredText: http://docutils.sf.net/rst.html
+.. _Sphinx: http://sphinx.pocoo.org/
 
 .. In the online version of these documents, you can submit comments and suggest
    changes directly on the documentation pages.
@@ -27,8 +29,13 @@ Many thanks go to:
 See :ref:`reporting-bugs` for information how to report bugs in this
 documentation, or Python itself.
 
-.. including the ACKS file here so that it can be maintained separately
-.. include:: ACKS.txt
+
+Contributors to the Python Documentation
+----------------------------------------
+
+Many people have contributed to the Python language, the Python standard
+library, and the Python documentation.  See :source:`Misc/ACKS` in the Python
+source distribution for a partial list of contributors.
 
 It is only with the input and contributions of the Python community
 that Python has such wonderful documentation -- Thank You!

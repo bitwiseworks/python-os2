@@ -1,7 +1,7 @@
 from Tkinter import *
-import SearchEngine
-from SearchDialogBase import SearchDialogBase
 
+from idlelib import SearchEngine
+from idlelib.SearchDialogBase import SearchDialogBase
 
 def _setup(text):
     root = text._root()
@@ -24,13 +24,12 @@ class SearchDialog(SearchDialogBase):
 
     def create_widgets(self):
         f = SearchDialogBase.create_widgets(self)
-        self.make_button("Find", self.default_command, 1)
+        self.make_button("Find Next", self.default_command, 1)
 
     def default_command(self, event=None):
         if not self.engine.getprog():
             return
-        if self.find_again(self.text):
-            self.close()
+        self.find_again(self.text)
 
     def find_again(self, text):
         if not self.engine.getpat():
