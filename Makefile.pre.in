@@ -878,7 +878,7 @@ bininstall:	altbininstall
 ifneq ($(filter os2emx os2knix,$(MACHDEP)),) # bird-like hack!
 	rm -f $(DESTDIR)$(BINDIR)/$(PYTHON); \
 	$(INSTALL_PROGRAM) $(BUILDPYTHON) $(DESTDIR)$(BINDIR)/$(PYTHON); \
-	$(INSTALL_DATA) $(LDLIBRARY) $(DLLLIBRARY) $(DESTDIR)$(LIBDIR); \
+	$(INSTALL_DATA) $(LDLIBRARY) $(DLLLIBRARY) $(DESTDIR)$(LIBDIR)
 endif
 
 # Install the interpreter with $(VERSION) affixed
