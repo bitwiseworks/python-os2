@@ -943,7 +943,7 @@ setup_readline(void)
 /* Wrapper around GNU readline that handles signals differently. */
 
 
-#if defined(HAVE_RL_CALLBACK) && defined(HAVE_SELECT)
+#if defined(HAVE_RL_CALLBACK) && defined(HAVE_SELECT) && !defined(__KLIBC__)
 
 static  char *completed_input_string;
 static void
