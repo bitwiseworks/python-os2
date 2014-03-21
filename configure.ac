@@ -346,6 +346,7 @@ then
 	darwin*) MACHDEP="darwin";;
 	atheos*) MACHDEP="atheos";;
         irix646) MACHDEP="irix6";;
+	os2*|OS/2*|emx*) MACHDEP="os2knix";;
 	'')	MACHDEP="unknown";;
     esac
 fi
@@ -748,9 +749,9 @@ AC_MSG_RESULT($LIBRARY)
 # is blank as the main program is not linked directly against LDLIBRARY.
 # LDLIBRARYDIR is the path to LDLIBRARY, which is made in a subdirectory. On
 # systems without shared libraries, LDLIBRARY is the same as LIBRARY
-# (defined in the Makefiles). On Cygwin LDLIBRARY is the import library,
-# DLLLIBRARY is the shared (i.e., DLL) library.
-# 
+# (defined in the Makefiles). On Cygwin and OS/2 LDLIBRARY is the import
+# library, DLLLIBRARY is the shared (i.e., DLL) library.
+#
 # RUNSHARED is used to run shared python without installed libraries
 #
 # INSTSONAME is the name of the shared library that will be use to install
@@ -761,12 +762,14 @@ AC_SUBST(BLDLIBRARY)
 AC_SUBST(LDLIBRARYDIR)
 AC_SUBST(INSTSONAME)
 AC_SUBST(RUNSHARED)
+AC_SUBST(CONDENSED_VERSION)
 LDLIBRARY="$LIBRARY"
 BLDLIBRARY='$(LDLIBRARY)'
 INSTSONAME='$(LDLIBRARY)'
 DLLLIBRARY=''
 LDLIBRARYDIR=''
 RUNSHARED=''
+CONDENSED_VERSION=''
 
 # LINKCC is the command that links the python executable -- default is $(CC).
 # If CXX is set, and if it is needed to link a main function that was
@@ -821,7 +824,7 @@ AC_ARG_ENABLE(shared,
 if test -z "$enable_shared"
 then 
   case $ac_sys_system in
-  CYGWIN* | atheos*)
+  CYGWIN* | atheos* | *OS/2* | *emx* | *os2*)
     enable_shared="yes";;
   *)
     enable_shared="no";;
@@ -925,6 +928,13 @@ if test $enable_shared = "yes"; then
 	LDLIBRARY='libpython$(VERSION).so'
 	RUNSHARED=LIBPATH=`pwd`:${LIBPATH}
 	;;
+    OS/2*|os2*|*emx*)
+	  LDLIBRARY='python$(VERSION)_dll.a'
+	  BLDLIBRARY='-L. -lpython$(VERSION)'
+	  RUNSHARED=BEGINLIBPATH="'`pwd`;$BEGINLIBPATH'"
+	  CONDENSED_VERSION=`echo "${VERSION}" | tr -d .,"`
+	  DLLLIBRARY='python$(CONDENSED_VERSION).dll'
+	  ;;
 
   esac
 else # shared is disabled
@@ -1008,6 +1018,7 @@ if test -z "$LN" ; then
 	case $ac_sys_system in
 		BeOS*) LN="ln -s";;
 		CYGWIN*) LN="ln -s";;
+		OS/2*|os2*|*emx*) LN="ln -s";;
 		atheos*) LN="ln -s";;
 		*) LN=ln;;
 	esac
@@ -1906,7 +1917,7 @@ AC_SUBST(BLDSHARED)
 AC_SUBST(CCSHARED)
 AC_SUBST(LINKFORSHARED)
 # SO is the extension of shared libraries `(including the dot!)
-# -- usually .so, .sl on HP-UX, .dll on Cygwin
+# -- usually .so, .sl on HP-UX, .dll on Cygwin and OS/2
 AC_MSG_CHECKING(SO)
 if test -z "$SO"
 then
@@ -1918,6 +1929,7 @@ then
 		esac
 		;;
 	CYGWIN*)   SO=.dll;;
+	OS/2*|os2*|*emx*) SO=.dll;;
 	*)	   SO=.so;;
 	esac
 else
@@ -2074,6 +2086,9 @@ then
 	atheos*)
 		LDSHARED="gcc -shared"
 		LDCXXSHARED="g++ -shared";;
+	OS/2*|os2*|*emx*)
+		LDSHARED="${CC} ${LDFLAGS} -Zdll"
+		LDCXXSHARED="${CXX} ${LDFLAGS} -Zdll";;
 	*)	LDSHARED="ld";;
 	esac
 fi

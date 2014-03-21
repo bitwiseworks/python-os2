@@ -5212,7 +5212,7 @@ INSTSONAME='$(LDLIBRARY)'
 DLLLIBRARY=''
 LDLIBRARYDIR=''
 RUNSHARED=''
-CONDENSED_VERSION=`echo "${VERSION}" | tr -d .,"`
+CONDENSED_VERSION=''
 
 # LINKCC is the command that links the python executable -- default is $(CC).
 # If CXX is set, and if it is needed to link a main function that was
@@ -5397,11 +5397,12 @@ $as_echo "#define Py_ENABLE_SHARED 1" >>confdefs.h
 	RUNSHARED=LIBPATH=`pwd`:${LIBPATH}
 	;;
     OS/2*|os2*|*emx*)
-	LDLIBRARY='python$(VERSION)_dll.a'
-	BLDLIBRARY='-L. -lpython$(VERSION)'
-	RUNSHARED=BEGINLIBPATH="'`pwd`;$BEGINLIBPATH'"
-        DLLLIBRARY='python${CONDENSED_VERSION}.dll'
-	;;
+	  LDLIBRARY='python$(VERSION)_dll.a'
+	  BLDLIBRARY='-L. -lpython$(VERSION)'
+	  RUNSHARED=BEGINLIBPATH="'`pwd`;$BEGINLIBPATH'"
+	  CONDENSED_VERSION=`echo "${VERSION}" | tr -d .,"`
+	  DLLLIBRARY='python$(CONDENSED_VERSION).dll'
+	  ;;
 
   esac
 else # shared is disabled
@@ -8139,7 +8140,7 @@ esac
 
 
 # SO is the extension of shared libraries `(including the dot!)
-# -- usually .so, .sl on HP-UX, .dll on Cygwin
+# -- usually .so, .sl on HP-UX, .dll on Cygwin and OS/2
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking SO" >&5
 $as_echo_n "checking SO... " >&6; }
 if test -z "$SO"
@@ -8315,7 +8316,9 @@ then
 	atheos*)
 		LDSHARED="gcc -shared"
 		LDCXXSHARED="g++ -shared";;
-	OS/2*|os2*|*emx*) LDSHARED="${CC} ${LDFLAGS} -Zdll";;
+	OS/2*|os2*|*emx*)
+		LDSHARED="${CC} ${LDFLAGS} -Zdll"
+		LDCXXSHARED="${CXX} ${LDFLAGS} -Zdll";;
 	*)	LDSHARED="ld";;
 	esac
 fi
