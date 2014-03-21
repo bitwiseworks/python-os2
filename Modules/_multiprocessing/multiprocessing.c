@@ -8,7 +8,7 @@
 
 #include "multiprocessing.h"
 
-#if (defined(CMSG_LEN) && defined(SCM_RIGHTS))
+#if (defined(CMSG_LEN) && defined(SCM_RIGHTS)) && !defined(__OS2__)
     #define HAVE_FD_TRANSFER 1
 #else
     #define HAVE_FD_TRANSFER 0
@@ -92,7 +92,7 @@ ProcessingCtrlHandler(DWORD dwCtrlType)
 
 #else /* !MS_WINDOWS */
 
-#if defined(HAVE_FD_TRANSFER) 
+#if HAVE_FD_TRANSFER
 
 /* Functions for transferring file descriptors between processes.
    Reimplements some of the functionality of the fdcred
