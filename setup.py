@@ -525,7 +525,7 @@ class PyBuildExt(build_ext):
             inc_dirs += os.getenv('C_INCLUDE_PATH', '').split(os.pathsep)
 
         # Check for OS/2 which may have libraries in non-standard locations
-        if platform == 'os2knix':
+        if host_platform == 'os2knix':
             lib_dirs += ['/@unixroot/usr/lib']
             lib_dirs += os.getenv('LIBRARY_PATH', '').split(os.pathsep)
             inc_dirs += ['/@unixroot/usr/include']

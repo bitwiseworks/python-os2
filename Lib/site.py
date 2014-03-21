@@ -288,10 +288,10 @@ def getsitepackages():
         if sys.platform in ('os2emx', 'riscos'):
             sitepackages.append(os.path.join(prefix, "Lib", "site-packages"))
         elif sys.platform == 'os2knix':
-            sitedirs.append(os.path.join(prefix, "lib",
+            sitepackages.append(os.path.join(prefix, "lib",
                                         "python" + sys.version[:3],
                                         "site-packages"))
-            sitedirs.append(os.path.join(prefix, "lib", "site-packages"))
+            sitepackages.append(os.path.join(prefix, "lib", "site-packages"))
         elif os.sep == '/':
             sitepackages.append(os.path.join(prefix, "lib",
                                         "python" + sys.version[:3],
