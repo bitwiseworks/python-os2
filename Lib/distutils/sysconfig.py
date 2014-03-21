@@ -432,49 +432,10 @@ def _init_nt():
 
 def _init_os2():
     """Initialize the module as appropriate for OS/2"""
-    g = {}
-    # load the installed Makefile:
-    try:
-        filename = get_makefile_filename()
-        parse_makefile(filename, g)
-    except IOError, msg:
-        my_msg = "invalid Python installation: unable to open %s" % filename
-        if hasattr(msg, "strerror"):
-            my_msg = my_msg + " (%s)" % msg.strerror
-
-        raise DistutilsPlatformError(my_msg)
-
-    # load the installed pyconfig.h:
-    try:
-        filename = get_config_h_filename()
-        parse_config_h(file(filename), g)
-    except IOError, msg:
-        my_msg = "invalid Python installation: unable to open %s" % filename
-        if hasattr(msg, "strerror"):
-            my_msg = my_msg + " (%s)" % msg.strerror
-
-        raise DistutilsPlatformError(my_msg)
-
-    # On AIX, there are wrong paths to the linker scripts in the Makefile
-    # -- these paths are relative to the Python source, but when installed
-    # the scripts are in another directory.
-    if python_build:
-        g['LDSHARED'] = g['BLDSHARED']
-
-    # OS/2 module
-
-    # set basic install directories
-    g['LIBDEST'] = get_python_lib(plat_specific=0, standard_lib=1)
-    g['BINLIBDEST'] = get_python_lib(plat_specific=1, standard_lib=1)
-
-    # XXX hmmm.. a normal install puts include files here
-    g['INCLUDEPY'] = get_python_inc(plat_specific=0)
-
-    g['SO'] = '.pyd'
-    g['EXE'] = ".exe"
-
-    global _config_vars
-    _config_vars = g
+    _init_posix()
+    # set the python module extension to .pyd instead of .dll -
+    # for compatibility with previous releases
+    _config_vars['SO'] = '.pyd'
 
 
 def get_config_vars(*args):

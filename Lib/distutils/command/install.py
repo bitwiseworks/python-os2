@@ -70,13 +70,13 @@ INSTALL_SCHEMES = {
         'data'   : '$userbase',
         },
     'os2': {
-        'purelib': '$base/Lib/site-packages',
-        'platlib': '$base/Lib/site-packages',
-        'headers': '$base/Include/$dist_name',
-        'scripts': '$base/Scripts',
+        'purelib': '$base/lib/python$py_version_short/site-packages',
+        'platlib': '$platbase/lib/python$py_version_short/site-packages',
+        'headers': '$base/include/python$py_version_short/$dist_name',
+        'scripts': '$base/bin',
         'data'   : '$base',
         },
-    'os2_home': {
+    'os2_user': {
         'purelib': '$usersite',
         'platlib': '$usersite',
         'headers': '$userbase/include/python$py_version_short/$dist_name',

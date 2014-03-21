@@ -37,16 +37,16 @@ _INSTALL_SCHEMES = {
         'data'   : '{base}',
         },
     'os2': {
-        'stdlib': '{base}/Lib',
-        'platstdlib': '{base}/Lib',
-        'purelib': '{base}/Lib/site-packages',
-        'platlib': '{base}/Lib/site-packages',
-        'include': '{base}/Include',
-        'platinclude': '{base}/Include',
-        'scripts': '{base}/Scripts',
-        'data'   : '{base}',
+        'stdlib': '{base}/lib/python{py_version_short}',
+        'platstdlib': '{platbase}/lib/python{py_version_short}',
+        'purelib': '{base}/lib/python{py_version_short}/site-packages',
+        'platlib': '{platbase}/lib/python{py_version_short}/site-packages',
+        'include': '{base}/include/python{py_version_short}',
+        'platinclude': '{platbase}/include/python{py_version_short}',
+        'scripts': '{base}/bin',
+        'data': '{base}',
         },
-    'os2_home': {
+    'os2_user': {
         'stdlib': '{userbase}/lib/python{py_version_short}',
         'platstdlib': '{userbase}/lib/python{py_version_short}',
         'purelib': '{userbase}/lib/python{py_version_short}/site-packages',
@@ -156,7 +156,7 @@ def _expand_vars(scheme, vars):
     _extend_dict(vars, get_config_vars())
 
     for key, value in _INSTALL_SCHEMES[scheme].items():
-        if os.name in ('posix', 'nt'):
+        if os.name in ('posix', 'nt', 'os2'):
             value = os.path.expanduser(value)
         res[key] = os.path.normpath(_subst_vars(value, vars))
     return res
@@ -462,9 +462,9 @@ def get_config_vars(*args):
         _CONFIG_VARS['platbase'] = _EXEC_PREFIX
         _CONFIG_VARS['projectbase'] = _PROJECT_BASE
 
-        if os.name in ('nt', 'os2'):
+        if os.name == 'nt':
             _init_non_posix(_CONFIG_VARS)
-        if os.name == 'posix':
+        if os.name in ('posix', 'os2'):
             _init_posix(_CONFIG_VARS)
 
         # Setting 'userbase' is done below the call to the
