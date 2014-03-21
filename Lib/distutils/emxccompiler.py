@@ -30,6 +30,8 @@ from distutils import log
 
 class EMXCCompiler (UnixCCompiler):
 
+    _rc_extensions = ['.rc', '.RC']
+
     compiler_type = 'emx'
     obj_extension = ".obj"
     static_lib_extension = ".lib"
@@ -170,30 +172,30 @@ class EMXCCompiler (UnixCCompiler):
 
     # -- Miscellaneous methods -----------------------------------------
 
-    # override the object_filenames method from CCompiler to
-    # support rc and res-files
     def object_filenames (self,
                           source_filenames,
                           strip_dir=0,
                           output_dir=''):
+        # Copied from ccompiler.py, extended to return .res as 'object'-file
+        # for .rc input file
         if output_dir is None: output_dir = ''
         obj_names = []
         for src_name in source_filenames:
-            # use normcase to make sure '.rc' is really '.rc' and not '.RC'
-            (base, ext) = os.path.splitext (os.path.normcase(src_name))
-            if ext not in (self.src_extensions + ['.rc']):
+            (base, ext) = os.path.splitext (src_name)
+            base = os.path.splitdrive(base)[1] # Chop off the drive
+            base = base[os.path.isabs(base):]  # If abs, chop off leading /
+            if ext not in (self.src_extensions + self._rc_extensions):
                 raise UnknownFileError, \
                       "unknown file type '%s' (from '%s')" % \
                       (ext, src_name)
             if strip_dir:
                 base = os.path.basename (base)
-            if ext == '.rc':
-                # these need to be compiled to object files
+            if ext in self._rc_extensions:
                 obj_names.append (os.path.join (output_dir,
-                                            base + self.res_extension))
+                                                base + self.res_extension))
             else:
                 obj_names.append (os.path.join (output_dir,
-                                            base + self.obj_extension))
+                                                base + self.obj_extension))
         return obj_names
 
     # object_filenames ()
