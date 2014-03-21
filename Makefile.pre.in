@@ -624,16 +624,12 @@ Parser/tokenizer_pgen.o:	$(srcdir)/Parser/tokenizer.c
 Parser/pgenmain.o:	$(srcdir)/Include/parsetok.h
 
 $(AST_H): $(AST_ASDL) $(ASDLGEN_FILES)
-ifndef BOOTSTRAPPING_PYTHON
 	$(MKDIR_P) $(AST_H_DIR)
 	$(ASDLGEN) -h $(AST_H_DIR) $(AST_ASDL)
-endif
 
 $(AST_C): $(AST_ASDL) $(ASDLGEN_FILES)
-ifndef BOOTSTRAPPING_PYTHON
 	$(MKDIR_P) $(AST_C_DIR)
 	$(ASDLGEN) -c $(AST_C_DIR) $(AST_ASDL)
-endif
 
 Python/compile.o Python/symtable.o Python/ast.o: $(GRAMMAR_H) $(AST_H)
 
@@ -879,9 +875,11 @@ bininstall:	altbininstall
 	(cd $(DESTDIR)$(LIBPC); $(LN) -s python-$(VERSION).pc python2.pc)
 	-rm -f $(DESTDIR)$(LIBPC)/python.pc
 	(cd $(DESTDIR)$(LIBPC); $(LN) -s python2.pc python.pc)
+ifneq ($(filter os2emx os2knix,$(MACHDEP)),) # bird-like hack!
 	rm -f $(DESTDIR)$(BINDIR)/$(PYTHON); \
 	$(INSTALL_PROGRAM) $(BUILDPYTHON) $(DESTDIR)$(BINDIR)/$(PYTHON); \
 	$(INSTALL_DATA) $(LDLIBRARY) $(DLLLIBRARY) $(DESTDIR)$(LIBDIR); \
+endif
 
 # Install the interpreter with $(VERSION) affixed
 # This goes into $(exec_prefix)
