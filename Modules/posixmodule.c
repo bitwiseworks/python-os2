@@ -55,6 +55,7 @@ corresponding Unix manual entries for more information on calls.");
 #endif
 
 #if defined(PYOS_OS2)
+#define OS2EMX_PLAIN_CHAR
 #define  INCL_DOS
 #define  INCL_DOSERRORS
 #define  INCL_DOSPROCESS

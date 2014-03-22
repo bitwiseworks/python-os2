@@ -437,7 +437,7 @@ PyLocale_getdefaultlocale(PyObject* self)
 
     strcpy( encoding, "");
     if (DosQueryCp (sizeof (cp), cp, &cplen) == NO_ERROR)
-        PyOS_snprintf(encoding, sizeof(encoding), "CP%u", cp[0]);
+        PyOS_snprintf(encoding, sizeof(encoding), "CP%lu", cp[0]);
 
     return Py_BuildValue("ss", locale, encoding);
 }
