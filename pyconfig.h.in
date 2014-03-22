@@ -1272,7 +1272,6 @@
 #define PLATFORM "os2knix"
 #define PYOS_OS2 1
 #define PYCC_GCC 1
-#undef HAVE_LINK // YD not working but available
 #endif
 
 #endif /*Py_PYCONFIG_H*/
