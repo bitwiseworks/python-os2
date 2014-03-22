@@ -95,7 +95,7 @@ win32_urandom(unsigned char *buffer, Py_ssize_t size, int raise)
 #endif /* MS_WINDOWS */
 
 
-#ifdef __VMS
+#if defined(__VMS) || defined(__OS2__)
 /* Use openssl random routine */
 #include <openssl/rand.h>
 static int
@@ -116,7 +116,7 @@ vms_urandom(unsigned char *buffer, Py_ssize_t size, int raise)
 #endif /* __VMS */
 
 
-#if !defined(MS_WINDOWS) && !defined(__VMS)
+#if !defined(MS_WINDOWS) && !defined(__VMS) && !defined(__OS2__)
 
 /* Read size bytes from /dev/urandom into buffer.
    Call Py_FatalError() on error. */
@@ -243,7 +243,7 @@ _PyOS_URandom(void *buffer, Py_ssize_t size)
 #ifdef MS_WINDOWS
     return win32_urandom((unsigned char *)buffer, size, 1);
 #else
-# ifdef __VMS
+# if defined(__VMS) || defined(__OS2__)
     return vms_urandom((unsigned char *)buffer, size, 1);
 # else
     return dev_urandom_python((char*)buffer, size);
@@ -302,7 +302,7 @@ _PyRandom_Init(void)
 #ifdef MS_WINDOWS
         (void)win32_urandom((unsigned char *)secret, secret_size, 0);
 #else /* #ifdef MS_WINDOWS */
-# ifdef __VMS
+# if defined(__VMS) || defined(__OS2__)
         vms_urandom((unsigned char *)secret, secret_size, 0);
 # else
         dev_urandom_noraise((char*)secret, secret_size);
