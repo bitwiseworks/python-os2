@@ -95,8 +95,12 @@ class build_scripts (Command):
                 if not self.dry_run:
                     outf = open(outfile, "w")
                     if not _sysconfig.is_python_build():
+                        if os.name == "os2":
+                            executable = self.executable.replace(os.environ.get("UNIXROOT"),"/@unixroot").lower()
+                        else:
+                            executable = sys.executable
                         outf.write("#!%s%s\n" %
-                                   (self.executable,
+                                   (executable,
                                     post_interp))
                     else:
                         outf.write("#!%s%s\n" %
