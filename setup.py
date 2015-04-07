@@ -671,7 +671,9 @@ class PyBuildExt(build_ext):
         exts.append( Extension('cPickle', ['cPickle.c']) )
 
         # Memory-mapped files (also works on Win32).
-        if host_platform not in ['atheos', 'os2knix']:
+        if host_platform in ['os2knix']:
+            exts.append( Extension('mmap', ['mmapmodule.c'], libraries=['mmap']) )
+        elif host_platform not in ['atheos']:
             exts.append( Extension('mmap', ['mmapmodule.c']) )
         else:
             missing.append('mmap')
