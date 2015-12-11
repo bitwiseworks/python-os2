@@ -37,13 +37,16 @@ def normcase(s):
     """Normalize case of pathname.
 
     Makes all characters lowercase and all altseps into seps."""
-    return s.replace('\\', '/').lower()
+    return s.replace(altsep, sep).lower()
 
 
 # Join two (or more) paths.
 
 def join(a, *p):
-    """Join two or more pathname components, inserting sep as needed"""
+    """Join two or more pathname components, inserting sep as needed.
+
+    Also replaces all altsep chars with sep in the returned string
+    to make it consistent."""
     path = a
     for b in p:
         if isabs(b):
@@ -52,7 +55,7 @@ def join(a, *p):
             path = path + b
         else:
             path = path + '/' + b
-    return path
+    return path.replace(altsep, sep)
 
 
 # Parse UNC paths
