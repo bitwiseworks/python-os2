@@ -4525,6 +4525,12 @@ AIX*)
   AC_DEFINE(HAVE_BROKEN_PIPE_BUF, 1, [Define if the system reports an invalid PIPE_BUF value.]) ;;
 esac
 
+case $host_os in
+os2-emx)
+  AC_DEFINE(PYOS_OS2, 1, [Define to 1 when building on OS/2.])
+  AC_DEFINE(PYCC_GCC, 1, [Define to 1 when building on OS/2 with GCC.])
+  ;;
+esac
 
 AC_SUBST(THREADHEADERS)
 
