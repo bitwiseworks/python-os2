@@ -26,7 +26,7 @@ extsep = '.'
 sep = '/'
 altsep = '\\'
 pathsep = ';'
-defpath = '.;C:\\bin'
+defpath = '.;' + (os.environ['UNIXROOT'] + '\\usr\\bin' if 'UNIXROOT' in os.environ else 'C:\\bin')
 devnull = 'nul'
 
 # Normalize the case of a pathname and map slashes to backslashes.
