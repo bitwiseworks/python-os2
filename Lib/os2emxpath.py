@@ -42,7 +42,7 @@ def normcase(s):
 # Join two (or more) paths.
 
 def join(a, *p):
-    """Join two or more pathname components, inserting sep as needed"""
+    """Join two or more pathname components, inserting sep as needed
 
     Also replace all altsep chars with sep in the returned string
     to make it consistent."""
