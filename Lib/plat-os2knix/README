@@ -1,0 +1,5 @@
+This is a dummy directory to prevent the install target from creating
+it out ouf the plat-generic template which fails due to:
+
+  a) a bug in ash that causes a crash (see http://trac.netlabs.org/ports/ticket/83)
+  b) plat-generic/regen not accounting for /@unixroot
