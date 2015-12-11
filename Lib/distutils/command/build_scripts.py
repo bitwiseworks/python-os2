@@ -98,7 +98,7 @@ class build_scripts (Command):
                         if os.name == "os2":
                             executable = self.executable.replace(os.environ.get("UNIXROOT"),"/@unixroot").lower()
                         else:
-                            executable = sys.executable
+                            executable = self.executable
                         outf.write("#!%s%s\n" %
                                    (executable,
                                     post_interp))
