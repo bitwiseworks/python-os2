@@ -12,6 +12,9 @@ import warnings
 warnings.warn("The popen2 module is deprecated.  Use the subprocess module.",
               DeprecationWarning, stacklevel=2)
 
+import sysconfig
+SHELL = sysconfig.get_config_var('SHELL') or '/bin/sh'
+
 __all__ = ["popen2", "popen3", "popen4"]
 
 try:
@@ -81,7 +84,7 @@ class Popen3:
 
     def _run_child(self, cmd):
         if isinstance(cmd, basestring):
-            cmd = ['/bin/sh', '-c', cmd]
+            cmd = [SHELL, '-c', cmd]
         os.closerange(3, MAXFD)
         try:
             os.execvp(cmd[0], cmd)

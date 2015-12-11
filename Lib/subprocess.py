@@ -396,6 +396,9 @@ import gc
 import signal
 import errno
 
+import sysconfig
+SHELL = sysconfig.get_config_var('SHELL') or '/bin/sh'
+
 # Exception classes used by this module.
 class CalledProcessError(Exception):
     """This exception is raised when a process run by check_call() or
@@ -1197,7 +1200,7 @@ class Popen(object):
                 args = list(args)
 
             if shell:
-                args = ["/bin/sh", "-c"] + args
+                args = [SHELL, "-c"] + args
                 if executable:
                     args[0] = executable
 
