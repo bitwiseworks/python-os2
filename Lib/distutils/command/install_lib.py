@@ -112,7 +112,7 @@ class install_lib(Command):
 
     def install(self):
         if os.path.isdir(self.build_dir):
-            outfiles = self.copy_tree(self.build_dir, self.install_dir)
+            outfiles = self.copy_tree(self.build_dir, self.install_dir, preserve_symlinks=1)
         else:
             self.warn("'%s' does not exist -- no Python modules to install" %
                       self.build_dir)

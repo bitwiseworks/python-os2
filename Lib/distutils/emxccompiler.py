@@ -106,6 +106,16 @@ class EMXCCompiler (UnixCCompiler):
         # Additional libraries
         libraries.extend(self.dll_libraries)
 
+        # get pyd name and extension
+        pyd_name8, pyd_ext = os.path.splitext( os.path.basename(output_filename))
+        # if name is longer than 8.3, generate a hashed 8.3 name
+        if len(os.path.basename(output_filename)) > 8+1+3:
+            pyd_name8 = os.path.basename(output_filename)[:3] + str(reduce(lambda x,y:x+y, map(ord, output_filename)) % 65536)
+
+        # full relative path of pyd
+        pyd_name = os.path.join(os.path.dirname(output_filename),
+            pyd_name8 + ".pyd")
+
         # handle export symbols by creating a def-file
         # with executables this only works with gcc/ld as linker
         if ((export_symbols is not None) and
@@ -129,7 +139,7 @@ class EMXCCompiler (UnixCCompiler):
             # Generate .def file
             contents = [
                 "LIBRARY %s INITINSTANCE TERMINSTANCE" % \
-                os.path.splitext(os.path.basename(output_filename))[0],
+                pyd_name8,
                 "DATA MULTIPLE NONSHARED",
                 "EXPORTS"]
             for sym in export_symbols:
@@ -156,7 +166,7 @@ class EMXCCompiler (UnixCCompiler):
         UnixCCompiler.link(self,
                            target_desc,
                            objects,
-                           output_filename,
+                           pyd_name,
                            output_dir,
                            libraries,
                            library_dirs,
@@ -167,6 +177,10 @@ class EMXCCompiler (UnixCCompiler):
                            extra_postargs,
                            build_temp,
                            target_lang)
+        # if filename exceed 8.3, create a symlink to 8.3 pyd
+        if len(os.path.basename(output_filename)) > 8+1+3:
+            os.remove( output_filename)
+            os.symlink( pyd_name8 + ".pyd", output_filename)
 
     # link ()
 
