@@ -1302,11 +1302,6 @@ find_module(char *fullname, char *subname, PyObject *path, char *buf,
     static struct filedescr fd_builtin = {"", "", C_BUILTIN};
     static struct filedescr fd_package = {"", "", PKG_DIRECTORY};
     char *name;
-#if defined(PYOS_OS2)
-    size_t saved_len;
-    size_t saved_namelen;
-    char *saved_buf = NULL;
-#endif
     if (p_loader != NULL)
         *p_loader = NULL;
 
@@ -1513,40 +1508,7 @@ find_module(char *fullname, char *subname, PyObject *path, char *buf,
                 }
             }
         }
-#if defined(PYOS_OS2)
-        /* take a snapshot of the module spec for restoration
-         * after the 8 character DLL hackery
-         */
-        saved_buf = strdup(buf);
-        saved_len = len;
-        saved_namelen = namelen;
-#endif /* PYOS_OS2 */
         for (fdp = _PyImport_Filetab; fdp->suffix != NULL; fdp++) {
-#if defined(PYOS_OS2) && defined(HAVE_DYNAMIC_LOADING)
-            /* OS/2 limits DLLs to 8 character names (w/o
-               extension)
-             * so if the name is longer than that and its a
-             * dynamically loaded module we're going to try,
-             * truncate the name before trying
-             */
-            if (strlen(subname) > 8) {
-                /* is this an attempt to load a C extension? */
-                const struct filedescr *scan;
-                scan = _PyImport_DynLoadFiletab;
-                while (scan->suffix != NULL) {
-                    if (!strcmp(scan->suffix, fdp->suffix))
-                        break;
-                    else
-                        scan++;
-                }
-                if (scan->suffix != NULL) {
-                    /* yes, so truncate the name */
-                    namelen = 8;
-                    len -= strlen(subname) - namelen;
-                    buf[len] = '\0';
-                }
-            }
-#endif /* PYOS_OS2 */
             strcpy(buf+len, fdp->suffix);
             if (Py_VerboseFlag > 1)
                 PySys_WriteStderr("# trying %s\n", buf);
@@ -1562,21 +1524,7 @@ find_module(char *fullname, char *subname, PyObject *path, char *buf,
                     fp = NULL;
                 }
             }
-#if defined(PYOS_OS2)
-            /* restore the saved snapshot */
-            strcpy(buf, saved_buf);
-            len = saved_len;
-            namelen = saved_namelen;
-#endif
         }
-#if defined(PYOS_OS2)
-        /* don't need/want the module name snapshot anymore */
-        if (saved_buf)
-        {
-            free(saved_buf);
-            saved_buf = NULL;
-        }
-#endif
         Py_XDECREF(copy);
         if (fp != NULL)
             break;
@@ -1644,7 +1592,7 @@ PyAPI_FUNC(int) _PyImport_IsScript(struct filedescr * fd)
 #elif defined(DJGPP)
 #include <dir.h>
 
-#elif (defined(__MACH__) && defined(__APPLE__) || defined(__CYGWIN__)) && defined(HAVE_DIRENT_H)
+#elif (defined(__MACH__) && defined(__APPLE__) || defined(__KLIBC__) || defined(__CYGWIN__)) && defined(HAVE_DIRENT_H)
 #include <sys/types.h>
 #include <dirent.h>
 
@@ -1704,7 +1652,8 @@ case_ok(char *buf, Py_ssize_t len, Py_ssize_t namelen, char *name)
     return strncmp(ffblk.ff_name, name, namelen) == 0;
 
 /* new-fangled macintosh (macosx) or Cygwin */
-#elif (defined(__MACH__) && defined(__APPLE__) || defined(__CYGWIN__)) && defined(HAVE_DIRENT_H)
+/* OS/2 use opendir() because it resolves @unixroot names without resolving symlinks */
+#elif (defined(__MACH__) && defined(__APPLE__) || defined(__KLIBC__) || defined(__CYGWIN__)) && defined(HAVE_DIRENT_H)
     DIR *dirp;
     struct dirent *dp;
     char dirname[MAXPATHLEN + 1];
@@ -1768,49 +1717,6 @@ case_ok(char *buf, Py_ssize_t len, Py_ssize_t namelen, char *name)
         return 1; /* match */
 
     return 0;
-
-/* OS/2 */
-#elif defined(__KLIBC__)
-	char canon[MAXPATHLEN+1];
-	size_t canonlen;
-	char *p, *p2;
-
-	if (Py_GETENV("PYTHONCASEOK") != NULL)
-		return 1;
-
-	/* This resolves case differences and return and native OS/2
-	   path. Unfortunately, it'll also resolve symbolic links
-	   while of course will screw up a bit... */
-	if (!_realrealpath(buf, canon, sizeof(canon)))
-		return 0;
-	canonlen = strlen(canon);
-	if (canonlen < namelen)
-		return 0;
-	p = strrchr(canon, SEP);
-	p2 = strrchr(p ? p : canon, ALTSEP);
-	if (p2)
-		p = p2;
-
-	return strncmp(p ? p + 1 : canon, name, namelen) == 0;
-
-#elif defined(PYOS_OS2)
-    HDIR hdir = 1;
-    ULONG srchcnt = 1;
-    FILEFINDBUF3 ffbuf;
-    APIRET rc;
-
-    if (Py_GETENV("PYTHONCASEOK") != NULL)
-        return 1;
-
-    rc = DosFindFirst(buf,
-                      &hdir,
-                      FILE_READONLY | FILE_HIDDEN | FILE_SYSTEM | FILE_DIRECTORY,
-                      &ffbuf, sizeof(ffbuf),
-                      &srchcnt,
-                      FIL_STANDARD);
-    if (rc != NO_ERROR)
-        return 0;
-    return strncmp(ffbuf.achName, name, namelen) == 0;
 
 /* assuming it's a case-sensitive filesystem, so there's nothing to do! */
 #else
