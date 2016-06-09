@@ -179,7 +179,10 @@ class EMXCCompiler (UnixCCompiler):
                            target_lang)
         # if filename exceed 8.3, create a symlink to 8.3 pyd
         if len(os.path.basename(output_filename)) > 8+1+3:
-            os.remove( output_filename)
+            try:
+                os.remove( output_filename)
+            except OSError:
+                pass
             os.symlink( pyd_name8 + ".pyd", output_filename)
 
     # link ()
