@@ -557,6 +557,8 @@ class PyBuildExt(build_ext):
 
         # Check for MacOS X, which doesn't need libm.a at all
         math_libs = ['m']
+        if host_platform in ['os2knix']:
+            math_libs.append('cx')
         if host_platform in ['darwin', 'beos']:
             math_libs = []
 
@@ -672,7 +674,7 @@ class PyBuildExt(build_ext):
 
         # Memory-mapped files (also works on Win32).
         if host_platform in ['os2knix']:
-            exts.append( Extension('mmap', ['mmapmodule.c'], libraries=['mmap']) )
+            exts.append( Extension('mmap', ['mmapmodule.c'], libraries=['cx']) )
         elif host_platform not in ['atheos']:
             exts.append( Extension('mmap', ['mmapmodule.c']) )
         else:
@@ -814,7 +816,7 @@ class PyBuildExt(build_ext):
             exts.append( Extension('_ssl', ['_ssl.c'],
                                    include_dirs = ssl_incs,
                                    library_dirs = ssl_libs,
-                                   libraries = ['ssl', 'crypto'],
+                                   libraries = ['ssl', 'crypto', 'cx'],
                                    depends = ['socketmodule.h']), )
         else:
             missing.append('_ssl')
@@ -1076,9 +1078,6 @@ class PyBuildExt(build_ext):
                 print "bsddb lib dir:", dblib_dir, " inc dir:", db_incdir
             db_incs = [db_incdir]
             dblibs = [dblib]
-            # YD add required libs
-            if os.name == "os2":
-                dblibs += ["mmap", "pthread"]
             # We add the runtime_library_dirs argument because the
             # BerkeleyDB lib we're linking against often isn't in the
             # system dynamic library search path.  This is usually
