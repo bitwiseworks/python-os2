@@ -932,7 +932,7 @@ if test $enable_shared = "yes"; then
 	  LDLIBRARY='python$(VERSION)_dll.a'
 	  BLDLIBRARY='-L. -lpython$(VERSION)'
 	  RUNSHARED=BEGINLIBPATH="'`pwd`;$BEGINLIBPATH'"
-	  CONDENSED_VERSION=`echo "${VERSION}" | tr -d .,"`
+	  CONDENSED_VERSION=`echo "${VERSION}" | tr -d .,`
 	  DLLLIBRARY='python$(CONDENSED_VERSION).dll'
 	  ;;
 
