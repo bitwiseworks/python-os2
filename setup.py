@@ -557,8 +557,6 @@ class PyBuildExt(build_ext):
 
         # Check for MacOS X, which doesn't need libm.a at all
         math_libs = ['m']
-        if host_platform in ['os2knix']:
-            math_libs.append('cx')
         if host_platform in ['darwin', 'beos']:
             math_libs = []
 
@@ -673,9 +671,7 @@ class PyBuildExt(build_ext):
         exts.append( Extension('cPickle', ['cPickle.c']) )
 
         # Memory-mapped files (also works on Win32).
-        if host_platform in ['os2knix']:
-            exts.append( Extension('mmap', ['mmapmodule.c'], libraries=['cx']) )
-        elif host_platform not in ['atheos']:
+        if host_platform not in ['atheos']:
             exts.append( Extension('mmap', ['mmapmodule.c']) )
         else:
             missing.append('mmap')
@@ -816,7 +812,7 @@ class PyBuildExt(build_ext):
             exts.append( Extension('_ssl', ['_ssl.c'],
                                    include_dirs = ssl_incs,
                                    library_dirs = ssl_libs,
-                                   libraries = ['ssl', 'crypto', 'cx'],
+                                   libraries = ['ssl', 'crypto'],
                                    depends = ['socketmodule.h']), )
         else:
             missing.append('_ssl')
