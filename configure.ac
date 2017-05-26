@@ -2087,8 +2087,8 @@ then
 		LDSHARED="gcc -shared"
 		LDCXXSHARED="g++ -shared";;
 	OS/2*|os2*|*emx*)
-		LDSHARED="${CC} ${LDFLAGS} -Zdll"
-		LDCXXSHARED="${CXX} ${LDFLAGS} -Zdll";;
+		LDSHARED='$(CC) -Zdll'
+		LDCXXSHARED='$(CXX) -Zdll';;
 	*)	LDSHARED="ld";;
 	esac
 fi
