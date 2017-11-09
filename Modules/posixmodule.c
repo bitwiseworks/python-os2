@@ -141,6 +141,9 @@ corresponding Unix manual entries for more information on calls.");
 /* Everything needed is defined in PC/os2emx/pyconfig.h or vms/pyconfig.h */
 #else                   /* all other compilers */
 /* Unix functions that the configure script doesn't check for */
+#if defined(PYOS_OS2)
+#define HAVE_SPAWNV     1
+#endif
 #define HAVE_EXECV      1
 #define HAVE_FORK       1
 #if defined(__USLC__) && defined(__SCO_VERSION__)       /* SCO UDK Compiler */
