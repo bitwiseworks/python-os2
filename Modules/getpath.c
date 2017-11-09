@@ -169,6 +169,7 @@ ismodule(char *filename)        /* Is module -- check for .pyc/.pyo too */
 }
 
 
+#ifndef PYOS_OS2
 static int
 isxfile(char *filename)         /* Is executable file */
 {
@@ -181,6 +182,7 @@ isxfile(char *filename)         /* Is executable file */
         return 0;
     return 1;
 }
+#endif
 
 
 static int
@@ -423,6 +425,10 @@ calculate_path(void)
 #endif
 #endif
 
+#ifdef PYOS_OS2
+    /* This will search for prog in PATH and leave progpath empty on failure */
+    _path2(prog, ".exe", progpath, MAXPATHLEN);
+#else
         /* If there is no slash in the argv0 path, then we have to
          * assume python is on the user's $PATH, since there's no
          * other way to find a directory to start the search from.  If
@@ -471,6 +477,8 @@ calculate_path(void)
         }
         else
                 progpath[0] = '\0';
+#endif /* PYOS_OS2 */
+
 #ifndef ALTSEP
         if (!IS_ABSPATH(progpath) && progpath[0] != '\0')
 #endif
