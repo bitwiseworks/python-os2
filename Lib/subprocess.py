@@ -396,6 +396,8 @@ import gc
 import signal
 import errno
 
+os2 = (os.name == "os2")
+
 import sysconfig
 SHELL = sysconfig.get_config_var('SHELL') or '/bin/sh'
 
@@ -426,6 +428,10 @@ if mswindows:
         wShowWindow = 0
     class pywintypes:
         error = IOError
+elif os2:
+    import threading
+    import fcntl
+    import time
 else:
     import select
     _has_poll = hasattr(select, 'poll')
@@ -660,15 +666,15 @@ class Popen(object):
         if not isinstance(bufsize, (int, long)):
             raise TypeError("bufsize must be an integer")
 
-        if mswindows:
+        if mswindows or os2:
             if preexec_fn is not None:
                 raise ValueError("preexec_fn is not supported on Windows "
-                                 "platforms")
-            if close_fds and (stdin is not None or stdout is not None or
-                              stderr is not None):
+                                 "and OS/2 platforms")
+            if not os2 and close_fds and (stdin is not None or stdout is not None or
+                                          stderr is not None):
                 raise ValueError("close_fds is not supported on Windows "
                                  "platforms if you redirect stdin/stdout/stderr")
-        else:
+        if not mswindows:
             # POSIX
             if startupinfo is not None:
                 raise ValueError("startupinfo is only supported on Windows "
@@ -1211,104 +1217,71 @@ class Popen(object):
                 os.close(fd)
                 to_close.remove(fd)
 
-            # For transferring possible exec failure from child to parent
-            # The first char specifies the exception type: 0 means
-            # OSError, 1 means some other error.
-            errpipe_read, errpipe_write = self.pipe_cloexec()
-            try:
+            if os2:
+                # We use spawn on OS/2 instead of fork because fork is very
+                # inefficient there (mostly due to the lack of COW page support
+                # in the kernel).
+                mode = os.P_NOWAIT
+                oldcwd = None
+                dups = [ None, None, None ]
+                cloexec_fds = set()
+
                 try:
-                    gc_was_enabled = gc.isenabled()
-                    # Disable gc to avoid bug where gc -> file_dealloc ->
-                    # write to stderr -> hang.  http://bugs.python.org/issue1336
-                    gc.disable()
-                    try:
-                        self.pid = os.fork()
-                    except:
-                        if gc_was_enabled:
-                            gc.enable()
-                        raise
-                    self._child_created = True
-                    if self.pid == 0:
-                        # Child
-                        try:
-                            # Close parent's pipe ends
-                            if p2cwrite is not None:
-                                os.close(p2cwrite)
-                            if c2pread is not None:
-                                os.close(c2pread)
-                            if errread is not None:
-                                os.close(errread)
-                            os.close(errpipe_read)
+                    # Change the directory if asked
+                    if cwd is not None:
+                        oldcwd = os.getcwd()
+                        os.chdir(cwd)
 
-                            # When duping fds, if there arises a situation
-                            # where one of the fds is either 0, 1 or 2, it
-                            # is possible that it is overwritten (#12607).
-                            if c2pwrite == 0:
-                                c2pwrite = os.dup(c2pwrite)
-                            if errwrite == 0 or errwrite == 1:
-                                errwrite = os.dup(errwrite)
+                    # Duplicate stdio if needed
+                    if p2cread is not None:
+                        dups[0] = os.dup(0)
+                        os.dup2(p2cread, 0)
+                        self._set_cloexec_flag(dups[0])
+                    if c2pwrite is not None:
+                        dups[1] = os.dup(1)
+                        os.dup2(c2pwrite, 1)
+                        self._set_cloexec_flag(dups[1])
+                    if errwrite is not None:
+                        dups[2] = os.dup(2)
+                        os.dup2(errwrite, 2)
+                        self._set_cloexec_flag(dups[2])
 
-                            # Dup fds for child
-                            def _dup2(a, b):
-                                # dup2() removes the CLOEXEC flag but
-                                # we must do it ourselves if dup2()
-                                # would be a no-op (issue #10806).
-                                if a == b:
-                                    self._set_cloexec_flag(a, False)
-                                elif a is not None:
-                                    os.dup2(a, b)
-                            _dup2(p2cread, 0)
-                            _dup2(c2pwrite, 1)
-                            _dup2(errwrite, 2)
+                    # Disable inheritance
+                    if close_fds:
+                        for i in xrange(3, MAXFD):
+                            try:
+                                f = fcntl.fcntl(i, fcntl.F_GETFD)
+                                if not (f & fcntl.FD_CLOEXEC):
+                                    cloexec_fds.add(i)
+                                    self._set_cloexec_flag(i)
+                            except:
+                                pass
 
-                            # Close pipe fds.  Make sure we don't close the
-                            # same fd more than once, or standard fds.
-                            closed = { None }
-                            for fd in [p2cread, c2pwrite, errwrite]:
-                                if fd not in closed and fd > 2:
-                                    os.close(fd)
-                                    closed.add(fd)
-
-                            if cwd is not None:
-                                os.chdir(cwd)
-
-                            if preexec_fn:
-                                preexec_fn()
-
-                            # Close all other fds, if asked for - after
-                            # preexec_fn(), which may open FDs.
-                            if close_fds:
-                                self._close_fds(but=errpipe_write)
-
-                            if env is None:
-                                os.execvp(executable, args)
-                            else:
-                                os.execvpe(executable, args, env)
-
-                        except:
-                            exc_type, exc_value, tb = sys.exc_info()
-                            # Save the traceback and attach it to the exception object
-                            exc_lines = traceback.format_exception(exc_type,
-                                                                   exc_value,
-                                                                   tb)
-                            exc_value.child_traceback = ''.join(exc_lines)
-                            os.write(errpipe_write, pickle.dumps(exc_value))
-
-                        # This exitcode won't be reported to applications, so it
-                        # really doesn't matter what we return.
-                        os._exit(255)
-
-                    # Parent
-                    if gc_was_enabled:
-                        gc.enable()
+                    if env is None:
+                        pid = os.spawnvp(mode, executable, args)
+                    else:
+                        pid = os.spawnvpe(mode, executable, args, env)
                 finally:
-                    # be sure the FD is closed no matter what
-                    os.close(errpipe_write)
+                    # Restore inheritance
+                    for i in cloexec_fds:
+                        self._set_cloexec_flag(i, False)
 
-                # Wait for exec to fail or succeed; possibly raising exception
-                # Exception limited to 1M
-                data = _eintr_retry_call(os.read, errpipe_read, 1048576)
-            finally:
+                    # Restore the parent stdio
+                    for i, fd in enumerate(dups):
+                        if fd is not None:
+                            os.dup2(fd, i)
+                            os.close(fd)
+
+                    # Restore the current directory
+                    if oldcwd is not None:
+                        os.chdir(oldcwd)
+
+                # Child is launched. Close the parent's copy of those pipe
+                # handles that only the child should have open.  You need
+                # to make sure that no handles to the write end of the
+                # output pipe are maintained in this process or else the
+                # pipe will not close when the child process exits and the
+                # ReadFile will hang.
                 if p2cread is not None and p2cwrite is not None:
                     _close_in_parent(p2cread)
                 if c2pwrite is not None and c2pread is not None:
@@ -1316,17 +1289,126 @@ class Popen(object):
                 if errwrite is not None and errread is not None:
                     _close_in_parent(errwrite)
 
-                # be sure the FD is closed no matter what
-                os.close(errpipe_read)
+                self._child_created = True
+                self.pid = pid
 
-            if data != "":
+            else:
+                # For transferring possible exec failure from child to parent
+                # The first char specifies the exception type: 0 means
+                # OSError, 1 means some other error.
+                errpipe_read, errpipe_write = self.pipe_cloexec()
                 try:
-                    _eintr_retry_call(os.waitpid, self.pid, 0)
-                except OSError as e:
-                    if e.errno != errno.ECHILD:
-                        raise
-                child_exception = pickle.loads(data)
-                raise child_exception
+                    try:
+                        gc_was_enabled = gc.isenabled()
+                        # Disable gc to avoid bug where gc -> file_dealloc ->
+                        # write to stderr -> hang.  http://bugs.python.org/issue1336
+                        gc.disable()
+                        try:
+                            self.pid = os.fork()
+                        except:
+                            if gc_was_enabled:
+                                gc.enable()
+                            raise
+                        self._child_created = True
+                        if self.pid == 0:
+                            # Child
+                            try:
+                                # Close parent's pipe ends
+                                if p2cwrite is not None:
+                                    os.close(p2cwrite)
+                                if c2pread is not None:
+                                    os.close(c2pread)
+                                if errread is not None:
+                                    os.close(errread)
+                                os.close(errpipe_read)
+
+                                # When duping fds, if there arises a situation
+                                # where one of the fds is either 0, 1 or 2, it
+                                # is possible that it is overwritten (#12607).
+                                if c2pwrite == 0:
+                                    c2pwrite = os.dup(c2pwrite)
+                                if errwrite == 0 or errwrite == 1:
+                                    errwrite = os.dup(errwrite)
+
+                                # Dup fds for child
+                                def _dup2(a, b):
+                                    # dup2() removes the CLOEXEC flag but
+                                    # we must do it ourselves if dup2()
+                                    # would be a no-op (issue #10806).
+                                    if a == b:
+                                        self._set_cloexec_flag(a, False)
+                                    elif a is not None:
+                                        os.dup2(a, b)
+                                _dup2(p2cread, 0)
+                                _dup2(c2pwrite, 1)
+                                _dup2(errwrite, 2)
+
+                                # Close pipe fds.  Make sure we don't close the
+                                # same fd more than once, or standard fds.
+                                closed = { None }
+                                for fd in [p2cread, c2pwrite, errwrite]:
+                                    if fd not in closed and fd > 2:
+                                        os.close(fd)
+                                        closed.add(fd)
+
+                                if cwd is not None:
+                                    os.chdir(cwd)
+
+                                if preexec_fn:
+                                    preexec_fn()
+
+                                # Close all other fds, if asked for - after
+                                # preexec_fn(), which may open FDs.
+                                if close_fds:
+                                    self._close_fds(but=errpipe_write)
+
+                                if env is None:
+                                    os.execvp(executable, args)
+                                else:
+                                    os.execvpe(executable, args, env)
+
+                            except:
+                                exc_type, exc_value, tb = sys.exc_info()
+                                # Save the traceback and attach it to the exception object
+                                exc_lines = traceback.format_exception(exc_type,
+                                                                       exc_value,
+                                                                       tb)
+                                exc_value.child_traceback = ''.join(exc_lines)
+                                os.write(errpipe_write, pickle.dumps(exc_value))
+
+                            # This exitcode won't be reported to applications, so it
+                            # really doesn't matter what we return.
+                            os._exit(255)
+
+                        # Parent
+                        if gc_was_enabled:
+                            gc.enable()
+                    finally:
+                        # be sure the FD is closed no matter what
+                        os.close(errpipe_write)
+
+                    # Wait for exec to fail or succeed; possibly raising exception
+                    # Exception limited to 1M
+                    data = _eintr_retry_call(os.read, errpipe_read, 1048576)
+                finally:
+                    if p2cread is not None and p2cwrite is not None:
+                        _close_in_parent(p2cread)
+                    if c2pwrite is not None and c2pread is not None:
+                        _close_in_parent(c2pwrite)
+                    if errwrite is not None and errread is not None:
+                        _close_in_parent(errwrite)
+
+                    # be sure the FD is closed no matter what
+                    os.close(errpipe_read)
+
+                if data != "":
+                    try:
+                        _eintr_retry_call(os.waitpid, self.pid, 0)
+                    except OSError as e:
+                        if e.errno != errno.ECHILD:
+                            raise
+                    child_exception = pickle.loads(data)
+                    raise child_exception
 
 
         def _handle_exitstatus(self, sts, _WIFSIGNALED=os.WIFSIGNALED,
@@ -1392,17 +1474,58 @@ class Popen(object):
 
 
         def _communicate(self, input):
-            if self.stdin:
-                # Flush stdio buffer.  This might block, if the user has
-                # been writing to .stdin in an uncontrolled fashion.
-                self.stdin.flush()
-                if not input:
+            if os2:
+                def _readerthread(file, buffer):
+                    while True:
+                        data = _eintr_retry_call(file.read)
+                        if data == "":
+                            file.close()
+                            break
+                        buffer.append(data)
+
+                stdout = None # Return
+                stderr = None # Return
+
+                if self.stdout:
+                    stdout = []
+                    stdout_thread = threading.Thread(target=_readerthread,
+                                                     args=(self.stdout, stdout))
+                    stdout_thread.setDaemon(True)
+                    stdout_thread.start()
+
+                if self.stderr:
+                    stderr = []
+                    stderr_thread = threading.Thread(target=_readerthread,
+                                                     args=(self.stderr, stderr))
+                    stderr_thread.setDaemon(True)
+                    stderr_thread.start()
+
+                if self.stdin:
+                    if input is not None:
+                        try:
+                            self.stdin.write(input)
+                        except IOError as e:
+                            if e.errno != errno.EPIPE:
+                                raise
                     self.stdin.close()
 
-            if _has_poll:
-                stdout, stderr = self._communicate_with_poll(input)
+                if self.stdout:
+                    stdout_thread.join()
+                if self.stderr:
+                    stderr_thread.join()
+
             else:
-                stdout, stderr = self._communicate_with_select(input)
+                if self.stdin:
+                    # Flush stdio buffer.  This might block, if the user has
+                    # been writing to .stdin in an uncontrolled fashion.
+                    self.stdin.flush()
+                    if not input:
+                        self.stdin.close()
+
+                if _has_poll:
+                    stdout, stderr = self._communicate_with_poll(input)
+                else:
+                    stdout, stderr = self._communicate_with_select(input)
 
             # All data exchanged.  Translate lists into strings.
             if stdout is not None:
@@ -1616,8 +1739,26 @@ def _demo_windows():
     p.wait()
 
 
+def _demo_os2():
+    #
+    # Example 1: Simple redirection: Get current process data
+    #
+    pdata = Popen(["pstat", "/p:%s" % hex(os.getpid())[2:]], stdout=PIPE, stderr=PIPE).communicate()[0]
+    print "Current process data:"
+    print pdata
+    #
+    # Example 2: Connecting several subprocesses
+    #
+    p1 = Popen(["pstat", "/p:%s" % hex(os.getpid())[2:]], stdout=PIPE)
+    p2 = Popen(["grep", "\.EXE"], stdin=p1.stdout, stdout=PIPE)
+    print "Current .EXE:"
+    print p2.communicate()[0]
+
+
 if __name__ == "__main__":
     if mswindows:
         _demo_windows()
+    elif os2:
+        _demo_os2()
     else:
         _demo_posix()

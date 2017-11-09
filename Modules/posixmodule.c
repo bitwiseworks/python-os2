@@ -4820,11 +4820,7 @@ _PyPopen(char *cmdstring, int mode, int n, int bufsize)
         file_count = 3;
     i = pipe_err = 0;
     while ((pipe_err == 0) && (i < file_count))
-#ifndef __KLIBC__
         pipe_err = pipe((int *)&p_fd[i++]);
-#else
-        pipe_err = socketpair(AF_UNIX, SOCK_STREAM,0,(int *)&p_fd[i++]);
-#endif
     if (pipe_err < 0)
     {
         /* didn't get them all made - clean up and bail out */
@@ -6961,11 +6957,7 @@ posix_pipe(PyObject *self, PyObject *noargs)
     int fds[2];
     int res;
     Py_BEGIN_ALLOW_THREADS
-#ifndef __KLIBC__
     res = pipe(fds);
-#else
-    res = socketpair(AF_UNIX, SOCK_STREAM,0, fds);
-#endif
     Py_END_ALLOW_THREADS
     if (res != 0)
         return posix_error();
