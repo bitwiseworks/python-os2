@@ -126,7 +126,14 @@ def cpu_count():
             num = 0
     else:
         try:
-            num = os.sysconf('SC_NPROCESSORS_ONLN')
+            num = 0
+            if os.name == 'os2':
+                try:
+                    num = int(os.environ['NUMBER_OF_PROCESSORS'])
+                except (ValueError, KeyError):
+                    num = 0
+            if num == 0:
+                num = os.sysconf('SC_NPROCESSORS_ONLN')
         except (ValueError, OSError, AttributeError):
             num = 0
 
