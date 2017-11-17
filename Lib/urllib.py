@@ -49,6 +49,19 @@ if os.name == 'nt':
     from nturl2path import url2pathname, pathname2url
 elif os.name == 'riscos':
     from rourl2path import url2pathname, pathname2url
+elif os.name == 'os2':
+    import nturl2path
+    def url2pathname(pathname):
+        """OS-specific conversion from a relative URL of the 'file' scheme
+        to a file system path; not recommended for general use."""
+        # nturl2path only expects back slashes
+        return nturl2path.url2pathname(pathname.replace('/', '\\'))
+
+    def pathname2url(pathname):
+        """OS-specific conversion from a file system path to a relative URL
+        of the 'file' scheme; not recommended for general use."""
+        # nturl2path only expects back slashes
+        return nturl2path.pathname2url(pathname.replace('/', '\\'))
 else:
     def url2pathname(pathname):
         """OS-specific conversion from a relative URL of the 'file' scheme
