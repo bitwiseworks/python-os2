@@ -37,6 +37,7 @@
 
 #if defined(__KLIBC__)
 #include <sys/socket.h>
+#include <libcx/spawn2.h>
 #endif
 
 #ifdef __cplusplus
@@ -8804,6 +8805,197 @@ posix_getresgid (PyObject *self, PyObject *noargs)
 }
 #endif
 
+#if defined(PYOS_OS2)
+PyDoc_STRVAR(os2_spawn2__doc__,
+"spawn2(mode, file, args, cwd, env, stdfds)\n\n\
+Execute the program 'name' in a new process,\n\
+search path to find the file.\n\
+\n\
+   mode: mode of process creation\n\
+   file: executable file name\n\
+   args: tuple or list of strings\n\
+   cwd: initial working directory for the new process\n\
+   env: dictionary of strings mapping to strings\n\
+   stdfds: tuple or list of 3 file descriptors for standard I/O");
+
+static PyObject *
+os2_spawn2(PyObject *self, PyObject *args)
+{
+    char *path, *cwd = NULL;
+    PyObject *argv, *env, *stdfds;
+    char **argvlist;
+    char **envlist;
+    PyObject *key, *val, *keys=NULL, *vals=NULL, *res=NULL;
+    int mode, i, pos, argc, envc, stdfdc;
+    Py_intptr_t spawnval;
+    PyObject *(*argv_getitem)(PyObject *, Py_ssize_t);
+    int lastarg = 0;
+    PyObject *(*stdfd_getitem)(PyObject *, Py_ssize_t);
+    int stdfdlist[3] = {0};
+
+    /* Note: no need in et and Py_FileSystemDefaultEncoding for path arguments
+     * as on OS/2 this is always the same as the default encoding. */
+    if (!PyArg_ParseTuple(args, "isOzOO:spawn2", &mode,
+                          &path, &argv, &cwd, &env, &stdfds))
+        return NULL;
+    if (PyList_Check(argv)) {
+        argc = PyList_Size(argv);
+        argv_getitem = PyList_GetItem;
+    }
+    else if (PyTuple_Check(argv)) {
+        argc = PyTuple_Size(argv);
+        argv_getitem = PyTuple_GetItem;
+    }
+    else {
+        PyErr_SetString(PyExc_TypeError,
+                        "spawn2() arg 3 must be a tuple or list");
+        goto fail_0;
+    }
+
+    if (env != Py_None && !PyMapping_Check(env)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "spawn2() arg 5 must be a mapping object");
+        goto fail_0;
+    }
+
+    if (PyList_Check(stdfds)) {
+        stdfdc = PyList_Size(stdfds);
+        stdfd_getitem = PyList_GetItem;
+    }
+    else if (PyTuple_Check(stdfds)) {
+        stdfdc = PyTuple_Size(stdfds);
+        stdfd_getitem = PyTuple_GetItem;
+    }
+    else if (stdfds == Py_None) {
+        stdfdc = -1;
+    }
+    else {
+        PyErr_SetString(PyExc_TypeError,
+                        "spawn2() arg 6 must be a tuple or list or None");
+        goto fail_0;
+    }
+    if (stdfdc != -1 && stdfdc != 3) {
+        PyErr_SetString(PyExc_TypeError,
+                        "spawn2() arg 6 must contain 3 elements");
+        goto fail_0;
+    }
+
+    argvlist = PyMem_NEW(char *, argc+1);
+    if (argvlist == NULL) {
+        PyErr_NoMemory();
+        goto fail_0;
+    }
+
+    for (i = 0; i < argc; i++) {
+        if (!PyArg_Parse((*argv_getitem)(argv, i), "et",
+                         Py_FileSystemDefaultEncoding, &argvlist[i]))
+        {
+            PyErr_SetString(PyExc_TypeError,
+                            "spawn2() arg 3 must contain only strings");
+            lastarg = i;
+            goto fail_1;
+        }
+    }
+    lastarg = argc;
+    argvlist[argc] = NULL;
+
+    if (env == Py_None) {
+        envlist = NULL;
+        envc = -1;
+    } else {
+        i = PyMapping_Size(env);
+        if (i < 0)
+            goto fail_1;
+        envlist = PyMem_NEW(char *, i + 1);
+        if (envlist == NULL) {
+            PyErr_NoMemory();
+            goto fail_1;
+        }
+        envc = 0;
+        keys = PyMapping_Keys(env);
+        vals = PyMapping_Values(env);
+        if (!keys || !vals)
+            goto fail_2;
+        if (!PyList_Check(keys) || !PyList_Check(vals)) {
+            PyErr_SetString(PyExc_TypeError,
+                            "spawn2(): env.keys() or env.values() is not a list");
+            goto fail_2;
+        }
+
+        for (pos = 0; pos < i; pos++) {
+            char *p, *k, *v;
+            size_t len;
+
+            key = PyList_GetItem(keys, pos);
+            val = PyList_GetItem(vals, pos);
+            if (!key || !val)
+                goto fail_2;
+
+            if (!PyArg_Parse(key, "s", &k)) {
+                PyErr_SetString(PyExc_TypeError,
+                                "spawn2() arg 5 contains a non-string key");
+                goto fail_2;
+            }
+            if (!PyArg_Parse(val, "s", &v)) {
+                PyErr_SetString(PyExc_TypeError,
+                                "spawn2() arg 5 contains a non-string key");
+                goto fail_2;
+            }
+            len = PyString_Size(key) + PyString_Size(val) + 2;
+            p = PyMem_NEW(char, len);
+            if (p == NULL) {
+                PyErr_NoMemory();
+                goto fail_2;
+            }
+            PyOS_snprintf(p, len, "%s=%s", k, v);
+            envlist[envc++] = p;
+        }
+        envlist[envc] = 0;
+    }
+
+    if (stdfdc != -1) {
+        for (i = 0; i < stdfdc; i++) {
+            PyObject *elem = (*stdfd_getitem)(stdfds, i);
+            if (elem == Py_None) {
+                stdfdlist[i] = 0;
+            } else {
+                if (!PyArg_Parse(elem, "i", &stdfdlist[i])) {
+                    PyErr_SetString(PyExc_TypeError,
+                                    "spawn2() arg 6 must contain only integers");
+                    goto fail_2;
+                }
+            }
+        }
+    }
+
+    Py_BEGIN_ALLOW_THREADS
+
+    spawnval = spawn2(mode, path, (const char * const *)argvlist, cwd,
+                      (const char * const *)envlist,
+                      stdfdc == -1 ? NULL : stdfdlist);
+
+    Py_END_ALLOW_THREADS
+
+    if (spawnval == -1)
+        (void) posix_error();
+    else
+        res = Py_BuildValue("l", (long) spawnval);
+
+  fail_2:
+    if (envlist) {
+        while (--envc >= 0)
+            PyMem_DEL(envlist[envc]);
+        PyMem_DEL(envlist);
+    }
+  fail_1:
+    free_string_array(argvlist, lastarg);
+    Py_XDECREF(vals);
+    Py_XDECREF(keys);
+  fail_0:
+    return res;
+}
+#endif /* PYOS_OS2 */
+
 static PyMethodDef posix_methods[] = {
     {"access",          posix_access, METH_VARARGS, posix_access__doc__},
 #ifdef HAVE_TTYNAME
@@ -9126,6 +9318,9 @@ static PyMethodDef posix_methods[] = {
     {"getresgid",       posix_getresgid, METH_NOARGS, posix_getresgid__doc__},
 #endif
     {"urandom",         posix_urandom,   METH_VARARGS, posix_urandom__doc__},
+#ifdef PYOS_OS2
+    {"spawn2",          os2_spawn2, METH_VARARGS, os2_spawn2__doc__},
+#endif
     {NULL,              NULL}            /* Sentinel */
 };
 
@@ -9394,6 +9589,9 @@ all_ins(PyObject *d)
     if (ins(d, "P_TILDE", (long)P_TILDE)) return -1;
     if (ins(d, "P_UNRELATED", (long)P_UNRELATED)) return -1;
     if (ins(d, "P_DEBUGDESC", (long)P_DEBUGDESC)) return -1;
+    if (ins(d, "P_2_NOINHERIT", (long)P_2_NOINHERIT)) return -1;
+    if (ins(d, "P_2_THREADSAFE", (long)P_2_THREADSAFE)) return -1;
+    if (ins(d, "P_2_MODE_MASK", (long)P_2_MODE_MASK)) return -1;
 #else
     if (ins(d, "P_WAIT", (long)_P_WAIT)) return -1;
     if (ins(d, "P_NOWAIT", (long)_P_NOWAIT)) return -1;

@@ -658,7 +658,8 @@ class Popen(object):
                  stdin=None, stdout=None, stderr=None,
                  preexec_fn=None, close_fds=False, shell=False,
                  cwd=None, env=None, universal_newlines=False,
-                 startupinfo=None, creationflags=0):
+                 startupinfo=None, creationflags=0,
+                 threadsafe=None):
         """Create new Popen instance."""
         _cleanup()
 
@@ -681,6 +682,13 @@ class Popen(object):
                                  "platforms")
             if creationflags != 0:
                 raise ValueError("creationflags is only supported on Windows "
+                                 "platforms")
+        if os2:
+            if threadsafe is None:
+                threadsafe = False
+        else:
+            if threadsafe is not None:
+                raise ValueError("threadsafe is only supported on OS/2 "
                                  "platforms")
 
         self.stdin = None
@@ -712,7 +720,7 @@ class Popen(object):
         try:
             self._execute_child(args, executable, preexec_fn, close_fds,
                                 cwd, env, universal_newlines,
-                                startupinfo, creationflags, shell, to_close,
+                                startupinfo, creationflags, threadsafe, shell, to_close,
                                 p2cread, p2cwrite,
                                 c2pread, c2pwrite,
                                 errread, errwrite)
@@ -911,7 +919,7 @@ class Popen(object):
 
         def _execute_child(self, args, executable, preexec_fn, close_fds,
                            cwd, env, universal_newlines,
-                           startupinfo, creationflags, shell, to_close,
+                           startupinfo, creationflags, threadsafe, shell, to_close,
                            p2cread, p2cwrite,
                            c2pread, c2pwrite,
                            errread, errwrite):
@@ -1194,7 +1202,7 @@ class Popen(object):
 
         def _execute_child(self, args, executable, preexec_fn, close_fds,
                            cwd, env, universal_newlines,
-                           startupinfo, creationflags, shell, to_close,
+                           startupinfo, creationflags, threadsafe, shell, to_close,
                            p2cread, p2cwrite,
                            c2pread, c2pwrite,
                            errread, errwrite):
@@ -1222,59 +1230,14 @@ class Popen(object):
                 # inefficient there (mostly due to the lack of COW page support
                 # in the kernel).
                 mode = os.P_NOWAIT
-                oldcwd = None
-                dups = [ None, None, None ]
-                cloexec_fds = set()
 
-                try:
-                    # Change the directory if asked
-                    if cwd is not None:
-                        oldcwd = os.getcwd()
-                        os.chdir(cwd)
+                if close_fds:
+                  mode |= os.P_2_NOINHERIT
+                if threadsafe:
+                  mode |= os.P_2_THREADSAFE
+                stdfds = [ p2cread, c2pwrite, errwrite ]
 
-                    # Duplicate stdio if needed
-                    if p2cread is not None:
-                        dups[0] = os.dup(0)
-                        os.dup2(p2cread, 0)
-                        self._set_cloexec_flag(dups[0])
-                    if c2pwrite is not None:
-                        dups[1] = os.dup(1)
-                        os.dup2(c2pwrite, 1)
-                        self._set_cloexec_flag(dups[1])
-                    if errwrite is not None:
-                        dups[2] = os.dup(2)
-                        os.dup2(errwrite, 2)
-                        self._set_cloexec_flag(dups[2])
-
-                    # Disable inheritance
-                    if close_fds:
-                        for i in xrange(3, MAXFD):
-                            try:
-                                f = fcntl.fcntl(i, fcntl.F_GETFD)
-                                if not (f & fcntl.FD_CLOEXEC):
-                                    cloexec_fds.add(i)
-                                    self._set_cloexec_flag(i)
-                            except:
-                                pass
-
-                    if env is None:
-                        pid = os.spawnvp(mode, executable, args)
-                    else:
-                        pid = os.spawnvpe(mode, executable, args, env)
-                finally:
-                    # Restore inheritance
-                    for i in cloexec_fds:
-                        self._set_cloexec_flag(i, False)
-
-                    # Restore the parent stdio
-                    for i, fd in enumerate(dups):
-                        if fd is not None:
-                            os.dup2(fd, i)
-                            os.close(fd)
-
-                    # Restore the current directory
-                    if oldcwd is not None:
-                        os.chdir(oldcwd)
+                pid = os.spawn2(mode, executable, args, cwd, env, stdfds)
 
                 # Child is launched. Close the parent's copy of those pipe
                 # handles that only the child should have open.  You need
@@ -1479,7 +1442,12 @@ class Popen(object):
                     while True:
                         data = _eintr_retry_call(file.read)
                         if data == "":
-                            file.close()
+                            try:
+                                file.close()
+                            except IOError as e:
+                                # kLIBC close may fail with EBADF or even Error 0,
+                                # ignore for now
+                                pass
                             break
                         buffer.append(data)
 
@@ -1503,11 +1471,16 @@ class Popen(object):
                 if self.stdin:
                     if input is not None:
                         try:
-                            self.stdin.write(input)
+                            _eintr_retry_call(self.stdin.write, input)
                         except IOError as e:
                             if e.errno != errno.EPIPE:
                                 raise
-                    self.stdin.close()
+                    try:
+                        self.stdin.close()
+                    except IOError as e:
+                        # kLIBC close may fail with EBADF or even Error 0,
+                        # ignore for now
+                        pass
 
                 if self.stdout:
                     stdout_thread.join()
