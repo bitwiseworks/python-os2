@@ -42,6 +42,8 @@ const struct filedescr _PyImport_DynLoadFiletab[] = {
 #if defined(PYOS_OS2) && defined(PYCC_GCC)
     {".pyd", "rb", C_EXTENSION},
     {".dll", "rb", C_EXTENSION},
+    {"module.pyd", "rb", C_EXTENSION},
+    {"module.dll", "rb", C_EXTENSION},
 #else
 #ifdef __VMS
     {".exe", "rb", C_EXTENSION},
