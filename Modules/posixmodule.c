@@ -576,6 +576,87 @@ _PyVerify_fd_dup2(int fd1, int fd2)
 #define _PyVerify_fd_dup2(A, B) (1)
 #endif
 
+#if defined(PYOS_OS2)
+static PyObject *
+os2_error(int code);
+
+#define OS2_SPECIAL_ENVVAR_CNT 3
+
+/* Returns a var ID if it is a special pseudo-environment variable or 0 */
+static ULONG
+os2_envvar_special(const char *var)
+{
+    ULONG flag = 0;
+    if (stricmp(var, "BEGINLIBPATH") == 0) {
+        flag = BEGIN_LIBPATH;
+    } else if (stricmp(var, "ENDLIBPATH") == 0) {
+        flag = END_LIBPATH;
+#ifdef LIBPATHSTRICT
+    } else if (stricmp(var, "LIBPATHSTRICT") == 0) {
+        flag = LIBPATHSTRICT;
+#endif
+    }
+
+    return flag;
+}
+
+/* Sets and optionally gets a special pseudo-environment variable.
+ * Returns 0 on success or non-zero on failure (with a respective Python
+ * exception pending). If val is NULL, no set operation is performed. An old
+ * value of the variable is returned in oldval if it is not NULL. If *oldval is
+ * NULL on input, a buffer will be allocaed with PyMem_NEW which must be freed
+ * with PyMem_DEL by the caller. */
+static int
+os2_putenv_special(const ULONG id, const char *val, char **oldval)
+{
+    APIRET rc;
+
+    if (oldval) {
+        if (*oldval == NULL) {
+            /* OS/2 Provides a Documented Max of 1024 Chars */
+            *oldval = PyMem_NEW(char, 1024);
+            if (*oldval == NULL) {
+                PyErr_NoMemory();
+                return -1;
+            }
+        }
+        /* LIBPATHSTRICT only returns T or nothing so set the zero terminator */
+        if (id == LIBPATHSTRICT)
+            memset(*oldval, '\0', 4);
+        rc = DosQueryExtLIBPATH(*oldval, id);
+        if (rc != NO_ERROR) {
+            os2_error(rc);
+            return -1;
+        }
+    }
+
+    if (val) {
+        /* Validate input */
+        if (id == LIBPATHSTRICT) {
+            if (val[0] != '\0' && (val[0] != 'T' || val[1] != '\0')) {
+                PyErr_SetString(PyExc_ValueError,
+                                "LIBPATHSTRICT value must be T or empty");
+                return -1;
+            }
+        } else {
+            if (strlen(val) > 1023) {
+                PyErr_SetString(PyExc_ValueError,
+                                "BEGINLIBPATH/ENDLIBPATH length must not "
+                                "exceed 1023 chars");
+                return -1;
+            }
+        }
+        rc = DosSetExtLIBPATH(val, id);
+        if (rc != NO_ERROR) {
+            os2_error(rc);
+            return -1;
+        }
+    }
+
+    return 0;
+}
+#endif
+
 /* Return a dictionary corresponding to the POSIX environment table */
 #if defined(WITH_NEXT_FRAMEWORK) || (defined(__APPLE__) && defined(Py_ENABLE_SHARED))
 /* On Darwin/MacOSX a shared library or framework has no access to
@@ -594,8 +675,12 @@ convertenviron(void)
     PyObject *d;
     char **e;
 #if defined(PYOS_OS2)
-    APIRET rc;
     char   buffer[1024]; /* OS/2 Provides a Documented Max of 1024 Chars */
+    const char *sp_envvars[OS2_SPECIAL_ENVVAR_CNT] =
+        { "BEGINLIBPATH", "ENDLIBPATH", "LIBPATHSTRICT" };
+    ULONG sp_envids[OS2_SPECIAL_ENVVAR_CNT] =
+        { BEGIN_LIBPATH, END_LIBPATH, LIBPATHSTRICT };
+    int i;
 #endif
     d = PyDict_New();
     if (d == NULL)
@@ -632,27 +717,19 @@ convertenviron(void)
         Py_DECREF(v);
     }
 #if defined(PYOS_OS2)
-    rc = DosQueryExtLIBPATH(buffer, BEGIN_LIBPATH);
-    if (rc == NO_ERROR) { /* (not a type, envname is NOT 'BEGIN_LIBPATH') */
-        PyObject *v = PyString_FromString(buffer);
-            PyDict_SetItemString(d, "BEGINLIBPATH", v);
-        Py_DECREF(v);
+    for (i = 0; i < OS2_SPECIAL_ENVVAR_CNT; ++i) {
+        char *val = buffer;
+        if (os2_putenv_special(sp_envids[i], NULL, &val)) {
+            PyErr_Clear();
+            continue;
+        }
+        /* Do not pollute the einvironment with unset pseudo-env variables */
+        if (*val) {
+            PyObject *v = PyString_FromString(val);
+            PyDict_SetItemString(d, sp_envvars[i], v);
+            Py_DECREF(v);
+        }
     }
-    rc = DosQueryExtLIBPATH(buffer, END_LIBPATH);
-    if (rc == NO_ERROR) { /* (not a typo, envname is NOT 'END_LIBPATH') */
-        PyObject *v = PyString_FromString(buffer);
-            PyDict_SetItemString(d, "ENDLIBPATH", v);
-        Py_DECREF(v);
-    }
-#ifdef LIBPATHSTRICT
-    buffer[0] = buffer[1] = buffer[2] = buffer[3] = '\0';
-    rc = DosQueryExtLIBPATH(buffer, LIBPATHSTRICT);
-    if (rc == NO_ERROR) { /* (not a typo, envname is NOT 'LIBPATH_STRICT') */
-        PyObject *v = PyString_FromString(buffer);
-        PyDict_SetItemString(d, "LIBPATHSTRICT", v);
-        Py_DECREF(v);
-    }
-#endif
 #endif
     return d;
 }
@@ -3208,6 +3285,12 @@ posix_execve(PyObject *self, PyObject *args)
     Py_ssize_t i, pos, argc, envc;
     PyObject *(*getitem)(PyObject *, Py_ssize_t);
     Py_ssize_t lastarg = 0;
+#if defined(PYOS_OS2)
+    char *sp_envvars[OS2_SPECIAL_ENVVAR_CNT] = { NULL };
+    ULONG sp_envids[OS2_SPECIAL_ENVVAR_CNT] = { 0 };
+    Py_ssize_t sp_envc = 0;
+    ULONG envid;
+#endif
 
     /* execve has three arguments: (path, argv, env), where
        argv is a list or tuple of strings and env is a dictionary
@@ -3295,9 +3378,19 @@ posix_execve(PyObject *self, PyObject *args)
         }
 
 #if defined(PYOS_OS2)
-        /* Omit Pseudo-Env Vars that Would Confuse Programs if Passed On */
-        if (stricmp(k, "BEGINLIBPATH") != 0 && stricmp(k, "ENDLIBPATH") != 0
-         && stricmp(k, "LIBPATHSTRICT") != 0) {
+        envid = os2_envvar_special(k);
+        if (envid) {
+            /* Process pseudo-env vars and omit them from the environment as
+             * they could coufuse programs if passed on. Note that this code is
+             * not thread-safe but we have no other option here. */
+            sp_envids[sp_envc] = envid;
+            if (os2_putenv_special(envid, v, &sp_envvars[sp_envc])) {
+                if (sp_envvars[sp_envc])
+                    PyMem_DEL(sp_envvars[sp_envc]);
+                goto fail_2;
+            }
+            ++sp_envc;
+        } else {
 #endif
         len = PyString_Size(key) + PyString_Size(val) + 2;
         p = PyMem_NEW(char, len);
@@ -3320,6 +3413,13 @@ posix_execve(PyObject *self, PyObject *args)
     (void) posix_error();
 
   fail_2:
+#if defined(PYOS_OS2)
+    while (--sp_envc >= 0) {
+        /* Restore the pseudo-env var's value */
+        os2_putenv_special(sp_envids[sp_envc], sp_envvars[sp_envc], NULL);
+        PyMem_DEL(sp_envvars[sp_envc]);
+    }
+#endif
     while (--envc >= 0)
         PyMem_DEL(envlist[envc]);
     PyMem_DEL(envlist);
@@ -3444,6 +3544,12 @@ posix_spawnve(PyObject *self, PyObject *args)
     Py_intptr_t spawnval;
     PyObject *(*getitem)(PyObject *, Py_ssize_t);
     Py_ssize_t lastarg = 0;
+#if defined(PYOS_OS2)
+    char *sp_envvars[OS2_SPECIAL_ENVVAR_CNT] = { NULL };
+    ULONG sp_envids[OS2_SPECIAL_ENVVAR_CNT] = { 0 };
+    Py_ssize_t sp_envc = 0;
+    ULONG envid;
+#endif
 
     /* spawnve has four arguments: (mode, path, argv, env), where
        argv is a list or tuple of strings and env is a dictionary
@@ -3529,6 +3635,21 @@ posix_spawnve(PyObject *self, PyObject *args)
         {
             goto fail_2;
         }
+#if defined(PYOS_OS2)
+        envid = os2_envvar_special(k);
+        if (envid) {
+            /* Process pseudo-env vars and omit them from the environment as
+             * they could coufuse programs if passed on. Note that this code is
+             * not thread-safe but we have no other option here. */
+            sp_envids[sp_envc] = envid;
+            if (os2_putenv_special(envid, v, &sp_envvars[sp_envc])) {
+                if (sp_envvars[sp_envc])
+                    PyMem_DEL(sp_envvars[sp_envc]);
+                goto fail_2;
+            }
+            ++sp_envc;
+        } else {
+#endif
         len = PyString_Size(key) + PyString_Size(val) + 2;
         p = PyMem_NEW(char, len);
         if (p == NULL) {
@@ -3537,6 +3658,9 @@ posix_spawnve(PyObject *self, PyObject *args)
         }
         PyOS_snprintf(p, len, "%s=%s", k, v);
         envlist[envc++] = p;
+#if defined(PYOS_OS2)
+        }
+#endif
     }
     envlist[envc] = 0;
 
@@ -3563,6 +3687,13 @@ posix_spawnve(PyObject *self, PyObject *args)
 #endif
 
   fail_2:
+#if defined(PYOS_OS2)
+    while (--sp_envc >= 0) {
+        /* Restore the pseudo-env var's value */
+        os2_putenv_special(sp_envids[sp_envc], sp_envvars[sp_envc], NULL);
+        PyMem_DEL(sp_envvars[sp_envc]);
+    }
+#endif
     while (--envc >= 0)
         PyMem_DEL(envlist[envc]);
     PyMem_DEL(envlist);
@@ -7133,27 +7264,10 @@ posix_putenv(PyObject *self, PyObject *args)
         return NULL;
 
 #if defined(PYOS_OS2)
-    if (stricmp(s1, "BEGINLIBPATH") == 0) {
-        APIRET rc;
-
-        rc = DosSetExtLIBPATH(s2, BEGIN_LIBPATH);
-        if (rc != NO_ERROR)
-            return os2_error(rc);
-
-    } else if (stricmp(s1, "ENDLIBPATH") == 0) {
-        APIRET rc;
-
-        rc = DosSetExtLIBPATH(s2, END_LIBPATH);
-        if (rc != NO_ERROR)
-            return os2_error(rc);
-#ifdef LIBPATHSTRICT
-    } else if (stricmp(s1, "LIBPATHSTRICT") == 0) {
-        APIRET rc;
-
-        rc = DosSetExtLIBPATH(s2, LIBPATHSTRICT);
-        if (rc != NO_ERROR)
-            return os2_error(rc);
-#endif
+    int envid = os2_envvar_special(s1);
+    if (envid) {
+        if (os2_putenv_special(envid, s2, NULL))
+            return NULL; /* Signal to Python that an Exception is Pending */
     } else {
 #endif /* OS2 */
 
@@ -8941,6 +9055,9 @@ os2_spawn2(PyObject *self, PyObject *args)
                                 "spawn2() arg 5 contains a non-string key");
                 goto fail_2;
             }
+            /* Note that we don't process pseudo-env vars here as they are
+             * processed internally by spawn2() to guarantee thread safety
+             * in P_2_THREADSAFE mode. */
             len = PyString_Size(key) + PyString_Size(val) + 2;
             p = PyMem_NEW(char, len);
             if (p == NULL) {
