@@ -325,7 +325,7 @@ def setBEGINLIBPATH():
 
     """
     dllpath = os.path.join(sys.prefix, "Lib", "lib-dynload")
-    libpath = os.environ['BEGINLIBPATH'].split(';')
+    libpath = os.environ.get('BEGINLIBPATH', '').split(';')
     if libpath[-1]:
         libpath.append(dllpath)
     else:
