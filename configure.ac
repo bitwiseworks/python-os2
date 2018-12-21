@@ -3248,12 +3248,19 @@ then
 #include <string.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#ifdef __OS2__
+#include <libcx/net.h>
+#endif
 
 int main()
 {
   int passive, gaierr, inet4 = 0, inet6 = 0;
   struct addrinfo hints, *ai, *aitop;
+#ifndef __OS2__
   char straddr[INET6_ADDRSTRLEN], strport[16];
+#else
+  char straddr[NI_MAXHOST], strport[NI_MAXSERV];
+#endif
 
   for (passive = 0; passive <= 1; passive++) {
     memset(&hints, 0, sizeof(hints));
@@ -3289,6 +3296,7 @@ int main()
         }
         inet4++;
         break;
+#ifndef __OS2__
       case AF_INET6:
         if (strcmp(strport, "54321") != 0) {
           goto bad;
@@ -3304,6 +3312,7 @@ int main()
         }
         inet6++;
         break;
+#endif
       case AF_UNSPEC:
         goto bad;
         break;
@@ -3393,7 +3402,12 @@ AC_MSG_RESULT($was_it_defined)
 
 AC_MSG_CHECKING(for addrinfo)
 AC_CACHE_VAL(ac_cv_struct_addrinfo,
-AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <netdb.h>]], [[struct addrinfo a]])],
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+  #include <netdb.h>
+  #ifdef __OS2__
+  #include <libcx/net.h>
+  #endif
+  ]], [[struct addrinfo a]])],
   [ac_cv_struct_addrinfo=yes],
   [ac_cv_struct_addrinfo=no]))
 AC_MSG_RESULT($ac_cv_struct_addrinfo)
@@ -4517,6 +4531,9 @@ AC_CHECK_TYPE(socklen_t,,
 #endif
 #ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
+#endif
+#ifdef __OS2__
+#include <libcx/net.h>
 #endif
 ])
 

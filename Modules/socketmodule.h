@@ -11,6 +11,9 @@
 # if !(defined(__BEOS__) || defined(__CYGWIN__) || (defined(PYOS_OS2) && defined(PYCC_VACPP)))
 #  include <netinet/tcp.h>
 # endif
+#ifdef __OS2__
+#include <libcx/net.h>
+#endif
 
 #else /* MS_WINDOWS */
 # include <winsock2.h>
