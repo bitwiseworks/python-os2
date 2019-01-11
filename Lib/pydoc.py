@@ -1351,10 +1351,10 @@ def getpager():
             return lambda text: pipepager(text, os.environ['PAGER'])
     if os.environ.get('TERM') in ('dumb', 'emacs'):
         return plainpager
-    if sys.platform == 'win32' or sys.platform.startswith('os2'):
-        return lambda text: tempfilepager(plain(text), 'more <')
     if hasattr(os, 'system') and os.system('(less) 2>/dev/null') == 0:
         return lambda text: pipepager(text, 'less')
+    if sys.platform == 'win32' or sys.platform.startswith('os2'):
+        return lambda text: tempfilepager(plain(text), 'more <')
 
     import tempfile
     (fd, filename) = tempfile.mkstemp()
@@ -1384,7 +1384,10 @@ def tempfilepager(text, cmd):
     """Page through text by invoking a program on a temporary file."""
     import tempfile
     filename = tempfile.mktemp()
-    file = open(filename, 'w')
+    if sys.platform.startswith('os2'):
+        file = open(filename, 'wt')
+    else:        
+        file = open(filename, 'w')
     file.write(text)
     file.close()
     try:
