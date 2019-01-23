@@ -234,7 +234,9 @@ aliases = {
     'gb18030_2000'       : 'gb18030',
 
     # gb2312 codec
+    '1381'               : 'gb2312',
     'chinese'            : 'gb2312',
+    'cp1381'             : 'gb2312',
     'csiso58gb231280'    : 'gb2312',
     'euc_cn'             : 'gb2312',
     'euccn'              : 'gb2312',
@@ -244,7 +246,9 @@ aliases = {
     'iso_ir_58'          : 'gb2312',
 
     # gbk codec
+    '1386'               : 'gbk',
     '936'                : 'gbk',
+    'cp1386'             : 'gbk',
     'cp936'              : 'gbk',
     'ms936'              : 'gbk',
 
