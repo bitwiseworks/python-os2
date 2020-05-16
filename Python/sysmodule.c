@@ -262,8 +262,13 @@ sys_getfilesystemencoding(PyObject *self)
 {
     if (Py_FileSystemDefaultEncoding)
         return PyString_FromString(Py_FileSystemDefaultEncoding);
-    Py_INCREF(Py_None);
-    return Py_None;
+    /*
+     * There is existing code that doesn't expect sys.getfilesystemencoding
+     * to return None despite the docs. Even Python's own saxutils.py does
+     * not expect it. For this reason, return the default encoding
+     * explicitly. See also https://github.com/bitwiseworks/python-os2/issues/1.
+     */
+    return PyString_FromString(PyUnicode_GetDefaultEncoding());
 }
 
 PyDoc_STRVAR(getfilesystemencoding_doc,
