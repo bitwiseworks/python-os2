@@ -220,7 +220,7 @@ class EMXCCompiler (UnixCCompiler):
     # override the find_library_file method from UnixCCompiler
     # to deal with file naming/searching differences
     def find_library_file(self, dirs, lib, debug=0):
-        try_names = [lib + ".lib", lib + ".a", "lib" + lib + ".lib", "lib" + lib + ".a", "lib" + lib + "_dll.a" ]
+        try_names = [lib + ".lib", lib + ".a", lib + "_dll.a", "lib" + lib + ".lib", "lib" + lib + ".a", "lib" + lib + "_dll.a" ]
 
         # get EMX's default library directory search path
         try:
