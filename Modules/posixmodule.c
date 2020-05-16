@@ -3382,11 +3382,15 @@ posix_execve(PyObject *self, PyObject *args)
         if (envid) {
             /* Process pseudo-env vars and omit them from the environment as
              * they could coufuse programs if passed on. Note that this code is
-             * not thread-safe but we have no other option here. */
+             * not thread-safe but we have no other option here. Note that we
+             * allow multiple overrides where the last one is actually used. */
+            char **oldval = sp_envvars[sp_envc] ? NULL : &sp_envvars[sp_envc];
             sp_envids[sp_envc] = envid;
-            if (os2_putenv_special(envid, v, &sp_envvars[sp_envc])) {
-                if (sp_envvars[sp_envc])
-                    PyMem_DEL(sp_envvars[sp_envc]);
+            if (os2_putenv_special(envid, v, oldval)) {
+                if (oldval && *oldval) {
+                    PyMem_DEL(*oldval);
+                    *oldval = NULL;
+                }
                 goto fail_2;
             }
             ++sp_envc;
@@ -3640,11 +3644,15 @@ posix_spawnve(PyObject *self, PyObject *args)
         if (envid) {
             /* Process pseudo-env vars and omit them from the environment as
              * they could coufuse programs if passed on. Note that this code is
-             * not thread-safe but we have no other option here. */
+             * not thread-safe but we have no other option here. Note that we
+             * allow multiple overrides where the last one is actually used. */
+            char **oldval = sp_envvars[sp_envc] ? NULL : &sp_envvars[sp_envc];
             sp_envids[sp_envc] = envid;
-            if (os2_putenv_special(envid, v, &sp_envvars[sp_envc])) {
-                if (sp_envvars[sp_envc])
-                    PyMem_DEL(sp_envvars[sp_envc]);
+            if (os2_putenv_special(envid, v, oldval)) {
+                if (oldval && *oldval) {
+                    PyMem_DEL(*oldval);
+                    *oldval = NULL;
+                }
                 goto fail_2;
             }
             ++sp_envc;
