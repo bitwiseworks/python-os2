@@ -3,7 +3,7 @@
 
 # Local imports
 from .. import fixer_base
-from ..fixer_util import Name, syms
+from ..fixer_util import Name
 
 class FixNonzero(fixer_base.BaseFix):
     BM_compatible = True
@@ -17,5 +17,5 @@ class FixNonzero(fixer_base.BaseFix):
 
     def transform(self, node, results):
         name = results["name"]
-        new = Name(u"__bool__", prefix=name.prefix)
+        new = Name("__bool__", prefix=name.prefix)
         name.replace(new)

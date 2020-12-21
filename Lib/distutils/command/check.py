@@ -2,10 +2,7 @@
 
 Implements the Distutils 'check' command.
 """
-__revision__ = "$Id$"
-
 from distutils.core import Command
-from distutils.dist import PKG_INFO_ENCODING
 from distutils.errors import DistutilsSetupError
 
 try:
@@ -14,7 +11,6 @@ try:
     from docutils.parsers.rst import Parser
     from docutils import frontend
     from docutils import nodes
-    from StringIO import StringIO
 
     class SilentReporter(Reporter):
 
@@ -31,8 +27,9 @@ try:
                                         *children, **kwargs)
 
     HAS_DOCUTILS = True
-except ImportError:
-    # docutils is not installed
+except Exception:
+    # Catch all exceptions because exceptions besides ImportError probably
+    # indicate that docutils is not ported to Py3k.
     HAS_DOCUTILS = False
 
 class check(Command):
@@ -82,8 +79,11 @@ class check(Command):
     def check_metadata(self):
         """Ensures that all required elements of meta-data are supplied.
 
-        name, version, URL, (author and author_email) or
-        (maintainer and maintainer_email)).
+        Required fields:
+            name, version, URL
+
+        Recommended fields:
+            (author and author_email) or (maintainer and maintainer_email))
 
         Warns if any are missing.
         """
@@ -99,21 +99,19 @@ class check(Command):
         if metadata.author:
             if not metadata.author_email:
                 self.warn("missing meta-data: if 'author' supplied, " +
-                          "'author_email' must be supplied too")
+                          "'author_email' should be supplied too")
         elif metadata.maintainer:
             if not metadata.maintainer_email:
                 self.warn("missing meta-data: if 'maintainer' supplied, " +
-                          "'maintainer_email' must be supplied too")
+                          "'maintainer_email' should be supplied too")
         else:
             self.warn("missing meta-data: either (author and author_email) " +
                       "or (maintainer and maintainer_email) " +
-                      "must be supplied")
+                      "should be supplied")
 
     def check_restructuredtext(self):
         """Checks if the long string fields are reST-compliant."""
         data = self.distribution.get_long_description()
-        if not isinstance(data, unicode):
-            data = data.decode(PKG_INFO_ENCODING)
         for warning in self._check_rst_data(data):
             line = warning[-1].get('line')
             if line is None:
@@ -124,9 +122,10 @@ class check(Command):
 
     def _check_rst_data(self, data):
         """Returns warnings when the provided data doesn't compile."""
-        source_path = StringIO()
+        # the include and csv_table directives need this to be a path
+        source_path = self.distribution.script_name or 'setup.py'
         parser = Parser()
-        settings = frontend.OptionParser().get_default_values()
+        settings = frontend.OptionParser(components=(Parser,)).get_default_values()
         settings.tab_width = 4
         settings.pep_references = None
         settings.rfc_references = None
@@ -142,8 +141,8 @@ class check(Command):
         document.note_source(source_path, -1)
         try:
             parser.parse(data, document)
-        except AttributeError:
-            reporter.messages.append((-1, 'Could not finish the parsing.',
-                                      '', {}))
+        except AttributeError as e:
+            reporter.messages.append(
+                (-1, 'Could not finish the parsing: %s.' % e, '', {}))
 
         return reporter.messages

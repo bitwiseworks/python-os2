@@ -6,7 +6,6 @@
 
 # Local imports
 from lib2to3.fixes.fix_imports import alternates, FixImports
-from lib2to3 import fixer_base
 from lib2to3.fixer_util import (Name, Comma, FromImport, Newline,
                                 find_indentation, Node, syms)
 
@@ -14,7 +13,7 @@ MAPPING = {"urllib":  [
                 ("urllib.request",
                     ["URLopener", "FancyURLopener", "urlretrieve",
                      "_urlopener", "urlopen", "urlcleanup",
-                     "pathname2url", "url2pathname"]),
+                     "pathname2url", "url2pathname", "getproxies"]),
                 ("urllib.parse",
                     ["quote", "quote_plus", "unquote", "unquote_plus",
                      "urlencode", "splitattr", "splithost", "splitnport",
@@ -128,7 +127,7 @@ class FixUrllib(FixImports):
                 else:
                     member_name = member.value
                     as_name = None
-                if member_name != u",":
+                if member_name != ",":
                     for change in MAPPING[mod_member.value]:
                         if member_name in change[1]:
                             if change[0] not in mod_dict:

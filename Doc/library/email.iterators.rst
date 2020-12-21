@@ -4,6 +4,9 @@
 .. module:: email.iterators
    :synopsis: Iterate over a  message object tree.
 
+**Source code:** :source:`Lib/email/iterators.py`
+
+--------------
 
 Iterating over a message object tree is fairly easy with the
 :meth:`Message.walk <email.message.Message.walk>` method.  The
@@ -11,7 +14,7 @@ Iterating over a message object tree is fairly easy with the
 message object trees.
 
 
-.. function:: body_line_iterator(msg[, decode])
+.. function:: body_line_iterator(msg, decode=False)
 
    This iterates over all the payloads in all the subparts of *msg*, returning the
    string payloads line-by-line.  It skips over all the subpart headers, and it
@@ -24,7 +27,7 @@ message object trees.
    <email.message.Message.get_payload>`.
 
 
-.. function:: typed_subpart_iterator(msg[, maintype[, subtype]])
+.. function:: typed_subpart_iterator(msg, maintype='text', subtype=None)
 
    This iterates over all the subparts of *msg*, returning only those subparts that
    match the MIME type specified by *maintype* and *subtype*.
@@ -36,14 +39,22 @@ message object trees.
    Thus, by default :func:`typed_subpart_iterator` returns each subpart that has a
    MIME type of :mimetype:`text/\*`.
 
+
 The following function has been added as a useful debugging tool.  It should
 *not* be considered part of the supported public interface for the package.
 
-
-.. function:: _structure(msg[, fp[, level]])
+.. function:: _structure(msg, fp=None, level=0, include_default=False)
 
    Prints an indented representation of the content types of the message object
-   structure.  For example::
+   structure.  For example:
+
+   .. testsetup::
+
+      import email
+      from email.iterators import _structure
+      somefile = open('../Lib/test/test_email/data/msg_02.txt')
+
+   .. doctest::
 
       >>> msg = email.message_from_file(somefile)
       >>> _structure(msg)
@@ -63,6 +74,10 @@ The following function has been added as a useful debugging tool.  It should
                   text/plain
           text/plain
 
-   Optional *fp* is a file-like object to print the output to.  It must be suitable
-   for Python's extended print statement.  *level* is used internally.
+   .. testcleanup::
 
+      somefile.close()
+
+   Optional *fp* is a file-like object to print the output to.  It must be
+   suitable for Python's :func:`print` function.  *level* is used internally.
+   *include_default*, if true, prints the default type as well.

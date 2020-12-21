@@ -4,7 +4,7 @@ from binascii import hexlify
 from ctypes import *
 
 def bin(s):
-    return hexlify(memoryview(s)).upper()
+    return hexlify(memoryview(s)).decode().upper()
 
 # Each *simple* type that supports different byte orders has an
 # __ctype_be__ attribute that specifies the same type in BIG ENDIAN
@@ -14,20 +14,41 @@ def bin(s):
 # For Structures and Unions, these types are created on demand.
 
 class Test(unittest.TestCase):
-    def X_test(self):
-        print >> sys.stderr,  sys.byteorder
+    @unittest.skip('test disabled')
+    def test_X(self):
+        print(sys.byteorder, file=sys.stderr)
         for i in range(32):
             bits = BITS()
             setattr(bits, "i%s" % i, 1)
             dump(bits)
 
+    def test_slots(self):
+        class BigPoint(BigEndianStructure):
+            __slots__ = ()
+            _fields_ = [("x", c_int), ("y", c_int)]
+
+        class LowPoint(LittleEndianStructure):
+            __slots__ = ()
+            _fields_ = [("x", c_int), ("y", c_int)]
+
+        big = BigPoint()
+        little = LowPoint()
+        big.x = 4
+        big.y = 2
+        little.x = 2
+        little.y = 4
+        with self.assertRaises(AttributeError):
+            big.z = 42
+        with self.assertRaises(AttributeError):
+            little.z = 24
+
     def test_endian_short(self):
         if sys.byteorder == "little":
-            self.assertTrue(c_short.__ctype_le__ is c_short)
-            self.assertTrue(c_short.__ctype_be__.__ctype_le__ is c_short)
+            self.assertIs(c_short.__ctype_le__, c_short)
+            self.assertIs(c_short.__ctype_be__.__ctype_le__, c_short)
         else:
-            self.assertTrue(c_short.__ctype_be__ is c_short)
-            self.assertTrue(c_short.__ctype_le__.__ctype_be__ is c_short)
+            self.assertIs(c_short.__ctype_be__, c_short)
+            self.assertIs(c_short.__ctype_le__.__ctype_be__, c_short)
         s = c_short.__ctype_be__(0x1234)
         self.assertEqual(bin(struct.pack(">h", 0x1234)), "1234")
         self.assertEqual(bin(s), "1234")
@@ -50,11 +71,11 @@ class Test(unittest.TestCase):
 
     def test_endian_int(self):
         if sys.byteorder == "little":
-            self.assertTrue(c_int.__ctype_le__ is c_int)
-            self.assertTrue(c_int.__ctype_be__.__ctype_le__ is c_int)
+            self.assertIs(c_int.__ctype_le__, c_int)
+            self.assertIs(c_int.__ctype_be__.__ctype_le__, c_int)
         else:
-            self.assertTrue(c_int.__ctype_be__ is c_int)
-            self.assertTrue(c_int.__ctype_le__.__ctype_be__ is c_int)
+            self.assertIs(c_int.__ctype_be__, c_int)
+            self.assertIs(c_int.__ctype_le__.__ctype_be__, c_int)
 
         s = c_int.__ctype_be__(0x12345678)
         self.assertEqual(bin(struct.pack(">i", 0x12345678)), "12345678")
@@ -78,11 +99,11 @@ class Test(unittest.TestCase):
 
     def test_endian_longlong(self):
         if sys.byteorder == "little":
-            self.assertTrue(c_longlong.__ctype_le__ is c_longlong)
-            self.assertTrue(c_longlong.__ctype_be__.__ctype_le__ is c_longlong)
+            self.assertIs(c_longlong.__ctype_le__, c_longlong)
+            self.assertIs(c_longlong.__ctype_be__.__ctype_le__, c_longlong)
         else:
-            self.assertTrue(c_longlong.__ctype_be__ is c_longlong)
-            self.assertTrue(c_longlong.__ctype_le__.__ctype_be__ is c_longlong)
+            self.assertIs(c_longlong.__ctype_be__, c_longlong)
+            self.assertIs(c_longlong.__ctype_le__.__ctype_be__, c_longlong)
 
         s = c_longlong.__ctype_be__(0x1234567890ABCDEF)
         self.assertEqual(bin(struct.pack(">q", 0x1234567890ABCDEF)), "1234567890ABCDEF")
@@ -106,29 +127,29 @@ class Test(unittest.TestCase):
 
     def test_endian_float(self):
         if sys.byteorder == "little":
-            self.assertTrue(c_float.__ctype_le__ is c_float)
-            self.assertTrue(c_float.__ctype_be__.__ctype_le__ is c_float)
+            self.assertIs(c_float.__ctype_le__, c_float)
+            self.assertIs(c_float.__ctype_be__.__ctype_le__, c_float)
         else:
-            self.assertTrue(c_float.__ctype_be__ is c_float)
-            self.assertTrue(c_float.__ctype_le__.__ctype_be__ is c_float)
+            self.assertIs(c_float.__ctype_be__, c_float)
+            self.assertIs(c_float.__ctype_le__.__ctype_be__, c_float)
         s = c_float(math.pi)
         self.assertEqual(bin(struct.pack("f", math.pi)), bin(s))
         # Hm, what's the precision of a float compared to a double?
-        self.assertAlmostEqual(s.value, math.pi, 6)
+        self.assertAlmostEqual(s.value, math.pi, places=6)
         s = c_float.__ctype_le__(math.pi)
-        self.assertAlmostEqual(s.value, math.pi, 6)
+        self.assertAlmostEqual(s.value, math.pi, places=6)
         self.assertEqual(bin(struct.pack("<f", math.pi)), bin(s))
         s = c_float.__ctype_be__(math.pi)
-        self.assertAlmostEqual(s.value, math.pi, 6)
+        self.assertAlmostEqual(s.value, math.pi, places=6)
         self.assertEqual(bin(struct.pack(">f", math.pi)), bin(s))
 
     def test_endian_double(self):
         if sys.byteorder == "little":
-            self.assertTrue(c_double.__ctype_le__ is c_double)
-            self.assertTrue(c_double.__ctype_be__.__ctype_le__ is c_double)
+            self.assertIs(c_double.__ctype_le__, c_double)
+            self.assertIs(c_double.__ctype_be__.__ctype_le__, c_double)
         else:
-            self.assertTrue(c_double.__ctype_be__ is c_double)
-            self.assertTrue(c_double.__ctype_le__.__ctype_be__ is c_double)
+            self.assertIs(c_double.__ctype_be__, c_double)
+            self.assertIs(c_double.__ctype_le__.__ctype_be__, c_double)
         s = c_double(math.pi)
         self.assertEqual(s.value, math.pi)
         self.assertEqual(bin(struct.pack("d", math.pi)), bin(s))
@@ -140,14 +161,14 @@ class Test(unittest.TestCase):
         self.assertEqual(bin(struct.pack(">d", math.pi)), bin(s))
 
     def test_endian_other(self):
-        self.assertTrue(c_byte.__ctype_le__ is c_byte)
-        self.assertTrue(c_byte.__ctype_be__ is c_byte)
+        self.assertIs(c_byte.__ctype_le__, c_byte)
+        self.assertIs(c_byte.__ctype_be__, c_byte)
 
-        self.assertTrue(c_ubyte.__ctype_le__ is c_ubyte)
-        self.assertTrue(c_ubyte.__ctype_be__ is c_ubyte)
+        self.assertIs(c_ubyte.__ctype_le__, c_ubyte)
+        self.assertIs(c_ubyte.__ctype_be__, c_ubyte)
 
-        self.assertTrue(c_char.__ctype_le__ is c_char)
-        self.assertTrue(c_char.__ctype_be__ is c_char)
+        self.assertIs(c_char.__ctype_le__, c_char)
+        self.assertIs(c_char.__ctype_be__, c_char)
 
     def test_struct_fields_1(self):
         if sys.byteorder == "little":

@@ -7,14 +7,12 @@ child after a fork().
 
 On some systems (e.g. Solaris without posix threads) we find that all
 active threads survive in the child after a fork(); this is an error.
-
-While BeOS doesn't officially support fork and native threading in
-the same application, the present example should work just fine.  DC
 """
 
 import os, sys, time, unittest
-import test.test_support as test_support
-thread = test_support.import_module('thread')
+import threading
+from test import support
+
 
 LONGSLEEP = 2
 SHORTSLEEP = 0.5
@@ -23,38 +21,46 @@ NUM_THREADS = 4
 class ForkWait(unittest.TestCase):
 
     def setUp(self):
+        self._threading_key = support.threading_setup()
         self.alive = {}
         self.stop = 0
+        self.threads = []
+
+    def tearDown(self):
+        # Stop threads
+        self.stop = 1
+        for thread in self.threads:
+            thread.join()
+        thread = None
+        self.threads.clear()
+        support.threading_cleanup(*self._threading_key)
 
     def f(self, id):
         while not self.stop:
             self.alive[id] = os.getpid()
             try:
                 time.sleep(SHORTSLEEP)
-            except IOError:
+            except OSError:
                 pass
 
-    def wait_impl(self, cpid):
-        for i in range(10):
-            # waitpid() shouldn't hang, but some of the buildbots seem to hang
-            # in the forking tests.  This is an attempt to fix the problem.
-            spid, status = os.waitpid(cpid, os.WNOHANG)
-            if spid == cpid:
-                break
-            time.sleep(2 * SHORTSLEEP)
-
-        self.assertEqual(spid, cpid)
-        self.assertEqual(status, 0, "cause = %d, exit = %d" % (status&0xff, status>>8))
+    def wait_impl(self, cpid, *, exitcode):
+        support.wait_process(cpid, exitcode=exitcode)
 
     def test_wait(self):
         for i in range(NUM_THREADS):
-            thread.start_new(self.f, (i,))
+            thread = threading.Thread(target=self.f, args=(i,))
+            thread.start()
+            self.threads.append(thread)
 
-        time.sleep(LONGSLEEP)
+        # busy-loop to wait for threads
+        deadline = time.monotonic() + support.SHORT_TIMEOUT
+        while len(self.alive) < NUM_THREADS:
+            time.sleep(0.1)
+            if deadline < time.monotonic():
+                break
 
-        a = self.alive.keys()
-        a.sort()
-        self.assertEqual(a, range(NUM_THREADS))
+        a = sorted(self.alive.keys())
+        self.assertEqual(a, list(range(NUM_THREADS)))
 
         prefork_lives = self.alive.copy()
 
@@ -73,7 +79,4 @@ class ForkWait(unittest.TestCase):
             os._exit(n)
         else:
             # Parent
-            self.wait_impl(cpid)
-            # Tell threads to die
-            self.stop = 1
-            time.sleep(2*SHORTSLEEP) # Wait for threads to die
+            self.wait_impl(cpid, exitcode=0)

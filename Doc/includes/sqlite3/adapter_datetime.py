@@ -1,5 +1,6 @@
 import sqlite3
-import datetime, time
+import datetime
+import time
 
 def adapt_datetime(ts):
     return time.mktime(ts.timetuple())
@@ -11,4 +12,6 @@ cur = con.cursor()
 
 now = datetime.datetime.now()
 cur.execute("select ?", (now,))
-print cur.fetchone()[0]
+print(cur.fetchone()[0])
+
+con.close()

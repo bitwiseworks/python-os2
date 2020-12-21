@@ -1,215 +1,324 @@
-
-:mod:`bz2` --- Compression compatible with :program:`bzip2`
-===========================================================
+:mod:`bz2` --- Support for :program:`bzip2` compression
+=======================================================
 
 .. module:: bz2
-   :synopsis: Interface to compression and decompression routines compatible with bzip2.
+   :synopsis: Interfaces for bzip2 compression and decompression.
+
 .. moduleauthor:: Gustavo Niemeyer <niemeyer@conectiva.com>
+.. moduleauthor:: Nadeem Vawda <nadeem.vawda@gmail.com>
 .. sectionauthor:: Gustavo Niemeyer <niemeyer@conectiva.com>
+.. sectionauthor:: Nadeem Vawda <nadeem.vawda@gmail.com>
 
+**Source code:** :source:`Lib/bz2.py`
 
-.. versionadded:: 2.3
+--------------
 
-This module provides a comprehensive interface for the bz2 compression library.
-It implements a complete file interface, one-shot (de)compression functions, and
-types for sequential (de)compression.
+This module provides a comprehensive interface for compressing and
+decompressing data using the bzip2 compression algorithm.
 
-Here is a summary of the features offered by the bz2 module:
+The :mod:`bz2` module contains:
 
-* :class:`BZ2File` class implements a complete file interface, including
-  :meth:`~BZ2File.readline`, :meth:`~BZ2File.readlines`,
-  :meth:`~BZ2File.writelines`, :meth:`~BZ2File.seek`, etc;
+* The :func:`.open` function and :class:`BZ2File` class for reading and
+  writing compressed files.
+* The :class:`BZ2Compressor` and :class:`BZ2Decompressor` classes for
+  incremental (de)compression.
+* The :func:`compress` and :func:`decompress` functions for one-shot
+  (de)compression.
 
-* :class:`BZ2File` class implements emulated :meth:`~BZ2File.seek` support;
-
-* :class:`BZ2File` class implements universal newline support;
-
-* :class:`BZ2File` class offers an optimized line iteration using the readahead
-  algorithm borrowed from file objects;
-
-* Sequential (de)compression supported by :class:`BZ2Compressor` and
-  :class:`BZ2Decompressor` classes;
-
-* One-shot (de)compression supported by :func:`compress` and :func:`decompress`
-  functions;
-
-* Thread safety uses individual locking mechanism.
+All of the classes in this module may safely be accessed from multiple threads.
 
 
 (De)compression of files
 ------------------------
 
-Handling of compressed files is offered by the :class:`BZ2File` class.
+.. function:: open(filename, mode='rb', compresslevel=9, encoding=None, errors=None, newline=None)
+
+   Open a bzip2-compressed file in binary or text mode, returning a :term:`file
+   object`.
+
+   As with the constructor for :class:`BZ2File`, the *filename* argument can be
+   an actual filename (a :class:`str` or :class:`bytes` object), or an existing
+   file object to read from or write to.
+
+   The *mode* argument can be any of ``'r'``, ``'rb'``, ``'w'``, ``'wb'``,
+   ``'x'``, ``'xb'``, ``'a'`` or ``'ab'`` for binary mode, or ``'rt'``,
+   ``'wt'``, ``'xt'``, or ``'at'`` for text mode. The default is ``'rb'``.
+
+   The *compresslevel* argument is an integer from 1 to 9, as for the
+   :class:`BZ2File` constructor.
+
+   For binary mode, this function is equivalent to the :class:`BZ2File`
+   constructor: ``BZ2File(filename, mode, compresslevel=compresslevel)``. In
+   this case, the *encoding*, *errors* and *newline* arguments must not be
+   provided.
+
+   For text mode, a :class:`BZ2File` object is created, and wrapped in an
+   :class:`io.TextIOWrapper` instance with the specified encoding, error
+   handling behavior, and line ending(s).
+
+   .. versionadded:: 3.3
+
+   .. versionchanged:: 3.4
+      The ``'x'`` (exclusive creation) mode was added.
+
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
 
 
-.. index::
-   single: universal newlines; bz2.BZ2File class
+.. class:: BZ2File(filename, mode='r', *, compresslevel=9)
 
-.. class:: BZ2File(filename[, mode[, buffering[, compresslevel]]])
+   Open a bzip2-compressed file in binary mode.
 
-   Open a bz2 file. Mode can be either ``'r'`` or ``'w'``, for reading (default)
-   or writing. When opened for writing, the file will be created if it doesn't
-   exist, and truncated otherwise. If *buffering* is given, ``0`` means
-   unbuffered, and larger numbers specify the buffer size; the default is
-   ``0``. If *compresslevel* is given, it must be a number between ``1`` and
-   ``9``; the default is ``9``. Add a ``'U'`` to mode to open the file for input
-   in :term:`universal newlines` mode. Any line ending in the input file will be
-   seen as a ``'\n'`` in Python.  Also, a file so opened gains the attribute
-   :attr:`newlines`; the value for this attribute is one of ``None`` (no newline
-   read yet), ``'\r'``, ``'\n'``, ``'\r\n'`` or a tuple containing all the
-   newline types seen. Universal newlines are available only when
-   reading. Instances support iteration in the same way as normal :class:`file`
-   instances.
+   If *filename* is a :class:`str` or :class:`bytes` object, open the named file
+   directly. Otherwise, *filename* should be a :term:`file object`, which will
+   be used to read or write the compressed data.
 
-   :class:`BZ2File` supports the :keyword:`with` statement.
+   The *mode* argument can be either ``'r'`` for reading (default), ``'w'`` for
+   overwriting, ``'x'`` for exclusive creation, or ``'a'`` for appending. These
+   can equivalently be given as ``'rb'``, ``'wb'``, ``'xb'`` and ``'ab'``
+   respectively.
 
-   .. versionchanged:: 2.7
+   If *filename* is a file object (rather than an actual file name), a mode of
+   ``'w'`` does not truncate the file, and is instead equivalent to ``'a'``.
+
+   If *mode* is ``'w'`` or ``'a'``, *compresslevel* can be an integer between
+   ``1`` and ``9`` specifying the level of compression: ``1`` produces the
+   least compression, and ``9`` (default) produces the most compression.
+
+   If *mode* is ``'r'``, the input file may be the concatenation of multiple
+   compressed streams.
+
+   :class:`BZ2File` provides all of the members specified by the
+   :class:`io.BufferedIOBase`, except for :meth:`detach` and :meth:`truncate`.
+   Iteration and the :keyword:`with` statement are supported.
+
+   :class:`BZ2File` also provides the following method:
+
+   .. method:: peek([n])
+
+      Return buffered data without advancing the file position. At least one
+      byte of data will be returned (unless at EOF). The exact number of bytes
+      returned is unspecified.
+
+      .. note:: While calling :meth:`peek` does not change the file position of
+         the :class:`BZ2File`, it may change the position of the underlying file
+         object (e.g. if the :class:`BZ2File` was constructed by passing a file
+         object for *filename*).
+
+      .. versionadded:: 3.3
+
+
+   .. versionchanged:: 3.1
       Support for the :keyword:`with` statement was added.
 
+   .. versionchanged:: 3.3
+      The :meth:`fileno`, :meth:`readable`, :meth:`seekable`, :meth:`writable`,
+      :meth:`read1` and :meth:`readinto` methods were added.
 
-   .. note::
+   .. versionchanged:: 3.3
+      Support was added for *filename* being a :term:`file object` instead of an
+      actual filename.
 
-      This class does not support input files containing multiple streams (such
-      as those produced by the :program:`pbzip2` tool). When reading such an
-      input file, only the first stream will be accessible. If you require
-      support for multi-stream files, consider using the third-party
-      :mod:`bz2file` module (available from
-      `PyPI <http://pypi.python.org/pypi/bz2file>`_). This module provides a
-      backport of Python 3.3's :class:`BZ2File` class, which does support
+   .. versionchanged:: 3.3
+      The ``'a'`` (append) mode was added, along with support for reading
       multi-stream files.
 
+   .. versionchanged:: 3.4
+      The ``'x'`` (exclusive creation) mode was added.
 
-   .. method:: close()
+   .. versionchanged:: 3.5
+      The :meth:`~io.BufferedIOBase.read` method now accepts an argument of
+      ``None``.
 
-      Close the file. Sets data attribute :attr:`closed` to true. A closed file
-      cannot be used for further I/O operations. :meth:`close` may be called
-      more than once without error.
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
 
+   .. versionchanged:: 3.9
+      The *buffering* parameter has been removed. It was ignored and deprecated
+      since Python 3.0. Pass an open file object to control how the file is
+      opened.
 
-   .. method:: read([size])
-
-      Read at most *size* uncompressed bytes, returned as a string. If the
-      *size* argument is negative or omitted, read until EOF is reached.
-
-
-   .. method:: readline([size])
-
-      Return the next line from the file, as a string, retaining newline. A
-      non-negative *size* argument limits the maximum number of bytes to return
-      (an incomplete line may be returned then). Return an empty string at EOF.
+      The *compresslevel* parameter became keyword-only.
 
 
-   .. method:: readlines([size])
+Incremental (de)compression
+---------------------------
 
-      Return a list of lines read. The optional *size* argument, if given, is an
-      approximate bound on the total number of bytes in the lines returned.
-
-
-   .. method:: xreadlines()
-
-      For backward compatibility. :class:`BZ2File` objects now include the
-      performance optimizations previously implemented in the :mod:`xreadlines`
-      module.
-
-      .. deprecated:: 2.3
-         This exists only for compatibility with the method by this name on
-         :class:`file` objects, which is deprecated.  Use ``for line in file``
-         instead.
-
-
-   .. method:: seek(offset[, whence])
-
-      Move to new file position. Argument *offset* is a byte count. Optional
-      argument *whence* defaults to ``os.SEEK_SET`` or ``0`` (offset from start
-      of file; offset should be ``>= 0``); other values are ``os.SEEK_CUR`` or
-      ``1`` (move relative to current position; offset can be positive or
-      negative), and ``os.SEEK_END`` or ``2`` (move relative to end of file;
-      offset is usually negative, although many platforms allow seeking beyond
-      the end of a file).
-
-      Note that seeking of bz2 files is emulated, and depending on the
-      parameters the operation may be extremely slow.
-
-
-   .. method:: tell()
-
-      Return the current file position, an integer (may be a long integer).
-
-
-   .. method:: write(data)
-
-      Write string *data* to file. Note that due to buffering, :meth:`close` may
-      be needed before the file on disk reflects the data written.
-
-
-   .. method:: writelines(sequence_of_strings)
-
-      Write the sequence of strings to the file. Note that newlines are not
-      added. The sequence can be any iterable object producing strings. This is
-      equivalent to calling write() for each string.
-
-
-Sequential (de)compression
---------------------------
-
-Sequential compression and decompression is done using the classes
-:class:`BZ2Compressor` and :class:`BZ2Decompressor`.
-
-
-.. class:: BZ2Compressor([compresslevel])
+.. class:: BZ2Compressor(compresslevel=9)
 
    Create a new compressor object. This object may be used to compress data
-   sequentially. If you want to compress data in one shot, use the
-   :func:`compress` function instead. The *compresslevel* parameter, if given,
-   must be a number between ``1`` and ``9``; the default is ``9``.
+   incrementally. For one-shot compression, use the :func:`compress` function
+   instead.
 
+   *compresslevel*, if given, must be an integer between ``1`` and ``9``. The
+   default is ``9``.
 
    .. method:: compress(data)
 
-      Provide more data to the compressor object. It will return chunks of
-      compressed data whenever possible. When you've finished providing data to
-      compress, call the :meth:`flush` method to finish the compression process,
-      and return what is left in internal buffers.
+      Provide data to the compressor object. Returns a chunk of compressed data
+      if possible, or an empty byte string otherwise.
+
+      When you have finished providing data to the compressor, call the
+      :meth:`flush` method to finish the compression process.
 
 
    .. method:: flush()
 
-      Finish the compression process and return what is left in internal
-      buffers. You must not use the compressor object after calling this method.
+      Finish the compression process. Returns the compressed data left in
+      internal buffers.
+
+      The compressor object may not be used after this method has been called.
 
 
 .. class:: BZ2Decompressor()
 
    Create a new decompressor object. This object may be used to decompress data
-   sequentially. If you want to decompress data in one shot, use the
-   :func:`decompress` function instead.
+   incrementally. For one-shot compression, use the :func:`decompress` function
+   instead.
+
+   .. note::
+      This class does not transparently handle inputs containing multiple
+      compressed streams, unlike :func:`decompress` and :class:`BZ2File`. If
+      you need to decompress a multi-stream input with :class:`BZ2Decompressor`,
+      you must use a new decompressor for each stream.
+
+   .. method:: decompress(data, max_length=-1)
+
+      Decompress *data* (a :term:`bytes-like object`), returning
+      uncompressed data as bytes. Some of *data* may be buffered
+      internally, for use in later calls to :meth:`decompress`. The
+      returned data should be concatenated with the output of any
+      previous calls to :meth:`decompress`.
+
+      If *max_length* is nonnegative, returns at most *max_length*
+      bytes of decompressed data. If this limit is reached and further
+      output can be produced, the :attr:`~.needs_input` attribute will
+      be set to ``False``. In this case, the next call to
+      :meth:`~.decompress` may provide *data* as ``b''`` to obtain
+      more of the output.
+
+      If all of the input data was decompressed and returned (either
+      because this was less than *max_length* bytes, or because
+      *max_length* was negative), the :attr:`~.needs_input` attribute
+      will be set to ``True``.
+
+      Attempting to decompress data after the end of stream is reached
+      raises an `EOFError`.  Any data found after the end of the
+      stream is ignored and saved in the :attr:`~.unused_data` attribute.
+
+      .. versionchanged:: 3.5
+         Added the *max_length* parameter.
+
+   .. attribute:: eof
+
+      ``True`` if the end-of-stream marker has been reached.
+
+      .. versionadded:: 3.3
 
 
-   .. method:: decompress(data)
+   .. attribute:: unused_data
 
-      Provide more data to the decompressor object. It will return chunks of
-      decompressed data whenever possible. If you try to decompress data after
-      the end of stream is found, :exc:`EOFError` will be raised. If any data
-      was found after the end of stream, it'll be ignored and saved in
-      :attr:`unused_data` attribute.
+      Data found after the end of the compressed stream.
+
+      If this attribute is accessed before the end of the stream has been
+      reached, its value will be ``b''``.
+
+   .. attribute:: needs_input
+
+      ``False`` if the :meth:`.decompress` method can provide more
+      decompressed data before requiring new uncompressed input.
+
+      .. versionadded:: 3.5
 
 
 One-shot (de)compression
 ------------------------
 
-One-shot compression and decompression is provided through the :func:`compress`
-and :func:`decompress` functions.
+.. function:: compress(data, compresslevel=9)
 
+   Compress *data*, a :term:`bytes-like object <bytes-like object>`.
 
-.. function:: compress(data[, compresslevel])
+   *compresslevel*, if given, must be an integer between ``1`` and ``9``. The
+   default is ``9``.
 
-   Compress *data* in one shot. If you want to compress data sequentially, use
-   an instance of :class:`BZ2Compressor` instead. The *compresslevel* parameter,
-   if given, must be a number between ``1`` and ``9``; the default is ``9``.
+   For incremental compression, use a :class:`BZ2Compressor` instead.
 
 
 .. function:: decompress(data)
 
-   Decompress *data* in one shot. If you want to decompress data sequentially,
-   use an instance of :class:`BZ2Decompressor` instead.
+   Decompress *data*, a :term:`bytes-like object <bytes-like object>`.
 
+   If *data* is the concatenation of multiple compressed streams, decompress
+   all of the streams.
+
+   For incremental decompression, use a :class:`BZ2Decompressor` instead.
+
+   .. versionchanged:: 3.3
+      Support for multi-stream inputs was added.
+
+.. _bz2-usage-examples:
+
+Examples of usage
+-----------------
+
+Below are some examples of typical usage of the :mod:`bz2` module.
+
+Using :func:`compress` and :func:`decompress` to demonstrate round-trip compression:
+
+    >>> import bz2
+    >>> data = b"""\
+    ... Donec rhoncus quis sapien sit amet molestie. Fusce scelerisque vel augue
+    ... nec ullamcorper. Nam rutrum pretium placerat. Aliquam vel tristique lorem,
+    ... sit amet cursus ante. In interdum laoreet mi, sit amet ultrices purus
+    ... pulvinar a. Nam gravida euismod magna, non varius justo tincidunt feugiat.
+    ... Aliquam pharetra lacus non risus vehicula rutrum. Maecenas aliquam leo
+    ... felis. Pellentesque semper nunc sit amet nibh ullamcorper, ac elementum
+    ... dolor luctus. Curabitur lacinia mi ornare consectetur vestibulum."""
+    >>> c = bz2.compress(data)
+    >>> len(data) / len(c)  # Data compression ratio
+    1.513595166163142
+    >>> d = bz2.decompress(c)
+    >>> data == d  # Check equality to original object after round-trip
+    True
+
+Using :class:`BZ2Compressor` for incremental compression:
+
+    >>> import bz2
+    >>> def gen_data(chunks=10, chunksize=1000):
+    ...     """Yield incremental blocks of chunksize bytes."""
+    ...     for _ in range(chunks):
+    ...         yield b"z" * chunksize
+    ...
+    >>> comp = bz2.BZ2Compressor()
+    >>> out = b""
+    >>> for chunk in gen_data():
+    ...     # Provide data to the compressor object
+    ...     out = out + comp.compress(chunk)
+    ...
+    >>> # Finish the compression process.  Call this once you have
+    >>> # finished providing data to the compressor.
+    >>> out = out + comp.flush()
+
+The example above uses a very "nonrandom" stream of data
+(a stream of `b"z"` chunks).  Random data tends to compress poorly,
+while ordered, repetitive data usually yields a high compression ratio.
+
+Writing and reading a bzip2-compressed file in binary mode:
+
+    >>> import bz2
+    >>> data = b"""\
+    ... Donec rhoncus quis sapien sit amet molestie. Fusce scelerisque vel augue
+    ... nec ullamcorper. Nam rutrum pretium placerat. Aliquam vel tristique lorem,
+    ... sit amet cursus ante. In interdum laoreet mi, sit amet ultrices purus
+    ... pulvinar a. Nam gravida euismod magna, non varius justo tincidunt feugiat.
+    ... Aliquam pharetra lacus non risus vehicula rutrum. Maecenas aliquam leo
+    ... felis. Pellentesque semper nunc sit amet nibh ullamcorper, ac elementum
+    ... dolor luctus. Curabitur lacinia mi ornare consectetur vestibulum."""
+    >>> with bz2.open("myfile.bz2", "wb") as f:
+    ...     # Write compressed data to file
+    ...     unused = f.write(data)
+    >>> with bz2.open("myfile.bz2", "rb") as f:
+    ...     # Decompress data from file
+    ...     content = f.read()
+    >>> content == data  # Check equality to original object after round-trip
+    True

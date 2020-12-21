@@ -1,8 +1,3 @@
-# NOTE: this file tests the new `io` library backported from Python 3.x.
-# Similar tests for the builtin file object can be found in test_file2k.py.
-
-from __future__ import print_function
-
 import sys
 import os
 import unittest
@@ -12,10 +7,11 @@ from weakref import proxy
 import io
 import _pyio as pyio
 
-from test.test_support import TESTFN, run_unittest
-from UserList import UserList
+from test.support import TESTFN
+from test import support
+from collections import UserList
 
-class AutoFileTests(unittest.TestCase):
+class AutoFileTests:
     # file tests for which a test file is automatically set up
 
     def setUp(self):
@@ -24,7 +20,7 @@ class AutoFileTests(unittest.TestCase):
     def tearDown(self):
         if self.f:
             self.f.close()
-        os.remove(TESTFN)
+        support.unlink(TESTFN)
 
     def testWeakRefs(self):
         # verify weak references
@@ -49,7 +45,7 @@ class AutoFileTests(unittest.TestCase):
         a = array('b', b'x'*10)
         self.f = self.open(TESTFN, 'rb')
         n = self.f.readinto(a)
-        self.assertEqual(b'12', a.tostring()[:n])
+        self.assertEqual(b'12', a.tobytes()[:n])
 
     def testReadinto_text(self):
         # verify readinto refuses text files
@@ -88,11 +84,11 @@ class AutoFileTests(unittest.TestCase):
     def testErrors(self):
         f = self.f
         self.assertEqual(f.name, TESTFN)
-        self.assertTrue(not f.isatty())
-        self.assertTrue(not f.closed)
+        self.assertFalse(f.isatty())
+        self.assertFalse(f.closed)
 
         if hasattr(f, "readinto"):
-            self.assertRaises((IOError, TypeError), f.readinto, "")
+            self.assertRaises((OSError, TypeError), f.readinto, "")
         f.close()
         self.assertTrue(f.closed)
 
@@ -100,7 +96,7 @@ class AutoFileTests(unittest.TestCase):
         methods = [('fileno', ()),
                    ('flush', ()),
                    ('isatty', ()),
-                   ('next', ()),
+                   ('__next__', ()),
                    ('read', ()),
                    ('write', (b"",)),
                    ('readline', ()),
@@ -111,8 +107,7 @@ class AutoFileTests(unittest.TestCase):
                    ('writelines', ([],)),
                    ('__iter__', ()),
                    ]
-        if not sys.platform.startswith('atheos'):
-            methods.append(('truncate', ()))
+        methods.append(('truncate', ()))
 
         # __exit__ should close the file
         self.f.__exit__(None, None, None)
@@ -127,25 +122,29 @@ class AutoFileTests(unittest.TestCase):
         self.assertEqual(self.f.__exit__(None, None, None), None)
         # it must also return None if an exception was given
         try:
-            1 // 0
+            1/0
         except:
             self.assertEqual(self.f.__exit__(*sys.exc_info()), None)
 
     def testReadWhenWriting(self):
-        self.assertRaises(IOError, self.f.read)
+        self.assertRaises(OSError, self.f.read)
 
-class CAutoFileTests(AutoFileTests):
+class CAutoFileTests(AutoFileTests, unittest.TestCase):
     open = io.open
 
-class PyAutoFileTests(AutoFileTests):
+class PyAutoFileTests(AutoFileTests, unittest.TestCase):
     open = staticmethod(pyio.open)
 
 
-class OtherFileTests(unittest.TestCase):
+class OtherFileTests:
+
+    def tearDown(self):
+        support.unlink(TESTFN)
 
     def testModeStrings(self):
         # check invalid mode strings
-        for mode in ("", "aU", "wU+"):
+        self.open(TESTFN, 'wb').close()
+        for mode in ("", "aU", "wU+", "U+", "+U", "rU+"):
             try:
                 f = self.open(TESTFN, mode)
             except ValueError:
@@ -170,28 +169,38 @@ class OtherFileTests(unittest.TestCase):
             f.close()
             self.fail("no error for invalid mode: %s" % bad_mode)
 
+    def _checkBufferSize(self, s):
+        try:
+            f = self.open(TESTFN, 'wb', s)
+            f.write(str(s).encode("ascii"))
+            f.close()
+            f.close()
+            f = self.open(TESTFN, 'rb', s)
+            d = int(f.read().decode("ascii"))
+            f.close()
+            f.close()
+        except OSError as msg:
+            self.fail('error setting buffer size %d: %s' % (s, str(msg)))
+        self.assertEqual(d, s)
+
     def testSetBufferSize(self):
         # make sure that explicitly setting the buffer size doesn't cause
         # misbehaviour especially with repeated close() calls
-        for s in (-1, 0, 1, 512):
-            try:
-                f = self.open(TESTFN, 'wb', s)
-                f.write(str(s).encode("ascii"))
-                f.close()
-                f.close()
-                f = self.open(TESTFN, 'rb', s)
-                d = int(f.read().decode("ascii"))
-                f.close()
-                f.close()
-            except IOError as msg:
-                self.fail('error setting buffer size %d: %s' % (s, str(msg)))
-            self.assertEqual(d, s)
+        for s in (-1, 0, 512):
+            with support.check_no_warnings(self,
+                                           message='line buffering',
+                                           category=RuntimeWarning):
+                self._checkBufferSize(s)
+
+        # test that attempts to use line buffering in binary mode cause
+        # a warning
+        with self.assertWarnsRegex(RuntimeWarning, 'line buffering'):
+            self._checkBufferSize(1)
 
     def testTruncateOnWindows(self):
         # SF bug <http://www.python.org/sf/801631>
         # "file.truncate fault on windows"
 
-        os.unlink(TESTFN)
         f = self.open(TESTFN, 'wb')
 
         try:
@@ -215,7 +224,6 @@ class OtherFileTests(unittest.TestCase):
                 self.fail("File size after ftruncate wrong %d" % size)
         finally:
             f.close()
-            os.unlink(TESTFN)
 
     def testIteration(self):
         # Test the complex interaction when mixing file-iteration and the
@@ -236,102 +244,90 @@ class OtherFileTests(unittest.TestCase):
         methods = [("readline", ()), ("read", ()), ("readlines", ()),
                    ("readinto", (array("b", b" "*100),))]
 
+        # Prepare the testfile
+        bag = self.open(TESTFN, "wb")
+        bag.write(filler * nchunks)
+        bag.writelines(testlines)
+        bag.close()
+        # Test for appropriate errors mixing read* and iteration
+        for methodname, args in methods:
+            f = self.open(TESTFN, 'rb')
+            self.assertEqual(next(f), filler)
+            meth = getattr(f, methodname)
+            meth(*args)  # This simply shouldn't fail
+            f.close()
+
+        # Test to see if harmless (by accident) mixing of read* and
+        # iteration still works. This depends on the size of the internal
+        # iteration buffer (currently 8192,) but we can test it in a
+        # flexible manner.  Each line in the bag o' ham is 4 bytes
+        # ("h", "a", "m", "\n"), so 4096 lines of that should get us
+        # exactly on the buffer boundary for any power-of-2 buffersize
+        # between 4 and 16384 (inclusive).
+        f = self.open(TESTFN, 'rb')
+        for i in range(nchunks):
+            next(f)
+        testline = testlines.pop(0)
         try:
-            # Prepare the testfile
-            bag = self.open(TESTFN, "wb")
-            bag.write(filler * nchunks)
-            bag.writelines(testlines)
-            bag.close()
-            # Test for appropriate errors mixing read* and iteration
-            for methodname, args in methods:
-                f = self.open(TESTFN, 'rb')
-                if next(f) != filler:
-                    self.fail, "Broken testfile"
-                meth = getattr(f, methodname)
-                meth(*args)  # This simply shouldn't fail
-                f.close()
+            line = f.readline()
+        except ValueError:
+            self.fail("readline() after next() with supposedly empty "
+                        "iteration-buffer failed anyway")
+        if line != testline:
+            self.fail("readline() after next() with empty buffer "
+                        "failed. Got %r, expected %r" % (line, testline))
+        testline = testlines.pop(0)
+        buf = array("b", b"\x00" * len(testline))
+        try:
+            f.readinto(buf)
+        except ValueError:
+            self.fail("readinto() after next() with supposedly empty "
+                        "iteration-buffer failed anyway")
+        line = buf.tobytes()
+        if line != testline:
+            self.fail("readinto() after next() with empty buffer "
+                        "failed. Got %r, expected %r" % (line, testline))
 
-            # Test to see if harmless (by accident) mixing of read* and
-            # iteration still works. This depends on the size of the internal
-            # iteration buffer (currently 8192,) but we can test it in a
-            # flexible manner.  Each line in the bag o' ham is 4 bytes
-            # ("h", "a", "m", "\n"), so 4096 lines of that should get us
-            # exactly on the buffer boundary for any power-of-2 buffersize
-            # between 4 and 16384 (inclusive).
-            f = self.open(TESTFN, 'rb')
-            for i in range(nchunks):
-                next(f)
-            testline = testlines.pop(0)
+        testline = testlines.pop(0)
+        try:
+            line = f.read(len(testline))
+        except ValueError:
+            self.fail("read() after next() with supposedly empty "
+                        "iteration-buffer failed anyway")
+        if line != testline:
+            self.fail("read() after next() with empty buffer "
+                        "failed. Got %r, expected %r" % (line, testline))
+        try:
+            lines = f.readlines()
+        except ValueError:
+            self.fail("readlines() after next() with supposedly empty "
+                        "iteration-buffer failed anyway")
+        if lines != testlines:
+            self.fail("readlines() after next() with empty buffer "
+                        "failed. Got %r, expected %r" % (line, testline))
+        f.close()
+
+        # Reading after iteration hit EOF shouldn't hurt either
+        f = self.open(TESTFN, 'rb')
+        try:
+            for line in f:
+                pass
             try:
-                line = f.readline()
-            except ValueError:
-                self.fail("readline() after next() with supposedly empty "
-                          "iteration-buffer failed anyway")
-            if line != testline:
-                self.fail("readline() after next() with empty buffer "
-                          "failed. Got %r, expected %r" % (line, testline))
-            testline = testlines.pop(0)
-            buf = array("b", b"\x00" * len(testline))
-            try:
+                f.readline()
                 f.readinto(buf)
+                f.read()
+                f.readlines()
             except ValueError:
-                self.fail("readinto() after next() with supposedly empty "
-                          "iteration-buffer failed anyway")
-            line = buf.tostring()
-            if line != testline:
-                self.fail("readinto() after next() with empty buffer "
-                          "failed. Got %r, expected %r" % (line, testline))
-
-            testline = testlines.pop(0)
-            try:
-                line = f.read(len(testline))
-            except ValueError:
-                self.fail("read() after next() with supposedly empty "
-                          "iteration-buffer failed anyway")
-            if line != testline:
-                self.fail("read() after next() with empty buffer "
-                          "failed. Got %r, expected %r" % (line, testline))
-            try:
-                lines = f.readlines()
-            except ValueError:
-                self.fail("readlines() after next() with supposedly empty "
-                          "iteration-buffer failed anyway")
-            if lines != testlines:
-                self.fail("readlines() after next() with empty buffer "
-                          "failed. Got %r, expected %r" % (line, testline))
-            # Reading after iteration hit EOF shouldn't hurt either
-            f = self.open(TESTFN, 'rb')
-            try:
-                for line in f:
-                    pass
-                try:
-                    f.readline()
-                    f.readinto(buf)
-                    f.read()
-                    f.readlines()
-                except ValueError:
-                    self.fail("read* failed after next() consumed file")
-            finally:
-                f.close()
+                self.fail("read* failed after next() consumed file")
         finally:
-            os.unlink(TESTFN)
+            f.close()
 
-class COtherFileTests(OtherFileTests):
+class COtherFileTests(OtherFileTests, unittest.TestCase):
     open = io.open
 
-class PyOtherFileTests(OtherFileTests):
+class PyOtherFileTests(OtherFileTests, unittest.TestCase):
     open = staticmethod(pyio.open)
 
 
-def test_main():
-    # Historically, these tests have been sloppy about removing TESTFN.
-    # So get rid of it no matter what.
-    try:
-        run_unittest(CAutoFileTests, PyAutoFileTests,
-                     COtherFileTests, PyOtherFileTests)
-    finally:
-        if os.path.exists(TESTFN):
-            os.unlink(TESTFN)
-
 if __name__ == '__main__':
-    test_main()
+    unittest.main()

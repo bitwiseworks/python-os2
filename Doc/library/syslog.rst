@@ -5,6 +5,7 @@
    :platform: Unix
    :synopsis: An interface to the Unix syslog library routines.
 
+--------------
 
 This module provides an interface to the Unix ``syslog`` library routines.
 Refer to the Unix manual pages for a detailed description of the ``syslog``
@@ -30,6 +31,8 @@ The module defines the following functions:
    If :func:`openlog` has not been called prior to the call to :func:`syslog`,
    ``openlog()`` will be called with no arguments.
 
+   .. audit-event:: syslog.syslog priority,message syslog.syslog
+
 
 .. function:: openlog([ident[, logoption[, facility]]])
 
@@ -44,6 +47,13 @@ The module defines the following functions:
    keyword argument (default is :const:`LOG_USER`) sets the default facility for
    messages which do not have a facility explicitly encoded.
 
+   .. audit-event:: syslog.openlog ident,logoption,facility syslog.openlog
+
+   .. versionchanged:: 3.2
+      In previous versions, keyword arguments were not allowed, and *ident* was
+      required.  The default for *ident* was dependent on the system libraries,
+      and often was ``python`` instead of the name of the Python program file.
+
 
 .. function:: closelog()
 
@@ -53,6 +63,8 @@ The module defines the following functions:
    example, :func:`openlog` will be called on the first :func:`syslog` call (if
    :func:`openlog` hasn't already been called), and *ident* and other
    :func:`openlog` parameters are reset to defaults.
+
+   .. audit-event:: syslog.closelog "" syslog.closelog
 
 
 .. function:: setlogmask(maskpri)
@@ -64,6 +76,8 @@ The module defines the following functions:
    ``LOG_UPTO(pri)`` calculates the mask for all priorities up to and including
    *pri*.
 
+   .. audit-event:: syslog.setlogmask maskpri syslog.setlogmask
+
 The module defines the following constants:
 
 Priority levels (high to low):
@@ -74,12 +88,14 @@ Priority levels (high to low):
 Facilities:
    :const:`LOG_KERN`, :const:`LOG_USER`, :const:`LOG_MAIL`, :const:`LOG_DAEMON`,
    :const:`LOG_AUTH`, :const:`LOG_LPR`, :const:`LOG_NEWS`, :const:`LOG_UUCP`,
-   :const:`LOG_CRON`, :const:`LOG_SYSLOG` and :const:`LOG_LOCAL0` to
-   :const:`LOG_LOCAL7`.
+   :const:`LOG_CRON`, :const:`LOG_SYSLOG`, :const:`LOG_LOCAL0` to
+   :const:`LOG_LOCAL7`, and, if defined in ``<syslog.h>``,
+   :const:`LOG_AUTHPRIV`.
 
 Log options:
-   :const:`LOG_PID`, :const:`LOG_CONS`, :const:`LOG_NDELAY`, :const:`LOG_NOWAIT`
-   and :const:`LOG_PERROR` if defined in ``<syslog.h>``.
+   :const:`LOG_PID`, :const:`LOG_CONS`, :const:`LOG_NDELAY`, and, if defined
+   in ``<syslog.h>``, :const:`LOG_ODELAY`, :const:`LOG_NOWAIT`, and
+   :const:`LOG_PERROR`.
 
 
 Examples

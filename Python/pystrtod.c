@@ -1,6 +1,7 @@
 /* -*- Mode: C; c-file-style: "python" -*- */
 
 #include <Python.h>
+#include "pycore_dtoa.h"
 #include <locale.h>
 
 /* Case-insensitive string match used for nan and inf detection; t should be
@@ -21,6 +22,43 @@ case_insensitive_match(const char *s, const char *t)
    return the NaN or Infinity as a double and set *endptr to point just beyond
    the successfully parsed portion of the string.  On failure, return -1.0 and
    set *endptr to point to the start of the string. */
+
+#ifndef PY_NO_SHORT_FLOAT_REPR
+
+double
+_Py_parse_inf_or_nan(const char *p, char **endptr)
+{
+    double retval;
+    const char *s;
+    int negate = 0;
+
+    s = p;
+    if (*s == '-') {
+        negate = 1;
+        s++;
+    }
+    else if (*s == '+') {
+        s++;
+    }
+    if (case_insensitive_match(s, "inf")) {
+        s += 3;
+        if (case_insensitive_match(s, "inity"))
+            s += 5;
+        retval = _Py_dg_infinity(negate);
+    }
+    else if (case_insensitive_match(s, "nan")) {
+        s += 3;
+        retval = _Py_dg_stdnan(negate);
+    }
+    else {
+        s = p;
+        retval = -1.0;
+    }
+    *endptr = (char *)s;
+    return retval;
+}
+
+#else
 
 double
 _Py_parse_inf_or_nan(const char *p, char **endptr)
@@ -57,8 +95,10 @@ _Py_parse_inf_or_nan(const char *p, char **endptr)
     return retval;
 }
 
+#endif
+
 /**
- * PyOS_ascii_strtod:
+ * _PyOS_ascii_strtod:
  * @nptr:    the string to convert to a numeric value.
  * @endptr:  if non-%NULL, it returns the character after
  *           the last character used in the conversion.
@@ -88,7 +128,7 @@ _Py_parse_inf_or_nan(const char *p, char **endptr)
 
 #ifndef PY_NO_SHORT_FLOAT_REPR
 
-double
+static double
 _PyOS_ascii_strtod(const char *nptr, char **endptr)
 {
     double result;
@@ -121,11 +161,11 @@ _PyOS_ascii_strtod(const char *nptr, char **endptr)
    correctly rounded results.
 */
 
-double
+static double
 _PyOS_ascii_strtod(const char *nptr, char **endptr)
 {
     char *fail_pos;
-    double val = -1.0;
+    double val;
     struct lconv *locale_data;
     const char *decimal_point;
     size_t decimal_point_len;
@@ -270,48 +310,10 @@ _PyOS_ascii_strtod(const char *nptr, char **endptr)
 
 #endif
 
-/* PyOS_ascii_strtod is DEPRECATED in Python 2.7 and 3.1 */
-
-double
-PyOS_ascii_strtod(const char *nptr, char **endptr)
-{
-    char *fail_pos;
-    const char *p;
-    double x;
-
-    if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                     "PyOS_ascii_strtod and PyOS_ascii_atof are "
-                     "deprecated.  Use PyOS_string_to_double "
-                     "instead.", 1) < 0)
-        return -1.0;
-
-    /* _PyOS_ascii_strtod already does everything that we want,
-       except that it doesn't parse leading whitespace */
-    p = nptr;
-    while (Py_ISSPACE(*p))
-        p++;
-    x = _PyOS_ascii_strtod(p, &fail_pos);
-    if (fail_pos == p)
-        fail_pos = (char *)nptr;
-    if (endptr)
-        *endptr = (char *)fail_pos;
-    return x;
-}
-
-/* PyOS_ascii_strtod is DEPRECATED in Python 2.7 and 3.1 */
-
-double
-PyOS_ascii_atof(const char *nptr)
-{
-    return PyOS_ascii_strtod(nptr, NULL);
-}
-
-/* PyOS_string_to_double is the recommended replacement for the deprecated
-   PyOS_ascii_strtod and PyOS_ascii_atof functions.  It converts a
-   null-terminated byte string s (interpreted as a string of ASCII characters)
-   to a float.  The string should not have leading or trailing whitespace (in
-   contrast, PyOS_ascii_strtod allows leading whitespace but not trailing
-   whitespace).  The conversion is independent of the current locale.
+/* PyOS_string_to_double converts a null-terminated byte string s (interpreted
+   as a string of ASCII characters) to a float.  The string should not have
+   leading or trailing whitespace.  The conversion is independent of the
+   current locale.
 
    If endptr is NULL, try to convert the whole string.  Raise ValueError and
    return -1.0 if the string is not a valid representation of a floating-point
@@ -324,7 +326,7 @@ PyOS_ascii_atof(const char *nptr)
 
    On overflow (e.g., when trying to convert '1e500' on an IEEE 754 machine),
    if overflow_exception is NULL then +-Py_HUGE_VAL is returned, and no Python
-   exception is raised.  Otherwise, overflow_exception should point to a
+   exception is raised.  Otherwise, overflow_exception should point to
    a Python exception, this exception will be raised, -1.0 will be returned,
    and *endptr will point just past the end of the converted value.
 
@@ -341,9 +343,7 @@ PyOS_string_to_double(const char *s,
     char *fail_pos;
 
     errno = 0;
-    PyFPE_START_PROTECT("PyOS_string_to_double", return -1.0)
     x = _PyOS_ascii_strtod(s, &fail_pos);
-    PyFPE_END_PROTECT(x)
 
     if (errno == ENOMEM) {
         PyErr_NoMemory();
@@ -352,15 +352,15 @@ PyOS_string_to_double(const char *s,
     else if (!endptr && (fail_pos == s || *fail_pos != '\0'))
         PyErr_Format(PyExc_ValueError,
                       "could not convert string to float: "
-                      "%.200s", s);
+                      "'%.200s'", s);
     else if (fail_pos == s)
         PyErr_Format(PyExc_ValueError,
                       "could not convert string to float: "
-                      "%.200s", s);
+                      "'%.200s'", s);
     else if (errno == ERANGE && fabs(x) >= 1.0 && overflow_exception)
         PyErr_Format(overflow_exception,
                       "value too large to convert to float: "
-                      "%.200s", s);
+                      "'%.200s'", s);
     else
         result = x;
 
@@ -368,6 +368,79 @@ PyOS_string_to_double(const char *s,
         *endptr = fail_pos;
     return result;
 }
+
+/* Remove underscores that follow the underscore placement rule from
+   the string and then call the `innerfunc` function on the result.
+   It should return a new object or NULL on exception.
+
+   `what` is used for the error message emitted when underscores are detected
+   that don't follow the rule. `arg` is an opaque pointer passed to the inner
+   function.
+
+   This is used to implement underscore-agnostic conversion for floats
+   and complex numbers.
+*/
+PyObject *
+_Py_string_to_number_with_underscores(
+    const char *s, Py_ssize_t orig_len, const char *what, PyObject *obj, void *arg,
+    PyObject *(*innerfunc)(const char *, Py_ssize_t, void *))
+{
+    char prev;
+    const char *p, *last;
+    char *dup, *end;
+    PyObject *result;
+
+    assert(s[orig_len] == '\0');
+
+    if (strchr(s, '_') == NULL) {
+        return innerfunc(s, orig_len, arg);
+    }
+
+    dup = PyMem_Malloc(orig_len + 1);
+    if (dup == NULL) {
+        return PyErr_NoMemory();
+    }
+    end = dup;
+    prev = '\0';
+    last = s + orig_len;
+    for (p = s; *p; p++) {
+        if (*p == '_') {
+            /* Underscores are only allowed after digits. */
+            if (!(prev >= '0' && prev <= '9')) {
+                goto error;
+            }
+        }
+        else {
+            *end++ = *p;
+            /* Underscores are only allowed before digits. */
+            if (prev == '_' && !(*p >= '0' && *p <= '9')) {
+                goto error;
+            }
+        }
+        prev = *p;
+    }
+    /* Underscores are not allowed at the end. */
+    if (prev == '_') {
+        goto error;
+    }
+    /* No embedded NULs allowed. */
+    if (p != last) {
+        goto error;
+    }
+    *end = '\0';
+    result = innerfunc(dup, end - dup, arg);
+    PyMem_Free(dup);
+    return result;
+
+  error:
+    PyMem_Free(dup);
+    PyErr_Format(PyExc_ValueError,
+                 "could not convert string to %s: "
+                 "%R", what, obj);
+    return NULL;
+}
+
+#ifdef PY_NO_SHORT_FLOAT_REPR
 
 /* Given a string that may have a decimal point in the current
    locale, change it back to a dot.  Since the string cannot get
@@ -528,7 +601,8 @@ Py_LOCAL_INLINE(char *)
 ensure_decimal_point(char* buffer, size_t buf_size, int precision)
 {
     int digit_count, insert_count = 0, convert_to_exp = 0;
-    char *chars_to_insert, *digits_start;
+    const char *chars_to_insert;
+    char *digits_start;
 
     /* search for the first non-digit character */
     char *p = buffer;
@@ -618,12 +692,13 @@ ensure_decimal_point(char* buffer, size_t buf_size, int precision)
 #define FLOAT_FORMATBUFLEN 120
 
 /**
- * PyOS_ascii_formatd:
+ * _PyOS_ascii_formatd:
  * @buffer: A buffer to place the resulting string in
  * @buf_size: The length of the buffer.
  * @format: The printf()-style format to use for the
  *          code to use for converting.
  * @d: The #gdouble to convert
+ * @precision: The precision to use when formatting.
  *
  * Converts a #gdouble to a string, using the '.' as
  * decimal point. To format the number you pass in
@@ -636,7 +711,7 @@ ensure_decimal_point(char* buffer, size_t buf_size, int precision)
  * Return value: The pointer to the buffer with the converted string.
  * On failure returns NULL but does not set any Python exception.
  **/
-char *
+static char *
 _PyOS_ascii_formatd(char       *buffer,
                    size_t      buf_size,
                    const char *format,
@@ -716,25 +791,9 @@ _PyOS_ascii_formatd(char       *buffer,
     return buffer;
 }
 
-char *
-PyOS_ascii_formatd(char       *buffer,
-                   size_t      buf_size,
-                   const char *format,
-                   double      d)
-{
-    if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                     "PyOS_ascii_formatd is deprecated, "
-                     "use PyOS_double_to_string instead", 1) < 0)
-        return NULL;
-
-    return _PyOS_ascii_formatd(buffer, buf_size, format, d, -1);
-}
-
-#ifdef PY_NO_SHORT_FLOAT_REPR
-
 /* The fallback code to use if _Py_dg_dtoa is not available. */
 
-PyAPI_FUNC(char *) PyOS_double_to_string(double val,
+char * PyOS_double_to_string(double val,
                                          char format_code,
                                          int precision,
                                          int flags,
@@ -893,12 +952,12 @@ PyAPI_FUNC(char *) PyOS_double_to_string(double val,
 #define OFS_E 2
 
 /* The lengths of these are known to the code below, so don't change them */
-static char *lc_float_strings[] = {
+static const char * const lc_float_strings[] = {
     "inf",
     "nan",
     "e",
 };
-static char *uc_float_strings[] = {
+static const char * const uc_float_strings[] = {
     "INF",
     "NAN",
     "E",
@@ -935,9 +994,10 @@ static char *uc_float_strings[] = {
 
 static char *
 format_float_short(double d, char format_code,
-                   int mode, Py_ssize_t precision,
+                   int mode, int precision,
                    int always_add_sign, int add_dot_0_if_integer,
-                   int use_alt_formatting, char **float_strings, int *type)
+                   int use_alt_formatting, const char * const *float_strings,
+                   int *type)
 {
     char *buf = NULL;
     char *p = NULL;
@@ -1004,9 +1064,7 @@ format_float_short(double d, char format_code,
         else {
             /* shouldn't get here: Gay's code should always return
                something starting with a digit, an 'I',  or 'N' */
-            strncpy(p, "ERR", 3);
-            p += 3;
-            assert(0);
+            Py_UNREACHABLE();
         }
         goto exit;
     }
@@ -1071,7 +1129,7 @@ format_float_short(double d, char format_code,
     /* if using an exponent, reset decimal point position to 1 and adjust
        exponent accordingly.*/
     if (use_exp) {
-        exp = decpt - 1;
+        exp = (int)decpt - 1;
         decpt = 1;
     }
     /* ensure vdigits_start < decpt <= vdigits_end, or vdigits_start <
@@ -1182,13 +1240,13 @@ format_float_short(double d, char format_code,
 }
 
 
-PyAPI_FUNC(char *) PyOS_double_to_string(double val,
+char * PyOS_double_to_string(double val,
                                          char format_code,
                                          int precision,
                                          int flags,
                                          int *type)
 {
-    char **float_strings = lc_float_strings;
+    const char * const *float_strings = lc_float_strings;
     int mode;
 
     /* Validate format_code, and map upper and lower case. Compute the

@@ -3,7 +3,7 @@
 __author__ = "Benjamin Peterson"
 __credits__ = "Nobody"
 __version__ = "1.2.3.4"
-
+__xyz__ = "X, Y and Z"
 
 class A:
     """Hello and goodbye"""
@@ -12,8 +12,18 @@ class A:
         pass
 
 class B(object):
-    NO_MEANING = "eggs"
+    NO_MEANING: str = "eggs"
     pass
+
+class C(object):
+    def say_no(self):
+        return "no"
+    def get_answer(self):
+        """ Return say_no() """
+        return self.say_no()
+    def is_it_true(self):
+        """ Return self.get_answer() """
+        return self.get_answer()
 
 def doc_func():
     """

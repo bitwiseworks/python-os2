@@ -1,8 +1,7 @@
 """Tests for distutils.unixccompiler."""
-import os
 import sys
 import unittest
-from test.test_support import EnvironmentVarGuard, run_unittest
+from test.support import EnvironmentVarGuard, run_unittest
 
 from distutils import sysconfig
 from distutils.unixccompiler import UnixCCompiler
@@ -21,12 +20,8 @@ class UnixCCompilerTestCase(unittest.TestCase):
         sys.platform = self._backup_platform
         sysconfig.get_config_var = self._backup_get_config_var
 
+    @unittest.skipIf(sys.platform == 'win32', "can't test on Windows")
     def test_runtime_libdir_option(self):
-
-        # not tested under windows
-        if sys.platform == 'win32':
-            return
-
         # Issue#5900
         #
         # Ensure RUNPATH is added to extension modules with RPATH if
@@ -56,14 +51,6 @@ class UnixCCompilerTestCase(unittest.TestCase):
 
         sysconfig.get_config_var = old_gcv
 
-        # irix646
-        sys.platform = 'irix646'
-        self.assertEqual(self.cc.rpath_foo(), ['-rpath', '/foo'])
-
-        # osf1V5
-        sys.platform = 'osf1V5'
-        self.assertEqual(self.cc.rpath_foo(), ['-rpath', '/foo'])
-
         # GCC GNULD
         sys.platform = 'bar'
         def gcv(v):
@@ -72,7 +59,7 @@ class UnixCCompilerTestCase(unittest.TestCase):
             elif v == 'GNULD':
                 return 'yes'
         sysconfig.get_config_var = gcv
-        self.assertEqual(self.cc.rpath_foo(), '-Wl,-R/foo')
+        self.assertEqual(self.cc.rpath_foo(), '-Wl,--enable-new-dtags,-R/foo')
 
         # GCC non-GNULD
         sys.platform = 'bar'
@@ -93,8 +80,7 @@ class UnixCCompilerTestCase(unittest.TestCase):
             elif v == 'GNULD':
                 return 'yes'
         sysconfig.get_config_var = gcv
-        self.assertEqual(self.cc.rpath_foo(), '-Wl,-R/foo')
-
+        self.assertEqual(self.cc.rpath_foo(), '-Wl,--enable-new-dtags,-R/foo')
 
         # non-GCC GNULD
         sys.platform = 'bar'
@@ -116,13 +102,6 @@ class UnixCCompilerTestCase(unittest.TestCase):
         sysconfig.get_config_var = gcv
         self.assertEqual(self.cc.rpath_foo(), '-R/foo')
 
-        # AIX C/C++ linker
-        sys.platform = 'aix'
-        def gcv(v):
-            return 'xxx'
-        sysconfig.get_config_var = gcv
-        self.assertEqual(self.cc.rpath_foo(), '-R/foo')
-
     @unittest.skipUnless(sys.platform == 'darwin', 'test only relevant for OS X')
     def test_osx_cc_overrides_ldshared(self):
         # Issue #18080:
@@ -139,7 +118,7 @@ class UnixCCompilerTestCase(unittest.TestCase):
         self.assertEqual(self.cc.linker_so[0], 'my_cc')
 
     @unittest.skipUnless(sys.platform == 'darwin', 'test only relevant for OS X')
-    def test_osx_explict_ldshared(self):
+    def test_osx_explicit_ldshared(self):
         # Issue #18080:
         # ensure that setting CC env variable does not change
         #   explicit LDSHARED setting for linker

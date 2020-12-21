@@ -1,11 +1,10 @@
-import sys
 import unittest
 
-if not sys.platform.startswith('win'):
-    raise unittest.SkipTest('Windows-only test')
+# also work on POSIX
 
 from ctypes import *
 from ctypes import wintypes
+
 
 class WinTypesTest(unittest.TestCase):
     def test_variant_bool(self):
@@ -38,6 +37,7 @@ class WinTypesTest(unittest.TestCase):
         self.assertIs(vb.value, True)
         vb.value = []
         self.assertIs(vb.value, False)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,6 @@
 /* cache.h - definitions for the LRU cache
  *
- * Copyright (C) 2004-2010 Gerhard Häring <gh@ghaering.de>
+ * Copyright (C) 2004-2010 Gerhard HÃ¤ring <gh@ghaering.de>
  *
  * This file is part of pysqlite.
  *
@@ -23,6 +23,7 @@
 
 #ifndef PYSQLITE_CACHE_H
 #define PYSQLITE_CACHE_H
+#define PY_SSIZE_T_CLEAN
 #include "Python.h"
 
 /* The LRU cache is implemented as a combination of a doubly-linked with a

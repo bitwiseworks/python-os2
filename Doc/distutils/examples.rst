@@ -1,8 +1,10 @@
-.. _examples:
+.. _distutils_examples:
 
-********
-Examples
-********
+******************
+Distutils Examples
+******************
+
+.. include:: ./_setuptools_disclaimer.rst
 
 This chapter provides a number of basic examples to help get started with
 distutils.  Additional information about using distutils can be found in the
@@ -11,7 +13,7 @@ Distutils Cookbook.
 
 .. seealso::
 
-   `Distutils Cookbook <http://wiki.python.org/moin/Distutils/Cookbook>`_
+   `Distutils Cookbook <https://wiki.python.org/moin/Distutils/Cookbook>`_
       Collection of recipes showing how to achieve more control over distutils.
 
 
@@ -22,7 +24,7 @@ Pure Python distribution (by module)
 
 If you're just distributing a couple of modules, especially if they don't live
 in a particular package, you can specify them individually using the
-:option:`py_modules` option in the setup script.
+``py_modules`` option in the setup script.
 
 In the simplest case, you'll have two files to worry about: a setup script and
 the single module you're distributing, :file:`foo.py` in this example::
@@ -41,12 +43,12 @@ directory.)  A minimal setup script to describe this situation would be::
          )
 
 Note that the name of the distribution is specified independently with the
-:option:`name` option, and there's no rule that says it has to be the same as
+``name`` option, and there's no rule that says it has to be the same as
 the name of the sole module in the distribution (although that's probably a good
 convention to follow).  However, the distribution name is used to generate
 filenames, so you should stick to letters, digits, underscores, and hyphens.
 
-Since :option:`py_modules` is a list, you can of course specify multiple
+Since ``py_modules`` is a list, you can of course specify multiple
 modules, eg. if you're distributing modules :mod:`foo` and :mod:`bar`, your
 setup might look like this::
 
@@ -130,7 +132,7 @@ requires the least work to describe in your setup script::
          )
 
 If you want to put modules in directories not named for their package, then you
-need to use the :option:`package_dir` option again.  For example, if the
+need to use the ``package_dir`` option again.  For example, if the
 :file:`src` directory holds modules in the :mod:`foobar` package::
 
    <root>/
@@ -169,8 +171,8 @@ in which case your setup script would be  ::
 
 (The empty string also stands for the current directory.)
 
-If you have sub-packages, they must be explicitly listed in :option:`packages`,
-but any entries in :option:`package_dir` automatically extend to sub-packages.
+If you have sub-packages, they must be explicitly listed in ``packages``,
+but any entries in ``package_dir`` automatically extend to sub-packages.
 (In other words, the Distutils does *not* scan your source tree, trying to
 figure out which directories correspond to Python packages by looking for
 :file:`__init__.py` files.)  Thus, if the default layout grows a sub-package::
@@ -193,17 +195,14 @@ then the corresponding setup script would be  ::
          packages=['foobar', 'foobar.subfoo'],
          )
 
-(Again, the empty string in :option:`package_dir` stands for the current
-directory.)
-
 
 .. _single-ext:
 
 Single extension module
 =======================
 
-Extension modules are specified using the :option:`ext_modules` option.
-:option:`package_dir` has no effect on where extension source files are found;
+Extension modules are specified using the ``ext_modules`` option.
+``package_dir`` has no effect on where extension source files are found;
 it only affects the source for pure Python modules.  The simplest  case, a
 single extension module in a single C source file, is::
 
@@ -233,9 +232,109 @@ With exactly the same source tree layout, this extension can be put in the
          ext_modules=[Extension('foopkg.foo', ['foo.c'])],
          )
 
+Checking a package
+==================
+
+The ``check`` command allows you to verify if your package meta-data
+meet the minimum requirements to build a distribution.
+
+To run it, just call it using your :file:`setup.py` script. If something is
+missing, ``check`` will display a warning.
+
+Let's take an example with a simple script::
+
+    from distutils.core import setup
+
+    setup(name='foobar')
+
+Running the ``check`` command will display some warnings:
+
+.. code-block:: shell-session
+
+    $ python setup.py check
+    running check
+    warning: check: missing required meta-data: version, url
+    warning: check: missing meta-data: either (author and author_email) or
+             (maintainer and maintainer_email) should be supplied
+
+
+If you use the reStructuredText syntax in the ``long_description`` field and
+`docutils`_  is installed you can check if the syntax is fine with the
+``check`` command, using the ``restructuredtext`` option.
+
+For example, if the :file:`setup.py` script is changed like this::
+
+    from distutils.core import setup
+
+    desc = """\
+    My description
+    ==============
+
+    This is the description of the ``foobar`` package.
+    """
+
+    setup(name='foobar', version='1', author='tarek',
+        author_email='tarek@ziade.org',
+        url='http://example.com', long_description=desc)
+
+Where the long description is broken, ``check`` will be able to detect it
+by using the :mod:`docutils` parser:
+
+.. code-block:: shell-session
+
+    $ python setup.py check --restructuredtext
+    running check
+    warning: check: Title underline too short. (line 2)
+    warning: check: Could not finish the parsing.
+
+Reading the metadata
+=====================
+
+The :func:`distutils.core.setup` function provides a command-line interface
+that allows you to query the metadata fields of a project through the
+``setup.py`` script of a given project:
+
+.. code-block:: shell-session
+
+    $ python setup.py --name
+    distribute
+
+This call reads the ``name`` metadata by running the
+:func:`distutils.core.setup`  function. Although, when a source or binary
+distribution is created with Distutils, the metadata fields are written
+in a static file called :file:`PKG-INFO`. When a Distutils-based project is
+installed in Python, the :file:`PKG-INFO` file is copied alongside the modules
+and packages of the distribution under :file:`NAME-VERSION-pyX.X.egg-info`,
+where ``NAME`` is the name of the project, ``VERSION`` its version as defined
+in the Metadata, and ``pyX.X`` the major and minor version of Python like
+``2.7`` or ``3.2``.
+
+You can read back this static file, by using the
+:class:`distutils.dist.DistributionMetadata` class and its
+:func:`read_pkg_file` method::
+
+    >>> from distutils.dist import DistributionMetadata
+    >>> metadata = DistributionMetadata()
+    >>> metadata.read_pkg_file(open('distribute-0.6.8-py2.7.egg-info'))
+    >>> metadata.name
+    'distribute'
+    >>> metadata.version
+    '0.6.8'
+    >>> metadata.description
+    'Easily download, build, install, upgrade, and uninstall Python packages'
+
+Notice that the class can also be instantiated with a metadata file path to
+loads its values::
+
+    >>> pkg_info_path = 'distribute-0.6.8-py2.7.egg-info'
+    >>> DistributionMetadata(pkg_info_path).name
+    'distribute'
+
+
 .. % \section{Multiple extension modules}
 .. % \label{multiple-ext}
 
 .. % \section{Putting it all together}
 
 
+.. _docutils: http://docutils.sourceforge.net

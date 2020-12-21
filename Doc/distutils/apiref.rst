@@ -4,6 +4,16 @@
 API Reference
 *************
 
+.. seealso::
+
+   `New and changed setup.py arguments in setuptools`_
+      The ``setuptools`` project adds new capabilities to the ``setup`` function
+      and other APIs, makes the API consistent across different Python versions,
+      and is hence recommended over using ``distutils`` directly.
+
+.. _New and changed setup.py arguments in setuptools: https://setuptools.readthedocs.io/en/latest/setuptools.html#new-and-changed-setup-keywords
+
+.. include:: ./_setuptools_disclaimer.rst
 
 :mod:`distutils.core` --- Core Distutils functionality
 ======================================================
@@ -78,7 +88,7 @@ setup script). Indirectly provides the  :class:`distutils.dist.Distribution` and
    |                    | be built                       | :class:`distutils.core.Extension`                           |
    +--------------------+--------------------------------+-------------------------------------------------------------+
    | *classifiers*      | A list of categories for the   | a list of strings; valid classifiers are listed on `PyPI    |
-   |                    | package                        | <http://pypi.python.org/pypi?:action=list_classifiers>`_.   |
+   |                    | package                        | <https://pypi.org/classifiers>`_.                           |
    +--------------------+--------------------------------+-------------------------------------------------------------+
    | *distclass*        | the :class:`Distribution`      | a subclass of                                               |
    |                    | class to use                   | :class:`distutils.core.Distribution`                        |
@@ -120,7 +130,7 @@ setup script). Indirectly provides the  :class:`distutils.dist.Distribution` and
    args from *script* to :func:`setup`), or  the contents of the config files or
    command-line.
 
-   *script_name* is a file that will be run with :func:`execfile` ``sys.argv[0]``
+   *script_name* is a file that will be read and run with :func:`exec`.  ``sys.argv[0]``
    will be replaced with *script* for the duration of the call.  *script_args* is a
    list of strings; if supplied, ``sys.argv[1:]`` will be replaced by *script_args*
    for the duration  of the call.
@@ -166,8 +176,8 @@ the full reference.
 
 .. class:: Extension
 
-   The Extension class describes a single C or C++extension module in a setup
-   script. It accepts the following keyword arguments in its constructor
+   The Extension class describes a single C or C++ extension module in a setup
+   script. It accepts the following keyword arguments in its constructor:
 
    .. tabularcolumns:: |l|L|l|
 
@@ -183,8 +193,9 @@ the full reference.
    | *sources*              | list of source filenames,      | a list of strings         |
    |                        | relative to the distribution   |                           |
    |                        | root (where the setup script   |                           |
-   |                        | lives), in Unix form (slash-   |                           |
-   |                        | separated) for portability.    |                           |
+   |                        | lives), in Unix form           |                           |
+   |                        | (slash-separated) for          |                           |
+   |                        | portability.                   |                           |
    |                        | Source files may be C, C++,    |                           |
    |                        | SWIG (.i), platform-specific   |                           |
    |                        | resource files, or whatever    |                           |
@@ -205,7 +216,7 @@ the full reference.
    |                        | to or ``None`` to define it    |                           |
    |                        | without a particular value     |                           |
    |                        | (equivalent of ``#define FOO`` |                           |
-   |                        | in source or :option:`-DFOO`   |                           |
+   |                        | in source or :option:`!-DFOO`  |                           |
    |                        | on Unix C compiler command     |                           |
    |                        | line)                          |                           |
    +------------------------+--------------------------------+---------------------------+
@@ -270,6 +281,16 @@ the full reference.
    |                        | from the source extensions if  |                           |
    |                        | not provided.                  |                           |
    +------------------------+--------------------------------+---------------------------+
+   | *optional*             | specifies that a build failure | a boolean                 |
+   |                        | in the extension should not    |                           |
+   |                        | abort the build process, but   |                           |
+   |                        | simply skip the extension.     |                           |
+   +------------------------+--------------------------------+---------------------------+
+
+   .. versionchanged:: 3.8
+
+      On Unix, C extensions are no longer linked to libpython except on
+      Android and Cygwin.
 
 
 .. class:: Distribution
@@ -280,6 +301,10 @@ the full reference.
    See the :func:`setup` function for a list of keyword arguments accepted  by the
    Distribution constructor. :func:`setup` creates a Distribution instance.
 
+   .. versionchanged:: 3.7
+      :class:`~distutils.core.Distribution` now warns if ``classifiers``,
+      ``keywords`` and ``platforms`` fields are not specified as a list or
+      a string.
 
 .. class:: Command
 
@@ -314,12 +339,12 @@ This module provides the following functions.
 
 .. function:: gen_preprocess_options(macros, include_dirs)
 
-   Generate C pre-processor options (:option:`-D`, :option:`-U`, :option:`-I`) as
+   Generate C pre-processor options (:option:`!-D`, :option:`!-U`, :option:`!-I`) as
    used by at least two types of compilers: the typical Unix compiler and Visual
    C++. *macros* is the usual thing, a list of 1- or 2-tuples, where ``(name,)``
-   means undefine (:option:`-U`) macro *name*, and ``(name, value)`` means define
-   (:option:`-D`) macro *name* to *value*.  *include_dirs* is just a list of
-   directory names to be added to the header file search path (:option:`-I`).
+   means undefine (:option:`!-U`) macro *name*, and ``(name, value)`` means define
+   (:option:`!-D`) macro *name* to *value*.  *include_dirs* is just a list of
+   directory names to be added to the header file search path (:option:`!-I`).
    Returns a list of command-line options suitable for either Unix compilers or
    Visual C++.
 
@@ -354,7 +379,7 @@ This module provides the following functions.
 
 .. function:: show_compilers()
 
-   Print list of available compilers (used by the :option:`--help-compiler` options
+   Print list of available compilers (used by the :option:`!--help-compiler` options
    to :command:`build`, :command:`build_ext`, :command:`build_clib`).
 
 
@@ -516,7 +541,7 @@ This module provides the following functions.
 
    .. method:: CCompiler.library_option(lib)
 
-      Return the compiler option to add *dir* to the list of libraries linked into the
+      Return the compiler option to add *lib* to the list of libraries linked into the
       shared library or executable.
 
 
@@ -784,23 +809,23 @@ This module provides the following functions.
 This module provides the :class:`UnixCCompiler` class, a subclass of
 :class:`CCompiler` that handles the typical Unix-style command-line  C compiler:
 
-* macros defined with :option:`-Dname[=value]`
+* macros defined with :option:`!-Dname[=value]`
 
-* macros undefined with :option:`-Uname`
+* macros undefined with :option:`!-Uname`
 
-* include search directories specified with :option:`-Idir`
+* include search directories specified with :option:`!-Idir`
 
-* libraries specified with :option:`-llib`
+* libraries specified with :option:`!-llib`
 
-* library search directories specified with :option:`-Ldir`
+* library search directories specified with :option:`!-Ldir`
 
-* compile handled by :program:`cc` (or similar) executable with :option:`-c`
+* compile handled by :program:`cc` (or similar) executable with :option:`!-c`
   option: compiles :file:`.c` to :file:`.o`
 
 * link static library handled by :program:`ar` command (possibly with
   :program:`ranlib`)
 
-* link shared library handled by :program:`cc` :option:`-shared`
+* link shared library handled by :program:`cc` :option:`!-shared`
 
 
 :mod:`distutils.msvccompiler` --- Microsoft Compiler
@@ -809,13 +834,13 @@ This module provides the :class:`UnixCCompiler` class, a subclass of
 .. module:: distutils.msvccompiler
    :synopsis: Microsoft Compiler
 
+.. XXX: This is *waaaaay* out of date!
 
 This module provides :class:`MSVCCompiler`, an implementation of the abstract
 :class:`CCompiler` class for Microsoft Visual Studio. Typically, extension
 modules need to be compiled with the same compiler that was used to compile
 Python. For Python 2.3 and earlier, the compiler was Visual Studio 6. For Python
-2.4 and 2.5, the compiler is Visual Studio .NET 2003. The AMD64 and Itanium
-binaries are created using the Platform SDK.
+2.4 and 2.5, the compiler is Visual Studio .NET 2003.
 
 :class:`MSVCCompiler` will normally choose the right compiler, linker etc. on
 its own. To override this choice, the environment variables *DISTUTILS_USE_SDK*
@@ -832,7 +857,7 @@ selection by :class:`MSVCCompiler`.
 .. module:: distutils.bcppcompiler
 
 
-This module provides :class:`BorlandCCompiler`, an subclass of the abstract
+This module provides :class:`BorlandCCompiler`, a subclass of the abstract
 :class:`CCompiler` class for the Borland C++ compiler.
 
 
@@ -846,17 +871,6 @@ This module provides the :class:`CygwinCCompiler` class, a subclass of
 :class:`UnixCCompiler` that handles the Cygwin port of the GNU C compiler to
 Windows.  It also contains the Mingw32CCompiler class which handles the mingw32
 port of GCC (same as cygwin in no-cygwin mode).
-
-
-:mod:`distutils.emxccompiler` --- OS/2 EMX Compiler
-===================================================
-
-.. module:: distutils.emxccompiler
-   :synopsis: OS/2 EMX Compiler support
-
-
-This module provides the EMXCCompiler class, a subclass of
-:class:`UnixCCompiler` that handles the EMX port of the GNU C compiler to OS/2.
 
 
 :mod:`distutils.archive_util` ---  Archiving utilities
@@ -874,23 +888,31 @@ tarballs or zipfiles.
 
    Create an archive file (eg. ``zip`` or ``tar``).  *base_name*  is the name of
    the file to create, minus any format-specific extension;  *format* is the
-   archive format: one of ``zip``, ``tar``,  ``ztar``, or ``gztar``. *root_dir* is
-   a directory that will be the root directory of the archive; ie. we typically
-   ``chdir`` into *root_dir* before  creating the archive.  *base_dir* is the
-   directory where we start  archiving from; ie. *base_dir* will be the common
-   prefix of all files and directories in the archive.  *root_dir* and *base_dir*
-   both default to the current directory.  Returns the name of the archive file.
+   archive format: one of ``zip``, ``tar``, ``gztar``, ``bztar``, ``xztar``, or
+   ``ztar``. *root_dir* is a directory that will be the root directory of the
+   archive; ie. we typically ``chdir`` into *root_dir* before  creating the
+   archive.  *base_dir* is the directory where we start  archiving from; ie.
+   *base_dir* will be the common prefix of all files and directories in the
+   archive.  *root_dir* and *base_dir* both default to the current directory.
+   Returns the name of the archive file.
+
+   .. versionchanged:: 3.5
+      Added support for the ``xztar`` format.
 
 
 .. function:: make_tarball(base_name, base_dir[, compress='gzip', verbose=0, dry_run=0])
 
    'Create an (optional compressed) archive as a tar file from all files in and
-   under *base_dir*. *compress* must be ``'gzip'`` (the default),  ``'compress'``,
-   ``'bzip2'``, or ``None``.  Both :program:`tar` and the compression utility named
-   by *compress* must be on the  default program search path, so this is probably
-   Unix-specific.  The  output tar file will be named :file:`base_dir.tar`,
-   possibly plus the appropriate compression extension (:file:`.gz`, :file:`.bz2`
-   or :file:`.Z`).  Return the output filename.
+   under *base_dir*. *compress* must be ``'gzip'`` (the default),
+   ``'bzip2'``, ``'xz'``, ``'compress'``, or ``None``.  For the ``'compress'``
+   method the compression utility named by :program:`compress` must be on the
+   default program search path, so this is probably Unix-specific.  The output
+   tar file will be named :file:`base_dir.tar`, possibly plus the appropriate
+   compression extension (``.gz``, ``.bz2``, ``.xz`` or ``.Z``).  Return the
+   output filename.
+
+   .. versionchanged:: 3.5
+      Added support for the ``xz`` compression.
 
 
 .. function:: make_zipfile(base_name, base_dir[, verbose=0, dry_run=0])
@@ -926,7 +948,7 @@ timestamp dependency analysis.
 
    Walk two filename lists in parallel, testing if each source is newer than its
    corresponding target.  Return a pair of lists (*sources*, *targets*) where
-   source is newer than target, according to the semantics of :func:`newer`
+   source is newer than target, according to the semantics of :func:`newer`.
 
    .. % % equivalent to a listcomp...
 
@@ -934,7 +956,7 @@ timestamp dependency analysis.
 .. function:: newer_group(sources, target[, missing='error'])
 
    Return true if *target* is out-of-date with respect to any file listed in
-   *sources*  In other words, if *target* exists and is newer than every file in
+   *sources*.  In other words, if *target* exists and is newer than every file in
    *sources*, return false; otherwise return true. *missing* controls what we do
    when a source file is missing; the default (``'error'``) is to blow up with an
    :exc:`OSError` from  inside :func:`os.stat`; if it is ``'ignore'``, we silently
@@ -956,7 +978,7 @@ This module provides functions for operating on directories and trees of
 directories.
 
 
-.. function:: mkpath(name[, mode=0777, verbose=0, dry_run=0])
+.. function:: mkpath(name[, mode=0o777, verbose=0, dry_run=0])
 
    Create a directory and any missing ancestor directories.  If the directory
    already exists (or if *name* is the empty string, which means the current
@@ -967,10 +989,10 @@ directories.
    directories actually created.
 
 
-.. function:: create_tree(base_dir, files[, mode=0777, verbose=0, dry_run=0])
+.. function:: create_tree(base_dir, files[, mode=0o777, verbose=0, dry_run=0])
 
    Create all the empty directories under *base_dir* needed to put *files* there.
-   *base_dir* is just the a name of a directory which doesn't necessarily exist
+   *base_dir* is just the name of a directory which doesn't necessarily exist
    yet; *files* is a list of filenames to be interpreted relative to *base_dir*.
    *base_dir* + the directory portion of every file in *files* will be created if
    it doesn't already exist.  *mode*, *verbose* and *dry_run* flags  are as for
@@ -982,8 +1004,8 @@ directories.
    Copy an entire directory tree *src* to a new location *dst*.  Both *src* and
    *dst* must be directory names.  If *src* is not a directory, raise
    :exc:`DistutilsFileError`.  If *dst* does  not exist, it is created with
-   :func:`mkpath`.  The end result of the copy is that every file in *src* is
-   copied to *dst*, and directories under *src* are recursively copied to *dst*.
+   :func:`mkpath`.  The end result of the  copy is that every file in *src* is
+   copied to *dst*, and  directories under *src* are recursively copied to *dst*.
    Return the list of files that were copied or might have been copied, using their
    output name. The return value is unaffected by *update* or *dry_run*: it is
    simply the list of all files under *src*, with the names changed to be under
@@ -999,11 +1021,10 @@ directories.
 
    Files in *src* that begin with :file:`.nfs` are skipped (more information on
    these files is available in answer D2 of the `NFS FAQ page
-   <http://nfs.sourceforge.net/#section_d>`_.
+   <http://nfs.sourceforge.net/#section_d>`_).
 
-   .. versionchanged:: 2.7.4
+   .. versionchanged:: 3.3.1
       NFS files are ignored.
-
 
 .. function:: remove_tree(directory[, verbose=0, dry_run=0])
 
@@ -1085,19 +1106,16 @@ other utility module.
 
    Return a string that identifies the current platform.  This is used mainly to
    distinguish platform-specific build directories and platform-specific built
-   distributions.  Typically includes the OS name and version and the architecture
-   (as supplied by 'os.uname()'), although the exact information included depends
-   on the OS; eg. for IRIX the architecture isn't particularly important (IRIX only
-   runs on SGI hardware), but for Linux the kernel version isn't particularly
-   important.
+   distributions.  Typically includes the OS name and version and the
+   architecture (as supplied by 'os.uname()'), although the exact information
+   included depends on the OS; e.g., on Linux, the kernel version isn't
+   particularly important.
 
    Examples of returned values:
 
    * ``linux-i586``
    * ``linux-alpha``
    * ``solaris-2.6-sun4u``
-   * ``irix-5.3``
-   * ``irix64-6.2``
 
    For non-POSIX platforms, currently just returns ``sys.platform``.
 
@@ -1106,13 +1124,13 @@ other utility module.
    during the build of Python), not the OS version of the current system.
 
    For universal binary builds on Mac OS X the architecture value reflects
-   the univeral binary status instead of the architecture of the current
+   the universal binary status instead of the architecture of the current
    processor. For 32-bit universal binaries the architecture is ``fat``,
    for 64-bit universal binaries the architecture is ``fat64``, and
    for 4-way universal binaries the architecture is ``universal``. Starting
    from Python 2.7 and Python 3.2 the architecture ``fat3`` is used for
    a 3-way universal build (ppc, i386, x86_64) and ``intel`` is used for
-   a univeral build with the i386 and x86_64 architectures
+   a universal build with the i386 and x86_64 architectures
 
    Examples of returned values on Mac OS X:
 
@@ -1123,6 +1141,24 @@ other utility module.
    * ``macosx-10.5-universal``
 
    * ``macosx-10.6-intel``
+
+   For AIX, Python 3.9 and later return a string starting with "aix", followed
+   by additional fields (separated by ``'-'``) that represent the combined
+   values of AIX Version, Release and Technology Level (first field), Build Date
+   (second field), and bit-size (third field). Python 3.8 and earlier returned
+   only a single additional field with the AIX Version and Release.
+
+   Examples of returned values on AIX:
+
+   * ``aix-5307-0747-32`` # 32-bit build on AIX ``oslevel -s``: 5300-07-00-0000
+
+   * ``aix-7105-1731-64`` # 64-bit build on AIX ``oslevel -s``: 7100-05-01-1731
+
+   * ``aix-7.2``          # Legacy form reported in Python 3.8 and earlier
+
+   .. versionchanged:: 3.9
+      The AIX platform string format now also includes the technology level,
+      build date, and ABI bit-size.
 
 
 .. function:: convert_path(pathname)
@@ -1167,16 +1203,6 @@ other utility module.
    underscore. No { } or ( ) style quoting is available.
 
 
-.. function:: grok_environment_error(exc[, prefix='error: '])
-
-   Generate a useful error message from an :exc:`EnvironmentError`  (:exc:`IOError`
-   or :exc:`OSError`) exception object.   Handles Python 1.5.1 and later styles,
-   and does what it can to deal with  exception objects that don't have a filename
-   (which happens when the error  is due to a two-file operation, such as
-   :func:`~os.rename` or  :func:`~os.link`).  Returns the error message as a
-   string prefixed  with *prefix*.
-
-
 .. function:: split_quoted(s)
 
    Split a string up according to Unix shell-like rules for quotes and backslashes.
@@ -1210,12 +1236,12 @@ other utility module.
 
 .. function:: byte_compile(py_files[, optimize=0, force=0, prefix=None, base_dir=None, verbose=1, dry_run=0, direct=None])
 
-   Byte-compile a collection of Python source files to either :file:`.pyc` or
-   :file:`.pyo` files in the same directory.  *py_files* is a list of files to
-   compile; any files that don't end in :file:`.py` are silently skipped.
-   *optimize* must be one of the following:
+   Byte-compile a collection of Python source files to :file:`.pyc` files in a
+   :file:`__pycache__` subdirectory (see :pep:`3147` and :pep:`488`).
+   *py_files* is a list of files to compile; any files that don't end in
+   :file:`.py` are silently skipped.  *optimize* must be one of the following:
 
-   * ``0`` - don't optimize (generate :file:`.pyc`)
+   * ``0`` - don't optimize
    * ``1`` - normal optimization (like ``python -O``)
    * ``2`` - extra optimization (like ``python -OO``)
 
@@ -1237,6 +1263,14 @@ other utility module.
    use direct compilation or not (see the source for details).  The *direct* flag
    is used by the script generated in indirect mode; unless you know what you're
    doing, leave it set to ``None``.
+
+   .. versionchanged:: 3.2.3
+      Create ``.pyc`` files with an :func:`import magic tag
+      <imp.get_tag>` in their name, in a :file:`__pycache__` subdirectory
+      instead of files without tag in the current directory.
+
+   .. versionchanged:: 3.5
+      Create ``.pyc`` files according to :pep:`488`.
 
 
 .. function:: rfc822_escape(header)
@@ -1319,10 +1353,9 @@ provides the following additional features:
 
 * options set attributes of a passed-in object
 
-* boolean options can have "negative aliases" --- eg. if :option:`--quiet` is
-  the "negative alias" of :option:`--verbose`, then :option:`--quiet` on the
+* boolean options can have "negative aliases" --- eg. if :option:`!--quiet` is
+  the "negative alias" of :option:`!--verbose`, then :option:`!--quiet` on the
   command line sets *verbose* to false.
-
 
 .. function:: fancy_getopt(options, negative_opt, object, args)
 
@@ -1338,7 +1371,6 @@ provides the following additional features:
 .. function:: wrap_text(text, width)
 
    Wraps *text* to less than *width* wide.
-
 
 
 .. class:: FancyGetopt([option_table=None])
@@ -1395,11 +1427,11 @@ This module provides the :class:`FileList` class, used for poking about the
 filesystem and building lists of files.
 
 
-:mod:`distutils.log` --- Simple PEP 282-style logging
-=====================================================
+:mod:`distutils.log` --- Simple :pep:`282`-style logging
+========================================================
 
 .. module:: distutils.log
-   :synopsis: A simple logging mechanism, 282-style
+   :synopsis: A simple logging mechanism, :pep:`282`-style
 
 
 :mod:`distutils.spawn` --- Spawn a sub-process
@@ -1531,7 +1563,7 @@ Python's own build procedures.
 =================================================
 
 .. module:: distutils.text_file
-   :synopsis: provides the TextFile class, a simple interface to text files
+   :synopsis: Provides the TextFile class, a simple interface to text files
 
 
 This module provides the :class:`TextFile` class, which gives an interface  to
@@ -1568,8 +1600,8 @@ lines, and joining lines with backslashes.
    +------------------+--------------------------------+---------+
    | option name      | description                    | default |
    +==================+================================+=========+
-   | *strip_comments* | strip from ``'#'`` to end-of-  | true    |
-   |                  | line, as well as any           |         |
+   | *strip_comments* | strip from ``'#'`` to          | true    |
+   |                  | end-of-line, as well as any    |         |
    |                  | whitespace leading up to the   |         |
    |                  | ``'#'``\ ---unless it is       |         |
    |                  | escaped by a backslash         |         |
@@ -1670,7 +1702,7 @@ lines, and joining lines with backslashes.
 ===================================================
 
 .. module:: distutils.version
-   :synopsis: implements classes that represent module version numbers.
+   :synopsis: Implements classes that represent module version numbers.
 
 
 .. % todo
@@ -1685,7 +1717,7 @@ lines, and joining lines with backslashes.
 ===================================================================
 
 .. module:: distutils.cmd
-   :synopsis: This module provides the abstract base class Command. This class
+   :synopsis: Provides the abstract base class :class:`~distutils.cmd.Command`. This class
               is subclassed by the modules in the distutils.command subpackage.
 
 
@@ -1778,7 +1810,7 @@ Subclasses of :class:`Command` must define the following methods.
 ==========================================================
 
 .. module:: distutils.command
-   :synopsis: This subpackage contains one module for each standard Distutils command.
+   :synopsis: Contains one module for each standard Distutils command.
 
 
 .. % \subsubsection{Individual Distutils commands}
@@ -1823,9 +1855,12 @@ Subclasses of :class:`Command` must define the following methods.
 
 .. class:: bdist_msi
 
+.. deprecated:: 3.9
+   Use bdist_wheel (wheel packages) instead.
+
    Builds a `Windows Installer`_ (.msi) binary package.
 
-   .. _Windows Installer: http://msdn.microsoft.com/en-us/library/cc185688(VS.85).aspx
+   .. _Windows Installer: https://msdn.microsoft.com/en-us/library/cc185688(VS.85).aspx
 
    In most cases, the ``bdist_msi`` installer is a better choice than the
    ``bdist_wininst`` installer, because it provides better support for
@@ -1848,6 +1883,9 @@ Subclasses of :class:`Command` must define the following methods.
 
 .. module:: distutils.command.bdist_wininst
    :synopsis: Build a Windows installer
+
+.. deprecated:: 3.8
+   Use bdist_wheel (wheel packages) instead.
 
 
 .. % todo
@@ -1900,6 +1938,27 @@ Subclasses of :class:`Command` must define the following methods.
    :synopsis: Build the .py/.pyc files of a package
 
 
+.. class:: build_py
+
+.. class:: build_py_2to3
+
+   Alternative implementation of build_py which also runs the
+   2to3 conversion library on each .py file that is going to be
+   installed. To use this in a setup.py file for a distribution
+   that is designed to run with both Python 2.x and 3.x, add::
+
+     try:
+         from distutils.command.build_py import build_py_2to3 as build_py
+     except ImportError:
+         from distutils.command.build_py import build_py
+
+   to your setup.py, and later::
+
+      cmdclass = {'build_py': build_py}
+
+   to the invocation of setup().
+
+
 :mod:`distutils.command.build_scripts` --- Build the scripts of a package
 =========================================================================
 
@@ -1916,8 +1975,12 @@ Subclasses of :class:`Command` must define the following methods.
 .. module:: distutils.command.clean
    :synopsis: Clean a package build area
 
+This command removes the temporary files created by :command:`build`
+and its subcommands, like intermediary compiled object files.  With
+the ``--all`` option, the complete build directory will be removed.
 
-.. % todo
+Extension modules built :ref:`in place <distutils-build-ext-inplace>`
+will not be cleaned, as they are not in the build directory.
 
 
 :mod:`distutils.command.config` --- Perform package configuration
@@ -1997,7 +2060,7 @@ This is described in more detail in :pep:`301`.
 ===================================================================
 
 .. module:: distutils.command.check
-   :synopsis: Check the metadata of a package
+   :synopsis: Check the meta-data of a package
 
 
 The ``check`` command performs some tests on the meta-data of a package.

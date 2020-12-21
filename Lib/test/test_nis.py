@@ -1,19 +1,17 @@
-from test import test_support
+from test import support
 import unittest
 
-nis = test_support.import_module('nis')
+# Skip test if nis module does not exist.
+nis = support.import_module('nis')
+
 
 class NisTests(unittest.TestCase):
     def test_maps(self):
         try:
             maps = nis.maps()
-        except nis.error, msg:
+        except nis.error as msg:
             # NIS is probably not active, so this test isn't useful
-            if test_support.verbose:
-                print "Test Skipped:", msg
-            # Can't raise SkipTest as regrtest only recognizes the exception
-            #   import time.
-            return
+            self.skipTest(str(msg))
         try:
             # On some systems, this map is only accessible to the
             # super user
@@ -37,8 +35,5 @@ class NisTests(unittest.TestCase):
             if done:
                 break
 
-def test_main():
-    test_support.run_unittest(NisTests)
-
 if __name__ == '__main__':
-    test_main()
+    unittest.main()

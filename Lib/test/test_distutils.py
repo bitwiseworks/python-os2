@@ -5,13 +5,19 @@ the test_suite() function there returns a test suite that's ready to
 be run.
 """
 
-from test import test_support
 import distutils.tests
+import test.support
 
 
 def test_main():
-    test_support.run_unittest(distutils.tests.test_suite())
-    test_support.reap_children()
+    # used by regrtest
+    test.support.run_unittest(distutils.tests.test_suite())
+    test.support.reap_children()
+
+
+def load_tests(*_):
+    # used by unittest
+    return distutils.tests.test_suite()
 
 
 if __name__ == "__main__":

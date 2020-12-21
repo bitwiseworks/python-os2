@@ -3,12 +3,11 @@ import unittest
 import os
 import sys
 
-from test.test_support import run_unittest
+from test.support import run_unittest, missing_compiler_executable
 
 from distutils.command.build_clib import build_clib
 from distutils.errors import DistutilsSetupError
 from distutils.tests import support
-from distutils.spawn import find_executable
 
 class BuildCLibTestCase(support.TempdirManager,
                         support.LoggingSilencer,
@@ -102,11 +101,8 @@ class BuildCLibTestCase(support.TempdirManager,
         cmd.distribution.libraries = 'WONTWORK'
         self.assertRaises(DistutilsSetupError, cmd.finalize_options)
 
+    @unittest.skipIf(sys.platform == 'win32', "can't test on Windows")
     def test_run(self):
-        # can't test on windows
-        if sys.platform == 'win32':
-            return
-
         pkg_dir, dist = self.create_dist()
         cmd = build_clib(dist)
 
@@ -119,25 +115,17 @@ class BuildCLibTestCase(support.TempdirManager,
         cmd.build_temp = build_temp
         cmd.build_clib = build_temp
 
-        # before we run the command, we want to make sure
-        # all commands are present on the system
-        # by creating a compiler and checking its executables
-        from distutils.ccompiler import new_compiler
-        from distutils.sysconfig import customize_compiler
-
-        compiler = new_compiler()
-        customize_compiler(compiler)
-        for ccmd in compiler.executables.values():
-            if ccmd is None:
-                continue
-            if find_executable(ccmd[0]) is None:
-                return # can't test
+        # Before we run the command, we want to make sure
+        # all commands are present on the system.
+        ccmd = missing_compiler_executable()
+        if ccmd is not None:
+            self.skipTest('The %r command is not found' % ccmd)
 
         # this should work
         cmd.run()
 
         # let's check the result
-        self.assertTrue('libfoo.a' in os.listdir(build_temp))
+        self.assertIn('libfoo.a', os.listdir(build_temp))
 
 def test_suite():
     return unittest.makeSuite(BuildCLibTestCase)

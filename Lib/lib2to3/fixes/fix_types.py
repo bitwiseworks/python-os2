@@ -20,7 +20,6 @@ There should be another fixer that handles at least the following constants:
 """
 
 # Local imports
-from ..pgen2 import token
 from .. import fixer_base
 from ..fixer_util import Name
 
@@ -42,7 +41,7 @@ _TYPE_MAPPING = {
         'NotImplementedType' : 'type(NotImplemented)',
         'SliceType' : 'slice',
         'StringType': 'bytes', # XXX ?
-        'StringTypes' : 'str', # XXX ?
+        'StringTypes' : '(str,)', # XXX ?
         'TupleType': 'tuple',
         'TypeType' : 'type',
         'UnicodeType': 'str',
@@ -56,7 +55,7 @@ class FixTypes(fixer_base.BaseFix):
     PATTERN = '|'.join(_pats)
 
     def transform(self, node, results):
-        new_value = unicode(_TYPE_MAPPING.get(results["name"].value))
+        new_value = _TYPE_MAPPING.get(results["name"].value)
         if new_value:
             return Name(new_value, prefix=node.prefix)
         return None

@@ -6,15 +6,11 @@ indirectly provides the Distribution and Command classes, although they are
 really defined in distutils.dist and distutils.cmd.
 """
 
-__revision__ = "$Id$"
-
-import sys
 import os
+import sys
 
 from distutils.debug import DEBUG
-from distutils.errors import (DistutilsSetupError, DistutilsArgError,
-                              DistutilsError, CCompilerError)
-from distutils.util import grok_environment_error
+from distutils.errors import *
 
 # Mainly import these so setup scripts can "from distutils.core import" them.
 from distutils.dist import Distribution
@@ -33,9 +29,9 @@ usage: %(script)s [global_opts] cmd1 [cmd1_opts] [cmd2 [cmd2_opts] ...]
    or: %(script)s cmd --help
 """
 
-def gen_usage(script_name):
+def gen_usage (script_name):
     script = os.path.basename(script_name)
-    return USAGE % {'script': script}
+    return USAGE % vars()
 
 
 # Some mild magic to control the behaviour of 'setup()' from 'run_setup()'.
@@ -58,7 +54,7 @@ extension_keywords = ('name', 'sources', 'include_dirs',
                       'extra_objects', 'extra_compile_args', 'extra_link_args',
                       'swig_opts', 'export_symbols', 'depends', 'language')
 
-def setup(**attrs):
+def setup (**attrs):
     """The gateway to the Distutils: do everything your setup script needs
     to do, in a highly flexible and user-driven way.  Briefly: create a
     Distribution instance; find and parse config files; parse the command
@@ -103,19 +99,19 @@ def setup(**attrs):
 
     if 'script_name' not in attrs:
         attrs['script_name'] = os.path.basename(sys.argv[0])
-    if 'script_args' not in attrs:
+    if 'script_args'  not in attrs:
         attrs['script_args'] = sys.argv[1:]
 
     # Create the Distribution instance, using the remaining arguments
     # (ie. everything except distclass) to initialize it
     try:
         _setup_distribution = dist = klass(attrs)
-    except DistutilsSetupError, msg:
-        if 'name' in attrs:
-            raise SystemExit, "error in %s setup command: %s" % \
-                  (attrs['name'], msg)
+    except DistutilsSetupError as msg:
+        if 'name' not in attrs:
+            raise SystemExit("error in setup command: %s" % msg)
         else:
-            raise SystemExit, "error in setup command: %s" % msg
+            raise SystemExit("error in %s setup command: %s" % \
+                  (attrs['name'], msg))
 
     if _setup_stop_after == "init":
         return dist
@@ -125,7 +121,7 @@ def setup(**attrs):
     dist.parse_config_files()
 
     if DEBUG:
-        print "options (after parsing config files):"
+        print("options (after parsing config files):")
         dist.dump_option_dicts()
 
     if _setup_stop_after == "config":
@@ -136,11 +132,11 @@ def setup(**attrs):
     # SystemExit to suppress tracebacks.
     try:
         ok = dist.parse_command_line()
-    except DistutilsArgError, msg:
-        raise SystemExit, gen_usage(dist.script_name) + "\nerror: %s" % msg
+    except DistutilsArgError as msg:
+        raise SystemExit(gen_usage(dist.script_name) + "\nerror: %s" % msg)
 
     if DEBUG:
-        print "options (after parsing command line):"
+        print("options (after parsing command line):")
         dist.dump_option_dicts()
 
     if _setup_stop_after == "commandline":
@@ -151,34 +147,34 @@ def setup(**attrs):
         try:
             dist.run_commands()
         except KeyboardInterrupt:
-            raise SystemExit, "interrupted"
-        except (IOError, os.error), exc:
-            error = grok_environment_error(exc)
-
+            raise SystemExit("interrupted")
+        except OSError as exc:
             if DEBUG:
-                sys.stderr.write(error + "\n")
+                sys.stderr.write("error: %s\n" % (exc,))
                 raise
             else:
-                raise SystemExit, error
+                raise SystemExit("error: %s" % (exc,))
 
         except (DistutilsError,
-                CCompilerError), msg:
+                CCompilerError) as msg:
             if DEBUG:
                 raise
             else:
-                raise SystemExit, "error: " + str(msg)
+                raise SystemExit("error: " + str(msg))
 
     return dist
 
+# setup ()
 
-def run_setup(script_name, script_args=None, stop_after="run"):
+
+def run_setup (script_name, script_args=None, stop_after="run"):
     """Run a setup script in a somewhat controlled environment, and
     return the Distribution instance that drives things.  This is useful
     if you need to find out the distribution meta-data (passed as
     keyword args from 'script' to 'setup()', or the contents of the
     config files or command-line.
 
-    'script_name' is a file that will be run with 'execfile()';
+    'script_name' is a file that will be read and run with 'exec()';
     'sys.argv[0]' will be replaced with 'script' for the duration of the
     call.  'script_args' is a list of strings; if supplied,
     'sys.argv[1:]' will be replaced by 'script_args' for the duration of
@@ -203,24 +199,20 @@ def run_setup(script_name, script_args=None, stop_after="run"):
     used to drive the Distutils.
     """
     if stop_after not in ('init', 'config', 'commandline', 'run'):
-        raise ValueError, "invalid value for 'stop_after': %r" % (stop_after,)
+        raise ValueError("invalid value for 'stop_after': %r" % (stop_after,))
 
     global _setup_stop_after, _setup_distribution
     _setup_stop_after = stop_after
 
-    save_argv = sys.argv
+    save_argv = sys.argv.copy()
     g = {'__file__': script_name}
-    l = {}
     try:
         try:
             sys.argv[0] = script_name
             if script_args is not None:
                 sys.argv[1:] = script_args
-            f = open(script_name)
-            try:
-                exec f.read() in g, l
-            finally:
-                f.close()
+            with open(script_name, 'rb') as f:
+                exec(f.read(), g)
         finally:
             sys.argv = save_argv
             _setup_stop_after = None
@@ -228,15 +220,15 @@ def run_setup(script_name, script_args=None, stop_after="run"):
         # Hmm, should we do something if exiting with a non-zero code
         # (ie. error)?
         pass
-    except:
-        raise
 
     if _setup_distribution is None:
-        raise RuntimeError, \
-              ("'distutils.core.setup()' was never called -- "
+        raise RuntimeError(("'distutils.core.setup()' was never called -- "
                "perhaps '%s' is not a Distutils setup script?") % \
-              script_name
+              script_name)
 
     # I wonder if the setup script's namespace -- g and l -- would be of
     # any interest to callers?
+    #print "_setup_distribution:", _setup_distribution
     return _setup_distribution
+
+# run_setup ()

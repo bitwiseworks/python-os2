@@ -72,6 +72,28 @@ class TokenTests(unittest.TestCase):
         x = 0b100000000000000000000000000000000000000000000000000000000000000000000
         x = 0B111111111111111111111111111111111111111111111111111111111111111111111
 
+    def testUnderscoresInNumbers(self):
+        # Integers
+        x = 1_0
+        x = 123_456_7_89
+        x = 0xabc_123_4_5
+        x = 0X_abc_123
+        x = 0B11_01
+        x = 0b_11_01
+        x = 0o45_67
+        x = 0O_45_67
+
+        # Floats
+        x = 3_1.4
+        x = 03_1.4
+        x = 3_1.
+        x = .3_1
+        x = 3.1_4
+        x = 0_3.1_4
+        x = 3e1_4
+        x = 3_1e+4_1
+        x = 3_1E-4_1
+
     def testFloats(self):
         x = 3.14
         x = 314.
@@ -124,6 +146,8 @@ brown fox\n\
 jumps over\n\
 the \'lazy\' dog.\n\
 '
+        self.assertEquals(x, y)
+        x = rf"hello \{True}"; y = f"hello \\{True}"
         self.assertEquals(x, y)
 
     def testEllipsis(self):
@@ -319,7 +343,7 @@ class GrammarTests(unittest.TestCase):
         def f(x) -> list: pass
         self.assertEquals(f.__annotations__, {'return': list})
 
-        # test MAKE_CLOSURE with a variety of oparg's
+        # test closures with a variety of oparg's
         closure = 1
         def f(): return closure
         def f(x=1): return closure
@@ -449,15 +473,27 @@ class GrammarTests(unittest.TestCase):
         test_inner()
 
     def testReturn(self):
-        # 'return' [testlist]
+        # 'return' [testlist_star_expr]
         def g1(): return
         def g2(): return 1
+        return_list = [2, 3]
+        def g3(): return 1, *return_list
         g1()
         x = g2()
+        x3 = g3()
         check_syntax_error(self, "class foo:return 1")
 
     def testYield(self):
+        # 'yield' [yield_arg]
+        def g1(): yield 1
+        yield_list = [2, 3]
+        def g2(): yield 1, *yield_list
+        def g3(): yield from iter(yield_list)
+        x1 = g1()
+        x2 = g2()
+        x3 = g3()
         check_syntax_error(self, "class foo:yield 1")
+        check_syntax_error(self, "def g4(): yield from *a")
 
     def testRaise(self):
         # 'raise' test [',' test]

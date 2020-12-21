@@ -2,37 +2,115 @@
 /* Method object implementation */
 
 #include "Python.h"
-#include "structmember.h"
+#include "pycore_ceval.h"         // _Py_EnterRecursiveCall()
+#include "pycore_object.h"
+#include "pycore_pyerrors.h"
+#include "pycore_pystate.h"       // _PyThreadState_GET()
+#include "structmember.h"         // PyMemberDef
 
-/* Free list for method objects to safe malloc/free overhead
- * The m_self element is used to chain the objects.
- */
-static PyCFunctionObject *free_list = NULL;
-static int numfree = 0;
-#ifndef PyCFunction_MAXFREELIST
-#define PyCFunction_MAXFREELIST 256
-#endif
+/* undefine macro trampoline to PyCFunction_NewEx */
+#undef PyCFunction_New
+/* undefine macro trampoline to PyCMethod_New */
+#undef PyCFunction_NewEx
+
+/* Forward declarations */
+static PyObject * cfunction_vectorcall_FASTCALL(
+    PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames);
+static PyObject * cfunction_vectorcall_FASTCALL_KEYWORDS(
+    PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames);
+static PyObject * cfunction_vectorcall_FASTCALL_KEYWORDS_METHOD(
+    PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames);
+static PyObject * cfunction_vectorcall_NOARGS(
+    PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames);
+static PyObject * cfunction_vectorcall_O(
+    PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames);
+static PyObject * cfunction_call(
+    PyObject *func, PyObject *args, PyObject *kwargs);
+
+
+PyObject *
+PyCFunction_New(PyMethodDef *ml, PyObject *self)
+{
+    return PyCFunction_NewEx(ml, self, NULL);
+}
 
 PyObject *
 PyCFunction_NewEx(PyMethodDef *ml, PyObject *self, PyObject *module)
 {
-    PyCFunctionObject *op;
-    op = free_list;
-    if (op != NULL) {
-        free_list = (PyCFunctionObject *)(op->m_self);
-        PyObject_INIT(op, &PyCFunction_Type);
-        numfree--;
-    }
-    else {
-        op = PyObject_GC_New(PyCFunctionObject, &PyCFunction_Type);
-        if (op == NULL)
+    return PyCMethod_New(ml, self, module, NULL);
+}
+
+PyObject *
+PyCMethod_New(PyMethodDef *ml, PyObject *self, PyObject *module, PyTypeObject *cls)
+{
+    /* Figure out correct vectorcall function to use */
+    vectorcallfunc vectorcall;
+    switch (ml->ml_flags & (METH_VARARGS | METH_FASTCALL | METH_NOARGS |
+                            METH_O | METH_KEYWORDS | METH_METHOD))
+    {
+        case METH_VARARGS:
+        case METH_VARARGS | METH_KEYWORDS:
+            /* For METH_VARARGS functions, it's more efficient to use tp_call
+             * instead of vectorcall. */
+            vectorcall = NULL;
+            break;
+        case METH_FASTCALL:
+            vectorcall = cfunction_vectorcall_FASTCALL;
+            break;
+        case METH_FASTCALL | METH_KEYWORDS:
+            vectorcall = cfunction_vectorcall_FASTCALL_KEYWORDS;
+            break;
+        case METH_NOARGS:
+            vectorcall = cfunction_vectorcall_NOARGS;
+            break;
+        case METH_O:
+            vectorcall = cfunction_vectorcall_O;
+            break;
+        case METH_METHOD | METH_FASTCALL | METH_KEYWORDS:
+            vectorcall = cfunction_vectorcall_FASTCALL_KEYWORDS_METHOD;
+            break;
+        default:
+            PyErr_Format(PyExc_SystemError,
+                         "%s() method: bad call flags", ml->ml_name);
             return NULL;
     }
+
+    PyCFunctionObject *op = NULL;
+
+    if (ml->ml_flags & METH_METHOD) {
+        if (!cls) {
+            PyErr_SetString(PyExc_SystemError,
+                            "attempting to create PyCMethod with a METH_METHOD "
+                            "flag but no class");
+            return NULL;
+        }
+        PyCMethodObject *om = PyObject_GC_New(PyCMethodObject, &PyCMethod_Type);
+        if (om == NULL) {
+            return NULL;
+        }
+        Py_INCREF(cls);
+        om->mm_class = cls;
+        op = (PyCFunctionObject *)om;
+    } else {
+        if (cls) {
+            PyErr_SetString(PyExc_SystemError,
+                            "attempting to create PyCFunction with class "
+                            "but no METH_METHOD flag");
+            return NULL;
+        }
+        op = PyObject_GC_New(PyCFunctionObject, &PyCFunction_Type);
+        if (op == NULL) {
+            return NULL;
+        }
+    }
+
+    op->m_weakreflist = NULL;
     op->m_ml = ml;
     Py_XINCREF(self);
     op->m_self = self;
     Py_XINCREF(module);
     op->m_module = module;
+    op->vectorcall = vectorcall;
     _PyObject_GC_TRACK(op);
     return (PyObject *)op;
 }
@@ -44,7 +122,7 @@ PyCFunction_GetFunction(PyObject *op)
         PyErr_BadInternalCall();
         return NULL;
     }
-    return ((PyCFunctionObject *)op) -> m_ml -> ml_meth;
+    return PyCFunction_GET_FUNCTION(op);
 }
 
 PyObject *
@@ -54,7 +132,7 @@ PyCFunction_GetSelf(PyObject *op)
         PyErr_BadInternalCall();
         return NULL;
     }
-    return ((PyCFunctionObject *)op) -> m_self;
+    return PyCFunction_GET_SELF(op);
 }
 
 int
@@ -64,65 +142,17 @@ PyCFunction_GetFlags(PyObject *op)
         PyErr_BadInternalCall();
         return -1;
     }
-    return ((PyCFunctionObject *)op) -> m_ml -> ml_flags;
+    return PyCFunction_GET_FLAGS(op);
 }
 
-PyObject *
-PyCFunction_Call(PyObject *func, PyObject *arg, PyObject *kw)
+PyTypeObject *
+PyCMethod_GetClass(PyObject *op)
 {
-    PyCFunctionObject* f = (PyCFunctionObject*)func;
-    PyCFunction meth = PyCFunction_GET_FUNCTION(func);
-    PyObject *self = PyCFunction_GET_SELF(func);
-    Py_ssize_t size;
-
-    switch (PyCFunction_GET_FLAGS(func) & ~(METH_CLASS | METH_STATIC | METH_COEXIST)) {
-    case METH_VARARGS:
-        if (kw == NULL || PyDict_Size(kw) == 0)
-            return (*meth)(self, arg);
-        break;
-    case METH_VARARGS | METH_KEYWORDS:
-    case METH_OLDARGS | METH_KEYWORDS:
-        return (*(PyCFunctionWithKeywords)meth)(self, arg, kw);
-    case METH_NOARGS:
-        if (kw == NULL || PyDict_Size(kw) == 0) {
-            size = PyTuple_GET_SIZE(arg);
-            if (size == 0)
-                return (*meth)(self, NULL);
-            PyErr_Format(PyExc_TypeError,
-                "%.200s() takes no arguments (%zd given)",
-                f->m_ml->ml_name, size);
-            return NULL;
-        }
-        break;
-    case METH_O:
-        if (kw == NULL || PyDict_Size(kw) == 0) {
-            size = PyTuple_GET_SIZE(arg);
-            if (size == 1)
-                return (*meth)(self, PyTuple_GET_ITEM(arg, 0));
-            PyErr_Format(PyExc_TypeError,
-                "%.200s() takes exactly one argument (%zd given)",
-                f->m_ml->ml_name, size);
-            return NULL;
-        }
-        break;
-    case METH_OLDARGS:
-        /* the really old style */
-        if (kw == NULL || PyDict_Size(kw) == 0) {
-            size = PyTuple_GET_SIZE(arg);
-            if (size == 1)
-                arg = PyTuple_GET_ITEM(arg, 0);
-            else if (size == 0)
-                arg = NULL;
-            return (*meth)(self, arg);
-        }
-        break;
-    default:
+    if (!PyCFunction_Check(op)) {
         PyErr_BadInternalCall();
         return NULL;
     }
-    PyErr_Format(PyExc_TypeError, "%.200s() takes no keyword arguments",
-                 f->m_ml->ml_name);
-    return NULL;
+    return PyCFunction_GET_CLASS(op);
 }
 
 /* Methods (the standard built-in methods, that is) */
@@ -131,38 +161,91 @@ static void
 meth_dealloc(PyCFunctionObject *m)
 {
     _PyObject_GC_UNTRACK(m);
+    if (m->m_weakreflist != NULL) {
+        PyObject_ClearWeakRefs((PyObject*) m);
+    }
+    // Dereference class before m_self: PyCFunction_GET_CLASS accesses
+    // PyMethodDef m_ml, which could be kept alive by m_self
+    Py_XDECREF(PyCFunction_GET_CLASS(m));
     Py_XDECREF(m->m_self);
     Py_XDECREF(m->m_module);
-    if (numfree < PyCFunction_MAXFREELIST) {
-        m->m_self = (PyObject *)free_list;
-        free_list = m;
-        numfree++;
-    }
-    else {
-        PyObject_GC_Del(m);
-    }
+    PyObject_GC_Del(m);
+}
+
+static PyObject *
+meth_reduce(PyCFunctionObject *m, PyObject *Py_UNUSED(ignored))
+{
+    _Py_IDENTIFIER(getattr);
+
+    if (m->m_self == NULL || PyModule_Check(m->m_self))
+        return PyUnicode_FromString(m->m_ml->ml_name);
+
+    return Py_BuildValue("N(Os)", _PyEval_GetBuiltinId(&PyId_getattr),
+                         m->m_self, m->m_ml->ml_name);
+}
+
+static PyMethodDef meth_methods[] = {
+    {"__reduce__", (PyCFunction)meth_reduce, METH_NOARGS, NULL},
+    {NULL, NULL}
+};
+
+static PyObject *
+meth_get__text_signature__(PyCFunctionObject *m, void *closure)
+{
+    return _PyType_GetTextSignatureFromInternalDoc(m->m_ml->ml_name, m->m_ml->ml_doc);
 }
 
 static PyObject *
 meth_get__doc__(PyCFunctionObject *m, void *closure)
 {
-    const char *doc = m->m_ml->ml_doc;
-
-    if (doc != NULL)
-        return PyString_FromString(doc);
-    Py_INCREF(Py_None);
-    return Py_None;
+    return _PyType_GetDocFromInternalDoc(m->m_ml->ml_name, m->m_ml->ml_doc);
 }
 
 static PyObject *
 meth_get__name__(PyCFunctionObject *m, void *closure)
 {
-    return PyString_FromString(m->m_ml->ml_name);
+    return PyUnicode_FromString(m->m_ml->ml_name);
+}
+
+static PyObject *
+meth_get__qualname__(PyCFunctionObject *m, void *closure)
+{
+    /* If __self__ is a module or NULL, return m.__name__
+       (e.g. len.__qualname__ == 'len')
+
+       If __self__ is a type, return m.__self__.__qualname__ + '.' + m.__name__
+       (e.g. dict.fromkeys.__qualname__ == 'dict.fromkeys')
+
+       Otherwise return type(m.__self__).__qualname__ + '.' + m.__name__
+       (e.g. [].append.__qualname__ == 'list.append') */
+    PyObject *type, *type_qualname, *res;
+    _Py_IDENTIFIER(__qualname__);
+
+    if (m->m_self == NULL || PyModule_Check(m->m_self))
+        return PyUnicode_FromString(m->m_ml->ml_name);
+
+    type = PyType_Check(m->m_self) ? m->m_self : (PyObject*)Py_TYPE(m->m_self);
+
+    type_qualname = _PyObject_GetAttrId(type, &PyId___qualname__);
+    if (type_qualname == NULL)
+        return NULL;
+
+    if (!PyUnicode_Check(type_qualname)) {
+        PyErr_SetString(PyExc_TypeError, "<method>.__class__."
+                        "__qualname__ is not a unicode object");
+        Py_XDECREF(type_qualname);
+        return NULL;
+    }
+
+    res = PyUnicode_FromFormat("%S.%s", type_qualname, m->m_ml->ml_name);
+    Py_DECREF(type_qualname);
+    return res;
 }
 
 static int
 meth_traverse(PyCFunctionObject *m, visitproc visit, void *arg)
 {
+    Py_VISIT(PyCFunction_GET_CLASS(m));
     Py_VISIT(m->m_self);
     Py_VISIT(m->m_module);
     return 0;
@@ -172,12 +255,8 @@ static PyObject *
 meth_get__self__(PyCFunctionObject *m, void *closure)
 {
     PyObject *self;
-    if (PyEval_GetRestricted()) {
-        PyErr_SetString(PyExc_RuntimeError,
-            "method.__self__ not accessible in restricted mode");
-        return NULL;
-    }
-    self = m->m_self;
+
+    self = PyCFunction_GET_SELF(m);
     if (self == NULL)
         self = Py_None;
     Py_INCREF(self);
@@ -187,40 +266,29 @@ meth_get__self__(PyCFunctionObject *m, void *closure)
 static PyGetSetDef meth_getsets [] = {
     {"__doc__",  (getter)meth_get__doc__,  NULL, NULL},
     {"__name__", (getter)meth_get__name__, NULL, NULL},
+    {"__qualname__", (getter)meth_get__qualname__, NULL, NULL},
     {"__self__", (getter)meth_get__self__, NULL, NULL},
+    {"__text_signature__", (getter)meth_get__text_signature__, NULL, NULL},
     {0}
 };
 
 #define OFF(x) offsetof(PyCFunctionObject, x)
 
 static PyMemberDef meth_members[] = {
-    {"__module__",    T_OBJECT,     OFF(m_module), PY_WRITE_RESTRICTED},
+    {"__module__",    T_OBJECT,     OFF(m_module), 0},
     {NULL}
 };
 
 static PyObject *
 meth_repr(PyCFunctionObject *m)
 {
-    if (m->m_self == NULL)
-        return PyString_FromFormat("<built-in function %s>",
+    if (m->m_self == NULL || PyModule_Check(m->m_self))
+        return PyUnicode_FromFormat("<built-in function %s>",
                                    m->m_ml->ml_name);
-    return PyString_FromFormat("<built-in method %s of %s object at %p>",
+    return PyUnicode_FromFormat("<built-in method %s of %s object at %p>",
                                m->m_ml->ml_name,
-                               m->m_self->ob_type->tp_name,
+                               Py_TYPE(m->m_self)->tp_name,
                                m->m_self);
-}
-
-static int
-meth_compare(PyCFunctionObject *a, PyCFunctionObject *b)
-{
-    if (a->m_self != b->m_self)
-        return (a->m_self < b->m_self) ? -1 : 1;
-    if (a->m_ml->ml_meth == b->m_ml->ml_meth)
-        return 0;
-    if (strcmp(a->m_ml->ml_name, b->m_ml->ml_name) < 0)
-        return -1;
-    else
-        return 1;
 }
 
 static PyObject *
@@ -230,19 +298,11 @@ meth_richcompare(PyObject *self, PyObject *other, int op)
     PyObject *res;
     int eq;
 
-    if (op != Py_EQ && op != Py_NE) {
-        /* Py3K warning if comparison isn't == or !=.  */
-        if (PyErr_WarnPy3k("builtin_function_or_method order "
-                           "comparisons not supported in 3.x", 1) < 0) {
-            return NULL;
-        }
-
-        Py_INCREF(Py_NotImplemented);
-        return Py_NotImplemented;
-    }
-    else if (!PyCFunction_Check(self) || !PyCFunction_Check(other)) {
-        Py_INCREF(Py_NotImplemented);
-        return Py_NotImplemented;
+    if ((op != Py_EQ && op != Py_NE) ||
+        !PyCFunction_Check(self) ||
+        !PyCFunction_Check(other))
+    {
+        Py_RETURN_NOTIMPLEMENTED;
     }
     a = (PyCFunctionObject *)self;
     b = (PyCFunctionObject *)other;
@@ -257,20 +317,12 @@ meth_richcompare(PyObject *self, PyObject *other, int op)
     return res;
 }
 
-static long
+static Py_hash_t
 meth_hash(PyCFunctionObject *a)
 {
-    long x,y;
-    if (a->m_self == NULL)
-        x = 0;
-    else {
-        x = PyObject_Hash(a->m_self);
-        if (x == -1)
-            return -1;
-    }
+    Py_hash_t x, y;
+    x = _Py_HashPointer(a->m_self);
     y = _Py_HashPointer((void*)(a->m_ml->ml_meth));
-    if (y == -1)
-        return -1;
     x ^= y;
     if (x == -1)
         x = -2;
@@ -284,144 +336,216 @@ PyTypeObject PyCFunction_Type = {
     sizeof(PyCFunctionObject),
     0,
     (destructor)meth_dealloc,                   /* tp_dealloc */
-    0,                                          /* tp_print */
+    offsetof(PyCFunctionObject, vectorcall),    /* tp_vectorcall_offset */
     0,                                          /* tp_getattr */
     0,                                          /* tp_setattr */
-    (cmpfunc)meth_compare,                      /* tp_compare */
+    0,                                          /* tp_as_async */
     (reprfunc)meth_repr,                        /* tp_repr */
     0,                                          /* tp_as_number */
     0,                                          /* tp_as_sequence */
     0,                                          /* tp_as_mapping */
     (hashfunc)meth_hash,                        /* tp_hash */
-    PyCFunction_Call,                           /* tp_call */
+    cfunction_call,                             /* tp_call */
     0,                                          /* tp_str */
     PyObject_GenericGetAttr,                    /* tp_getattro */
     0,                                          /* tp_setattro */
     0,                                          /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,/* tp_flags */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
+    Py_TPFLAGS_HAVE_VECTORCALL,                 /* tp_flags */
     0,                                          /* tp_doc */
     (traverseproc)meth_traverse,                /* tp_traverse */
     0,                                          /* tp_clear */
-    meth_richcompare,                                           /* tp_richcompare */
-    0,                                          /* tp_weaklistoffset */
+    meth_richcompare,                           /* tp_richcompare */
+    offsetof(PyCFunctionObject, m_weakreflist), /* tp_weaklistoffset */
     0,                                          /* tp_iter */
     0,                                          /* tp_iternext */
-    0,                                          /* tp_methods */
+    meth_methods,                               /* tp_methods */
     meth_members,                               /* tp_members */
     meth_getsets,                               /* tp_getset */
     0,                                          /* tp_base */
     0,                                          /* tp_dict */
 };
 
-/* List all methods in a chain -- helper for findmethodinchain */
+PyTypeObject PyCMethod_Type = {
+    PyVarObject_HEAD_INIT(&PyType_Type, 0)
+    .tp_name = "builtin_method",
+    .tp_basicsize = sizeof(PyCMethodObject),
+    .tp_base = &PyCFunction_Type,
+};
+
+/* Vectorcall functions for each of the PyCFunction calling conventions,
+ * except for METH_VARARGS (possibly combined with METH_KEYWORDS) which
+ * doesn't use vectorcall.
+ *
+ * First, common helpers
+ */
+
+static inline int
+cfunction_check_kwargs(PyThreadState *tstate, PyObject *func, PyObject *kwnames)
+{
+    assert(!_PyErr_Occurred(tstate));
+    assert(PyCFunction_Check(func));
+    if (kwnames && PyTuple_GET_SIZE(kwnames)) {
+        PyObject *funcstr = _PyObject_FunctionStr(func);
+        if (funcstr != NULL) {
+            _PyErr_Format(tstate, PyExc_TypeError,
+                         "%U takes no keyword arguments", funcstr);
+            Py_DECREF(funcstr);
+        }
+        return -1;
+    }
+    return 0;
+}
+
+typedef void (*funcptr)(void);
+
+static inline funcptr
+cfunction_enter_call(PyThreadState *tstate, PyObject *func)
+{
+    if (_Py_EnterRecursiveCall(tstate, " while calling a Python object")) {
+        return NULL;
+    }
+    return (funcptr)PyCFunction_GET_FUNCTION(func);
+}
+
+/* Now the actual vectorcall functions */
+static PyObject *
+cfunction_vectorcall_FASTCALL(
+    PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    if (cfunction_check_kwargs(tstate, func, kwnames)) {
+        return NULL;
+    }
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    _PyCFunctionFast meth = (_PyCFunctionFast)
+                            cfunction_enter_call(tstate, func);
+    if (meth == NULL) {
+        return NULL;
+    }
+    PyObject *result = meth(PyCFunction_GET_SELF(func), args, nargs);
+    _Py_LeaveRecursiveCall(tstate);
+    return result;
+}
 
 static PyObject *
-listmethodchain(PyMethodChain *chain)
+cfunction_vectorcall_FASTCALL_KEYWORDS(
+    PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames)
 {
-    PyMethodChain *c;
-    PyMethodDef *ml;
-    int i, n;
-    PyObject *v;
-
-    n = 0;
-    for (c = chain; c != NULL; c = c->link) {
-        for (ml = c->methods; ml->ml_name != NULL; ml++)
-            n++;
-    }
-    v = PyList_New(n);
-    if (v == NULL)
-        return NULL;
-    i = 0;
-    for (c = chain; c != NULL; c = c->link) {
-        for (ml = c->methods; ml->ml_name != NULL; ml++) {
-            PyList_SetItem(v, i, PyString_FromString(ml->ml_name));
-            i++;
-        }
-    }
-    if (PyErr_Occurred()) {
-        Py_DECREF(v);
+    PyThreadState *tstate = _PyThreadState_GET();
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    _PyCFunctionFastWithKeywords meth = (_PyCFunctionFastWithKeywords)
+                                        cfunction_enter_call(tstate, func);
+    if (meth == NULL) {
         return NULL;
     }
-    PyList_Sort(v);
-    return v;
+    PyObject *result = meth(PyCFunction_GET_SELF(func), args, nargs, kwnames);
+    _Py_LeaveRecursiveCall(tstate);
+    return result;
 }
 
-/* Find a method in a method chain */
-
-PyObject *
-Py_FindMethodInChain(PyMethodChain *chain, PyObject *self, const char *name)
+static PyObject *
+cfunction_vectorcall_FASTCALL_KEYWORDS_METHOD(
+    PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames)
 {
-    if (name[0] == '_' && name[1] == '_') {
-        if (strcmp(name, "__methods__") == 0) {
-            if (PyErr_WarnPy3k("__methods__ not supported in 3.x",
-                               1) < 0)
-                return NULL;
-            return listmethodchain(chain);
-        }
-        if (strcmp(name, "__doc__") == 0) {
-            const char *doc = self->ob_type->tp_doc;
-            if (doc != NULL)
-                return PyString_FromString(doc);
-        }
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyTypeObject *cls = PyCFunction_GET_CLASS(func);
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    PyCMethod meth = (PyCMethod)cfunction_enter_call(tstate, func);
+    if (meth == NULL) {
+        return NULL;
     }
-    while (chain != NULL) {
-        PyMethodDef *ml = chain->methods;
-        for (; ml->ml_name != NULL; ml++) {
-            if (name[0] == ml->ml_name[0] &&
-                strcmp(name+1, ml->ml_name+1) == 0)
-                /* XXX */
-                return PyCFunction_New(ml, self);
+    PyObject *result = meth(PyCFunction_GET_SELF(func), cls, args, nargs, kwnames);
+    _Py_LeaveRecursiveCall(tstate);
+    return result;
+}
+
+static PyObject *
+cfunction_vectorcall_NOARGS(
+    PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    if (cfunction_check_kwargs(tstate, func, kwnames)) {
+        return NULL;
+    }
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    if (nargs != 0) {
+        PyObject *funcstr = _PyObject_FunctionStr(func);
+        if (funcstr != NULL) {
+            _PyErr_Format(tstate, PyExc_TypeError,
+                "%U takes no arguments (%zd given)", funcstr, nargs);
+            Py_DECREF(funcstr);
         }
-        chain = chain->link;
+        return NULL;
     }
-    PyErr_SetString(PyExc_AttributeError, name);
-    return NULL;
-}
-
-/* Find a method in a single method list */
-
-PyObject *
-Py_FindMethod(PyMethodDef *methods, PyObject *self, const char *name)
-{
-    PyMethodChain chain;
-    chain.methods = methods;
-    chain.link = NULL;
-    return Py_FindMethodInChain(&chain, self, name);
-}
-
-/* Clear out the free list */
-
-int
-PyCFunction_ClearFreeList(void)
-{
-    int freelist_size = numfree;
-
-    while (free_list) {
-        PyCFunctionObject *v = free_list;
-        free_list = (PyCFunctionObject *)(v->m_self);
-        PyObject_GC_Del(v);
-        numfree--;
+    PyCFunction meth = (PyCFunction)cfunction_enter_call(tstate, func);
+    if (meth == NULL) {
+        return NULL;
     }
-    assert(numfree == 0);
-    return freelist_size;
+    PyObject *result = meth(PyCFunction_GET_SELF(func), NULL);
+    _Py_LeaveRecursiveCall(tstate);
+    return result;
 }
 
-void
-PyCFunction_Fini(void)
+static PyObject *
+cfunction_vectorcall_O(
+    PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames)
 {
-    (void)PyCFunction_ClearFreeList();
+    PyThreadState *tstate = _PyThreadState_GET();
+    if (cfunction_check_kwargs(tstate, func, kwnames)) {
+        return NULL;
+    }
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    if (nargs != 1) {
+        PyObject *funcstr = _PyObject_FunctionStr(func);
+        if (funcstr != NULL) {
+            _PyErr_Format(tstate, PyExc_TypeError,
+                "%U takes exactly one argument (%zd given)", funcstr, nargs);
+            Py_DECREF(funcstr);
+        }
+        return NULL;
+    }
+    PyCFunction meth = (PyCFunction)cfunction_enter_call(tstate, func);
+    if (meth == NULL) {
+        return NULL;
+    }
+    PyObject *result = meth(PyCFunction_GET_SELF(func), args[0]);
+    _Py_LeaveRecursiveCall(tstate);
+    return result;
 }
 
-/* PyCFunction_New() is now just a macro that calls PyCFunction_NewEx(),
-   but it's part of the API so we need to keep a function around that
-   existing C extensions can call.
-*/
 
-#undef PyCFunction_New
-PyAPI_FUNC(PyObject *) PyCFunction_New(PyMethodDef *, PyObject *);
-
-PyObject *
-PyCFunction_New(PyMethodDef *ml, PyObject *self)
+static PyObject *
+cfunction_call(PyObject *func, PyObject *args, PyObject *kwargs)
 {
-    return PyCFunction_NewEx(ml, self, NULL);
+    assert(kwargs == NULL || PyDict_Check(kwargs));
+
+    PyThreadState *tstate = _PyThreadState_GET();
+    assert(!_PyErr_Occurred(tstate));
+
+    int flags = PyCFunction_GET_FLAGS(func);
+    if (!(flags & METH_VARARGS)) {
+        /* If this is not a METH_VARARGS function, delegate to vectorcall */
+        return PyVectorcall_Call(func, args, kwargs);
+    }
+
+    /* For METH_VARARGS, we cannot use vectorcall as the vectorcall pointer
+     * is NULL. This is intentional, since vectorcall would be slower. */
+    PyCFunction meth = PyCFunction_GET_FUNCTION(func);
+    PyObject *self = PyCFunction_GET_SELF(func);
+
+    PyObject *result;
+    if (flags & METH_KEYWORDS) {
+        result = (*(PyCFunctionWithKeywords)(void(*)(void))meth)(self, args, kwargs);
+    }
+    else {
+        if (kwargs != NULL && PyDict_GET_SIZE(kwargs) != 0) {
+            _PyErr_Format(tstate, PyExc_TypeError,
+                          "%.200s() takes no keyword arguments",
+                          ((PyCFunctionObject*)func)->m_ml->ml_name);
+            return NULL;
+        }
+        result = meth(self, args);
+    }
+    return _Py_CheckFunctionResult(tstate, func, result, NULL);
 }

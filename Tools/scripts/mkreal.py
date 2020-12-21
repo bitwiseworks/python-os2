@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 
 # mkreal
 #
@@ -18,14 +18,13 @@ def mkrealfile(name):
     st = os.stat(name) # Get the mode
     mode = S_IMODE(st[ST_MODE])
     linkto = os.readlink(name) # Make sure again it's a symlink
-    f_in = open(name, 'r') # This ensures it's a file
-    os.unlink(name)
-    f_out = open(name, 'w')
-    while 1:
-        buf = f_in.read(BUFSIZE)
-        if not buf: break
-        f_out.write(buf)
-    del f_out # Flush data to disk before changing mode
+    with open(name, 'rb') as f_in: # This ensures it's a file
+        os.unlink(name)
+        with open(name, 'wb') as f_out:
+            while 1:
+                buf = f_in.read(BUFSIZE)
+                if not buf: break
+                f_out.write(buf)
     os.chmod(name, mode)
 
 def mkrealdir(name):
@@ -48,12 +47,12 @@ def main():
     if progname == '-c': progname = 'mkreal'
     args = sys.argv[1:]
     if not args:
-        print 'usage:', progname, 'path ...'
+        print('usage:', progname, 'path ...')
         sys.exit(2)
     status = 0
     for name in args:
         if not os.path.islink(name):
-            print progname+':', name+':', 'not a symlink'
+            print(progname+':', name+':', 'not a symlink')
             status = 1
         else:
             if os.path.isdir(name):

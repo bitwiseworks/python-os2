@@ -1,5 +1,4 @@
-.. highlightlang:: c
-
+.. highlight:: c
 
 .. _newtypes:
 

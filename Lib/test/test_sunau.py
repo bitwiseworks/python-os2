@@ -1,14 +1,18 @@
-from test.test_support import TESTFN, run_unittest
 import unittest
 from test import audiotests
+from audioop import byteswap
+import io
+import struct
 import sys
 import sunau
 
 
-class SunauPCM8Test(audiotests.AudioWriteTests,
-        audiotests.AudioTestsWithSourceFile,
-        unittest.TestCase):
+class SunauTest(audiotests.AudioWriteTests,
+                audiotests.AudioTestsWithSourceFile):
     module = sunau
+
+
+class SunauPCM8Test(SunauTest, unittest.TestCase):
     sndfilename = 'pluck-pcm8.au'
     sndfilenframes = 3307
     nchannels = 2
@@ -17,7 +21,7 @@ class SunauPCM8Test(audiotests.AudioWriteTests,
     nframes = 48
     comptype = 'NONE'
     compname = 'not compressed'
-    frames = audiotests.fromhex("""\
+    frames = bytes.fromhex("""\
       02FF 4B00 3104 8008 CB06 4803 BF01 03FE B8FA B4F3 29EB 1AE6 \
       EDE4 C6E2 0EE0 EFE0 57E2 FBE8 13EF D8F7 97FB F5FC 08FB DFFB \
       11FA 3EFB BCFC 66FF CF04 4309 C10E 5112 EE17 8216 7F14 8012 \
@@ -25,10 +29,7 @@ class SunauPCM8Test(audiotests.AudioWriteTests,
       """)
 
 
-class SunauPCM16Test(audiotests.AudioWriteTests,
-        audiotests.AudioTestsWithSourceFile,
-        unittest.TestCase):
-    module = sunau
+class SunauPCM16Test(SunauTest, unittest.TestCase):
     sndfilename = 'pluck-pcm16.au'
     sndfilenframes = 3307
     nchannels = 2
@@ -37,7 +38,7 @@ class SunauPCM16Test(audiotests.AudioWriteTests,
     nframes = 48
     comptype = 'NONE'
     compname = 'not compressed'
-    frames = audiotests.fromhex("""\
+    frames = bytes.fromhex("""\
       022EFFEA 4B5C00F9 311404EF 80DB0844 CBE006B0 48AB03F3 BFE601B5 0367FE80 \
       B853FA42 B4AFF351 2997EBCD 1A5AE6DC EDF9E492 C627E277 0E06E0B7 EF29E029 \
       5759E271 FB34E83F 1377EF85 D82CF727 978EFB79 F5F7FC12 0864FB9E DF30FB40 \
@@ -47,10 +48,32 @@ class SunauPCM16Test(audiotests.AudioWriteTests,
       """)
 
 
-class SunauPCM32Test(audiotests.AudioWriteTests,
-        audiotests.AudioTestsWithSourceFile,
-        unittest.TestCase):
-    module = sunau
+class SunauPCM24Test(SunauTest, unittest.TestCase):
+    sndfilename = 'pluck-pcm24.au'
+    sndfilenframes = 3307
+    nchannels = 2
+    sampwidth = 3
+    framerate = 11025
+    nframes = 48
+    comptype = 'NONE'
+    compname = 'not compressed'
+    frames = bytes.fromhex("""\
+      022D65FFEB9D 4B5A0F00FA54 3113C304EE2B 80DCD6084303 \
+      CBDEC006B261 48A99803F2F8 BFE82401B07D 036BFBFE7B5D \
+      B85756FA3EC9 B4B055F3502B 299830EBCB62 1A5CA7E6D99A \
+      EDFA3EE491BD C625EBE27884 0E05A9E0B6CF EF2929E02922 \
+      5758D8E27067 FB3557E83E16 1377BFEF8402 D82C5BF7272A \
+      978F16FB7745 F5F865FC1013 086635FB9C4E DF30FCFB40EE \
+      117FE0FA3438 3EE6B8FB5AC3 BC77A3FCB2F4 66D6DAFF5F32 \
+      CF13B9041275 431D69097A8C C1BB600EC74E 5120B912A2BA \
+      EEDF641754C0 8207001664B7 7FFFFF14453F 8000001294E6 \
+      499C1B0EB3B2 52B73E0DBCA0 EFB2B20F5FD8 CE3CDB0FBE12 \
+      E4B49C0CEA2D 6344A80A5A7C 08C8FE0A1FFE 2BB9860B0A0E \
+      51486F0E44E1 8BCC64113B05 B6F4EC0EEB36 4413170A5B48 \
+      """)
+
+
+class SunauPCM32Test(SunauTest, unittest.TestCase):
     sndfilename = 'pluck-pcm32.au'
     sndfilenframes = 3307
     nchannels = 2
@@ -59,7 +82,7 @@ class SunauPCM32Test(audiotests.AudioWriteTests,
     nframes = 48
     comptype = 'NONE'
     compname = 'not compressed'
-    frames = audiotests.fromhex("""\
+    frames = bytes.fromhex("""\
       022D65BCFFEB9D92 4B5A0F8000FA549C 3113C34004EE2BC0 80DCD680084303E0 \
       CBDEC0C006B26140 48A9980003F2F8FC BFE8248001B07D92 036BFB60FE7B5D34 \
       B8575600FA3EC920 B4B05500F3502BC0 29983000EBCB6240 1A5CA7A0E6D99A60 \
@@ -75,10 +98,7 @@ class SunauPCM32Test(audiotests.AudioWriteTests,
       """)
 
 
-class SunauULAWTest(audiotests.AudioWriteTests,
-        audiotests.AudioTestsWithSourceFile,
-        unittest.TestCase):
-    module = sunau
+class SunauULAWTest(SunauTest, unittest.TestCase):
     sndfilename = 'pluck-ulaw.au'
     sndfilenframes = 3307
     nchannels = 2
@@ -87,7 +107,7 @@ class SunauULAWTest(audiotests.AudioWriteTests,
     nframes = 48
     comptype = 'ULAW'
     compname = 'CCITT G.711 u-law'
-    frames = audiotests.fromhex("""\
+    frames = bytes.fromhex("""\
       022CFFE8 497C00F4 307C04DC 8284083C CB84069C 497C03DC BE8401AC 036CFE74 \
       B684FA24 B684F344 2A7CEC04 19FCE704 EE04E504 C584E204 0E3CE104 EF04DF84 \
       557CE204 FB24E804 12FCEF04 D784F744 9684FB64 F5C4FC24 083CFBA4 DF84FB24 \
@@ -96,12 +116,43 @@ class SunauULAWTest(audiotests.AudioWriteTests,
       E5040CBC 617C0A3C 08BC0A3C 2C7C0B3C 517C0E3C 8A8410FC B6840EBC 457C0A3C \
       """)
     if sys.byteorder != 'big':
-        frames = audiotests.byteswap2(frames)
+        frames = byteswap(frames, 2)
 
 
-def test_main():
-    run_unittest(SunauPCM8Test, SunauPCM16Test, SunauPCM16Test,
-                 SunauPCM32Test, SunauULAWTest)
+class SunauLowLevelTest(unittest.TestCase):
+
+    def test_read_bad_magic_number(self):
+        b = b'SPA'
+        with self.assertRaises(EOFError):
+            sunau.open(io.BytesIO(b))
+        b = b'SPAM'
+        with self.assertRaisesRegex(sunau.Error, 'bad magic number'):
+            sunau.open(io.BytesIO(b))
+
+    def test_read_too_small_header(self):
+        b = struct.pack('>LLLLL', sunau.AUDIO_FILE_MAGIC, 20, 0,
+                        sunau.AUDIO_FILE_ENCODING_LINEAR_8, 11025)
+        with self.assertRaisesRegex(sunau.Error, 'header size too small'):
+            sunau.open(io.BytesIO(b))
+
+    def test_read_too_large_header(self):
+        b = struct.pack('>LLLLLL', sunau.AUDIO_FILE_MAGIC, 124, 0,
+                        sunau.AUDIO_FILE_ENCODING_LINEAR_8, 11025, 1)
+        b += b'\0' * 100
+        with self.assertRaisesRegex(sunau.Error, 'header size ridiculously large'):
+            sunau.open(io.BytesIO(b))
+
+    def test_read_wrong_encoding(self):
+        b = struct.pack('>LLLLLL', sunau.AUDIO_FILE_MAGIC, 24, 0, 0, 11025, 1)
+        with self.assertRaisesRegex(sunau.Error, r'encoding not \(yet\) supported'):
+            sunau.open(io.BytesIO(b))
+
+    def test_read_wrong_number_of_channels(self):
+        b = struct.pack('>LLLLLL', sunau.AUDIO_FILE_MAGIC, 24, 0,
+                        sunau.AUDIO_FILE_ENCODING_LINEAR_8, 11025, 0)
+        with self.assertRaisesRegex(sunau.Error, 'bad # of channels'):
+            sunau.open(io.BytesIO(b))
+
 
 if __name__ == "__main__":
-    test_main()
+    unittest.main()

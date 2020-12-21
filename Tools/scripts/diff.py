@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """ Command line interface to difflib.py providing diffs in four formats:
 
 * ndiff:    lists every line and highlights interline changes.
@@ -8,32 +8,42 @@
 
 """
 
-import sys, os, time, difflib, optparse
+import sys, os, difflib, argparse
+from datetime import datetime, timezone
+
+def file_mtime(path):
+    t = datetime.fromtimestamp(os.stat(path).st_mtime,
+                               timezone.utc)
+    return t.astimezone().isoformat()
 
 def main():
 
-    usage = "usage: %prog [options] fromfile tofile"
-    parser = optparse.OptionParser(usage)
-    parser.add_option("-c", action="store_true", default=False, help='Produce a context format diff (default)')
-    parser.add_option("-u", action="store_true", default=False, help='Produce a unified format diff')
-    parser.add_option("-m", action="store_true", default=False, help='Produce HTML side by side diff (can use -c and -l in conjunction)')
-    parser.add_option("-n", action="store_true", default=False, help='Produce a ndiff format diff')
-    parser.add_option("-l", "--lines", type="int", default=3, help='Set number of context lines (default 3)')
-    (options, args) = parser.parse_args()
-
-    if len(args) == 0:
-        parser.print_help()
-        sys.exit(1)
-    if len(args) != 2:
-        parser.error("need to specify both a fromfile and tofile")
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c', action='store_true', default=False,
+                        help='Produce a context format diff (default)')
+    parser.add_argument('-u', action='store_true', default=False,
+                        help='Produce a unified format diff')
+    parser.add_argument('-m', action='store_true', default=False,
+                        help='Produce HTML side by side diff '
+                             '(can use -c and -l in conjunction)')
+    parser.add_argument('-n', action='store_true', default=False,
+                        help='Produce a ndiff format diff')
+    parser.add_argument('-l', '--lines', type=int, default=3,
+                        help='Set number of context lines (default 3)')
+    parser.add_argument('fromfile')
+    parser.add_argument('tofile')
+    options = parser.parse_args()
 
     n = options.lines
-    fromfile, tofile = args
+    fromfile = options.fromfile
+    tofile = options.tofile
 
-    fromdate = time.ctime(os.stat(fromfile).st_mtime)
-    todate = time.ctime(os.stat(tofile).st_mtime)
-    fromlines = open(fromfile, 'U').readlines()
-    tolines = open(tofile, 'U').readlines()
+    fromdate = file_mtime(fromfile)
+    todate = file_mtime(tofile)
+    with open(fromfile) as ff:
+        fromlines = ff.readlines()
+    with open(tofile) as tf:
+        tolines = tf.readlines()
 
     if options.u:
         diff = difflib.unified_diff(fromlines, tolines, fromfile, tofile, fromdate, todate, n=n)

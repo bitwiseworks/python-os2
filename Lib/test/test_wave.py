@@ -1,14 +1,19 @@
-from test.test_support import TESTFN, run_unittest
 import unittest
 from test import audiotests
+from test import support
+from audioop import byteswap
+import io
+import struct
 import sys
 import wave
 
 
-class WavePCM8Test(audiotests.AudioWriteTests,
-        audiotests.AudioTestsWithSourceFile,
-        unittest.TestCase):
+class WaveTest(audiotests.AudioWriteTests,
+               audiotests.AudioTestsWithSourceFile):
     module = wave
+
+
+class WavePCM8Test(WaveTest, unittest.TestCase):
     sndfilename = 'pluck-pcm8.wav'
     sndfilenframes = 3307
     nchannels = 2
@@ -17,7 +22,7 @@ class WavePCM8Test(audiotests.AudioWriteTests,
     nframes = 48
     comptype = 'NONE'
     compname = 'not compressed'
-    frames = audiotests.fromhex("""\
+    frames = bytes.fromhex("""\
       827F CB80 B184 0088 4B86 C883 3F81 837E 387A 3473 A96B 9A66 \
       6D64 4662 8E60 6F60 D762 7B68 936F 5877 177B 757C 887B 5F7B \
       917A BE7B 3C7C E67F 4F84 C389 418E D192 6E97 0296 FF94 0092 \
@@ -25,10 +30,7 @@ class WavePCM8Test(audiotests.AudioWriteTests,
       """)
 
 
-class WavePCM16Test(audiotests.AudioWriteTests,
-        audiotests.AudioTestsWithSourceFile,
-        unittest.TestCase):
-    module = wave
+class WavePCM16Test(WaveTest, unittest.TestCase):
     sndfilename = 'pluck-pcm16.wav'
     sndfilenframes = 3307
     nchannels = 2
@@ -37,7 +39,7 @@ class WavePCM16Test(audiotests.AudioWriteTests,
     nframes = 48
     comptype = 'NONE'
     compname = 'not compressed'
-    frames = audiotests.fromhex("""\
+    frames = bytes.fromhex("""\
       022EFFEA 4B5C00F9 311404EF 80DC0843 CBDF06B2 48AA03F3 BFE701B2 036BFE7C \
       B857FA3E B4B2F34F 2999EBCA 1A5FE6D7 EDFCE491 C626E279 0E05E0B8 EF27E02D \
       5754E275 FB31E843 1373EF89 D827F72C 978BFB7A F5F7FC11 0866FB9C DF30FB42 \
@@ -46,16 +48,10 @@ class WavePCM16Test(audiotests.AudioWriteTests,
       E4B50CEB 63440A5A 08CA0A1F 2BBA0B0B 51460E47 8BCB113C B6F50EEA 44150A59 \
       """)
     if sys.byteorder != 'big':
-        frames = audiotests.byteswap2(frames)
+        frames = byteswap(frames, 2)
 
 
-@unittest.skipIf(sys.byteorder == 'big',
-                 '24-bit wave files are supported only on little-endian '
-                 'platforms')
-class WavePCM24Test(audiotests.AudioWriteTests,
-        audiotests.AudioTestsWithSourceFile,
-        unittest.TestCase):
-    module = wave
+class WavePCM24Test(WaveTest, unittest.TestCase):
     sndfilename = 'pluck-pcm24.wav'
     sndfilenframes = 3307
     nchannels = 2
@@ -64,7 +60,7 @@ class WavePCM24Test(audiotests.AudioWriteTests,
     nframes = 48
     comptype = 'NONE'
     compname = 'not compressed'
-    frames = audiotests.fromhex("""\
+    frames = bytes.fromhex("""\
       022D65FFEB9D 4B5A0F00FA54 3113C304EE2B 80DCD6084303 \
       CBDEC006B261 48A99803F2F8 BFE82401B07D 036BFBFE7B5D \
       B85756FA3EC9 B4B055F3502B 299830EBCB62 1A5CA7E6D99A \
@@ -79,13 +75,10 @@ class WavePCM24Test(audiotests.AudioWriteTests,
       51486F0E44E1 8BCC64113B05 B6F4EC0EEB36 4413170A5B48 \
       """)
     if sys.byteorder != 'big':
-        frames = audiotests.byteswap3(frames)
+        frames = byteswap(frames, 3)
 
 
-class WavePCM32Test(audiotests.AudioWriteTests,
-        audiotests.AudioTestsWithSourceFile,
-        unittest.TestCase):
-    module = wave
+class WavePCM32Test(WaveTest, unittest.TestCase):
     sndfilename = 'pluck-pcm32.wav'
     sndfilenframes = 3307
     nchannels = 2
@@ -94,7 +87,7 @@ class WavePCM32Test(audiotests.AudioWriteTests,
     nframes = 48
     comptype = 'NONE'
     compname = 'not compressed'
-    frames = audiotests.fromhex("""\
+    frames = bytes.fromhex("""\
       022D65BCFFEB9D92 4B5A0F8000FA549C 3113C34004EE2BC0 80DCD680084303E0 \
       CBDEC0C006B26140 48A9980003F2F8FC BFE8248001B07D92 036BFB60FE7B5D34 \
       B8575600FA3EC920 B4B05500F3502BC0 29983000EBCB6240 1A5CA7A0E6D99A60 \
@@ -109,11 +102,74 @@ class WavePCM32Test(audiotests.AudioWriteTests,
       51486F800E44E190 8BCC6480113B0580 B6F4EC000EEB3630 441317800A5B48A0 \
       """)
     if sys.byteorder != 'big':
-        frames = audiotests.byteswap4(frames)
+        frames = byteswap(frames, 4)
 
 
-def test_main():
-    run_unittest(WavePCM8Test, WavePCM16Test, WavePCM24Test, WavePCM32Test)
+class MiscTestCase(unittest.TestCase):
+    def test__all__(self):
+        blacklist = {'WAVE_FORMAT_PCM'}
+        support.check__all__(self, wave, blacklist=blacklist)
+
+
+class WaveLowLevelTest(unittest.TestCase):
+
+    def test_read_no_chunks(self):
+        b = b'SPAM'
+        with self.assertRaises(EOFError):
+            wave.open(io.BytesIO(b))
+
+    def test_read_no_riff_chunk(self):
+        b = b'SPAM' + struct.pack('<L', 0)
+        with self.assertRaisesRegex(wave.Error,
+                                    'file does not start with RIFF id'):
+            wave.open(io.BytesIO(b))
+
+    def test_read_not_wave(self):
+        b = b'RIFF' + struct.pack('<L', 4) + b'SPAM'
+        with self.assertRaisesRegex(wave.Error,
+                                    'not a WAVE file'):
+            wave.open(io.BytesIO(b))
+
+    def test_read_no_fmt_no_data_chunk(self):
+        b = b'RIFF' + struct.pack('<L', 4) + b'WAVE'
+        with self.assertRaisesRegex(wave.Error,
+                                    'fmt chunk and/or data chunk missing'):
+            wave.open(io.BytesIO(b))
+
+    def test_read_no_data_chunk(self):
+        b = b'RIFF' + struct.pack('<L', 28) + b'WAVE'
+        b += b'fmt ' + struct.pack('<LHHLLHH', 16, 1, 1, 11025, 11025, 1, 8)
+        with self.assertRaisesRegex(wave.Error,
+                                    'fmt chunk and/or data chunk missing'):
+            wave.open(io.BytesIO(b))
+
+    def test_read_no_fmt_chunk(self):
+        b = b'RIFF' + struct.pack('<L', 12) + b'WAVE'
+        b += b'data' + struct.pack('<L', 0)
+        with self.assertRaisesRegex(wave.Error, 'data chunk before fmt chunk'):
+            wave.open(io.BytesIO(b))
+
+    def test_read_wrong_form(self):
+        b = b'RIFF' + struct.pack('<L', 36) + b'WAVE'
+        b += b'fmt ' + struct.pack('<LHHLLHH', 16, 2, 1, 11025, 11025, 1, 1)
+        b += b'data' + struct.pack('<L', 0)
+        with self.assertRaisesRegex(wave.Error, 'unknown format: 2'):
+            wave.open(io.BytesIO(b))
+
+    def test_read_wrong_number_of_channels(self):
+        b = b'RIFF' + struct.pack('<L', 36) + b'WAVE'
+        b += b'fmt ' + struct.pack('<LHHLLHH', 16, 1, 0, 11025, 11025, 1, 8)
+        b += b'data' + struct.pack('<L', 0)
+        with self.assertRaisesRegex(wave.Error, 'bad # of channels'):
+            wave.open(io.BytesIO(b))
+
+    def test_read_wrong_sample_width(self):
+        b = b'RIFF' + struct.pack('<L', 36) + b'WAVE'
+        b += b'fmt ' + struct.pack('<LHHLLHH', 16, 1, 1, 11025, 11025, 1, 0)
+        b += b'data' + struct.pack('<L', 0)
+        with self.assertRaisesRegex(wave.Error, 'bad sample width'):
+            wave.open(io.BytesIO(b))
+
 
 if __name__ == '__main__':
-    test_main()
+    unittest.main()

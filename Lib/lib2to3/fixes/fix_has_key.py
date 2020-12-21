@@ -31,7 +31,6 @@ CAVEATS:
 
 # Local imports
 from .. import pytree
-from ..pgen2 import token
 from .. import fixer_base
 from ..fixer_util import Name, parenthesize
 
@@ -92,10 +91,10 @@ class FixHasKey(fixer_base.BaseFix):
             before = before[0]
         else:
             before = pytree.Node(syms.power, before)
-        before.prefix = u" "
-        n_op = Name(u"in", prefix=u" ")
+        before.prefix = " "
+        n_op = Name("in", prefix=" ")
         if negation:
-            n_not = Name(u"not", prefix=u" ")
+            n_not = Name("not", prefix=" ")
             n_op = pytree.Node(syms.comp_op, (n_not, n_op))
         new = pytree.Node(syms.comparison, (arg, n_op, before))
         if after:

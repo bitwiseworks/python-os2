@@ -2,22 +2,21 @@
 
 Implements the Distutils 'sdist' command (create a source distribution)."""
 
-__revision__ = "$Id$"
-
 import os
-import string
 import sys
 from glob import glob
 from warnings import warn
 
 from distutils.core import Command
-from distutils import dir_util, dep_util, file_util, archive_util
+from distutils import dir_util
+from distutils import file_util
+from distutils import archive_util
 from distutils.text_file import TextFile
-from distutils.errors import (DistutilsPlatformError, DistutilsOptionError,
-                              DistutilsTemplateError)
 from distutils.filelist import FileList
 from distutils import log
 from distutils.util import convert_path
+from distutils.errors import DistutilsTemplateError, DistutilsOptionError
+
 
 def show_formats():
     """Print all possible values for the 'formats' option (used by
@@ -32,6 +31,7 @@ def show_formats():
     formats.sort()
     FancyGetopt(formats).print_help(
         "List of available source distribution formats:")
+
 
 class sdist(Command):
 
@@ -94,10 +94,9 @@ class sdist(Command):
     negative_opt = {'no-defaults': 'use-defaults',
                     'no-prune': 'prune' }
 
-    default_format = {'posix': 'gztar',
-                      'nt': 'zip' }
-
     sub_commands = [('check', checking_metadata)]
+
+    READMES = ('README', 'README.txt', 'README.rst')
 
     def initialize_options(self):
         # 'template' and 'manifest' are, respectively, the names of
@@ -113,7 +112,7 @@ class sdist(Command):
         self.manifest_only = 0
         self.force_manifest = 0
 
-        self.formats = None
+        self.formats = ['gztar']
         self.keep_temp = 0
         self.dist_dir = None
 
@@ -129,18 +128,11 @@ class sdist(Command):
             self.template = "MANIFEST.in"
 
         self.ensure_string_list('formats')
-        if self.formats is None:
-            try:
-                self.formats = [self.default_format[os.name]]
-            except KeyError:
-                raise DistutilsPlatformError, \
-                      "don't know how to create source distributions " + \
-                      "on platform %s" % os.name
 
         bad_format = archive_util.check_archive_formats(self.formats)
         if bad_format:
-            raise DistutilsOptionError, \
-                  "unknown archive format '%s'" % bad_format
+            raise DistutilsOptionError(
+                  "unknown archive format '%s'" % bad_format)
 
         if self.dist_dir is None:
             self.dist_dir = "dist"
@@ -229,33 +221,59 @@ class sdist(Command):
         Warns if (README or README.txt) or setup.py are missing; everything
         else is optional.
         """
+        self._add_defaults_standards()
+        self._add_defaults_optional()
+        self._add_defaults_python()
+        self._add_defaults_data_files()
+        self._add_defaults_ext()
+        self._add_defaults_c_libs()
+        self._add_defaults_scripts()
 
-        standards = [('README', 'README.txt'), self.distribution.script_name]
+    @staticmethod
+    def _cs_path_exists(fspath):
+        """
+        Case-sensitive path existence check
+
+        >>> sdist._cs_path_exists(__file__)
+        True
+        >>> sdist._cs_path_exists(__file__.upper())
+        False
+        """
+        if not os.path.exists(fspath):
+            return False
+        # make absolute so we always have a directory
+        abspath = os.path.abspath(fspath)
+        directory, filename = os.path.split(abspath)
+        return filename in os.listdir(directory)
+
+    def _add_defaults_standards(self):
+        standards = [self.READMES, self.distribution.script_name]
         for fn in standards:
             if isinstance(fn, tuple):
                 alts = fn
-                got_it = 0
+                got_it = False
                 for fn in alts:
-                    if os.path.exists(fn):
-                        got_it = 1
+                    if self._cs_path_exists(fn):
+                        got_it = True
                         self.filelist.append(fn)
                         break
 
                 if not got_it:
                     self.warn("standard file not found: should have one of " +
-                              string.join(alts, ', '))
+                              ', '.join(alts))
             else:
-                if os.path.exists(fn):
+                if self._cs_path_exists(fn):
                     self.filelist.append(fn)
                 else:
                     self.warn("standard file '%s' not found" % fn)
 
+    def _add_defaults_optional(self):
         optional = ['test/test*.py', 'setup.cfg']
         for pattern in optional:
             files = filter(os.path.isfile, glob(pattern))
-            if files:
-                self.filelist.extend(files)
+            self.filelist.extend(files)
 
+    def _add_defaults_python(self):
         # build_py is used to get:
         #  - python modules
         #  - files defined in package_data
@@ -271,28 +289,34 @@ class sdist(Command):
             for filename in filenames:
                 self.filelist.append(os.path.join(src_dir, filename))
 
+    def _add_defaults_data_files(self):
         # getting distribution.data_files
         if self.distribution.has_data_files():
             for item in self.distribution.data_files:
-                if isinstance(item, str): # plain file
+                if isinstance(item, str):
+                    # plain file
                     item = convert_path(item)
                     if os.path.isfile(item):
                         self.filelist.append(item)
-                else:    # a (dirname, filenames) tuple
+                else:
+                    # a (dirname, filenames) tuple
                     dirname, filenames = item
                     for f in filenames:
                         f = convert_path(f)
                         if os.path.isfile(f):
                             self.filelist.append(f)
 
+    def _add_defaults_ext(self):
         if self.distribution.has_ext_modules():
             build_ext = self.get_finalized_command('build_ext')
             self.filelist.extend(build_ext.get_source_files())
 
+    def _add_defaults_c_libs(self):
         if self.distribution.has_c_libraries():
             build_clib = self.get_finalized_command('build_clib')
             self.filelist.extend(build_clib.get_source_files())
 
+    def _add_defaults_scripts(self):
         if self.distribution.has_scripts():
             build_scripts = self.get_finalized_command('build_scripts')
             self.filelist.extend(build_scripts.get_source_files())
@@ -304,16 +328,12 @@ class sdist(Command):
         'self.filelist', which updates itself accordingly.
         """
         log.info("reading manifest template '%s'", self.template)
-        template = TextFile(self.template,
-                            strip_comments=1,
-                            skip_blanks=1,
-                            join_lines=1,
-                            lstrip_ws=1,
-                            rstrip_ws=1,
+        template = TextFile(self.template, strip_comments=1, skip_blanks=1,
+                            join_lines=1, lstrip_ws=1, rstrip_ws=1,
                             collapse_join=1)
 
         try:
-            while 1:
+            while True:
                 line = template.readline()
                 if line is None:            # end of file
                     break
@@ -344,8 +364,6 @@ class sdist(Command):
         self.filelist.exclude_pattern(None, prefix=build.build_base)
         self.filelist.exclude_pattern(None, prefix=base_dir)
 
-        # pruning out vcs directories
-        # both separators are used under win32
         if sys.platform == 'win32':
             seps = r'/|\\'
         else:
@@ -372,11 +390,11 @@ class sdist(Command):
                      "writing manifest file '%s'" % self.manifest)
 
     def _manifest_is_not_generated(self):
-        # check for special comment used in 2.7.1 and higher
+        # check for special comment used in 3.1.3 and higher
         if not os.path.isfile(self.manifest):
             return False
 
-        fp = open(self.manifest, 'rU')
+        fp = open(self.manifest)
         try:
             first_line = fp.readline()
         finally:
@@ -389,14 +407,13 @@ class sdist(Command):
         distribution.
         """
         log.info("reading manifest file '%s'", self.manifest)
-        manifest = open(self.manifest)
-        for line in manifest:
-            # ignore comments and blank lines
-            line = line.strip()
-            if line.startswith('#') or not line:
-                continue
-            self.filelist.append(line)
-        manifest.close()
+        with open(self.manifest) as manifest:
+            for line in manifest:
+                # ignore comments and blank lines
+                line = line.strip()
+                if line.startswith('#') or not line:
+                    continue
+                self.filelist.append(line)
 
     def make_release_tree(self, base_dir, files):
         """Create the directory tree that will become the source
@@ -433,7 +450,7 @@ class sdist(Command):
             log.info(msg)
         for file in files:
             if not os.path.isfile(file):
-                log.warn("'%s' not a regular file -- skipping" % file)
+                log.warn("'%s' not a regular file -- skipping", file)
             else:
                 dest = os.path.join(base_dir, file)
                 self.copy_file(file, dest, link=link)

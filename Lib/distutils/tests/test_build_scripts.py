@@ -5,10 +5,10 @@ import unittest
 
 from distutils.command.build_scripts import build_scripts
 from distutils.core import Distribution
-import sysconfig
+from distutils import sysconfig
 
 from distutils.tests import support
-from test.test_support import run_unittest
+from test.support import run_unittest
 
 
 class BuildScriptsTestCase(support.TempdirManager,
@@ -17,8 +17,8 @@ class BuildScriptsTestCase(support.TempdirManager,
 
     def test_default_settings(self):
         cmd = self.get_build_scripts_cmd("/foo/bar", [])
-        self.assertTrue(not cmd.force)
-        self.assertTrue(cmd.build_dir is None)
+        self.assertFalse(cmd.force)
+        self.assertIsNone(cmd.build_dir)
 
         cmd.finalize_options()
 
@@ -38,7 +38,7 @@ class BuildScriptsTestCase(support.TempdirManager,
 
         built = os.listdir(target)
         for name in expected:
-            self.assertTrue(name in built)
+            self.assertIn(name, built)
 
     def get_build_scripts_cmd(self, target, scripts):
         import sys
@@ -94,16 +94,16 @@ class BuildScriptsTestCase(support.TempdirManager,
         # --with-suffix=3`, python is compiled okay but the build scripts
         # failed when writing the name of the executable
         old = sysconfig.get_config_vars().get('VERSION')
-        sysconfig._CONFIG_VARS['VERSION'] = 4
+        sysconfig._config_vars['VERSION'] = 4
         try:
             cmd.run()
         finally:
             if old is not None:
-                sysconfig._CONFIG_VARS['VERSION'] = old
+                sysconfig._config_vars['VERSION'] = old
 
         built = os.listdir(target)
         for name in expected:
-            self.assertTrue(name in built)
+            self.assertIn(name, built)
 
 def test_suite():
     return unittest.makeSuite(BuildScriptsTestCase)

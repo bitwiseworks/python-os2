@@ -4,28 +4,37 @@
 #
 
 # You can set these variables from the command line.
-PYTHON       = python
-SVNROOT      = http://svn.python.org/projects
-SPHINXOPTS   =
+PYTHON       = python3
+VENVDIR      = ./venv
+SPHINXBUILD  = PATH=$(VENVDIR)/bin:$$PATH sphinx-build
+BLURB        = PATH=$(VENVDIR)/bin:$$PATH blurb
 PAPER        =
 SOURCES      =
-DISTVERSION  = $(shell $(PYTHON) tools/sphinxext/patchlevel.py)
+DISTVERSION  = $(shell $(PYTHON) tools/extensions/patchlevel.py)
+SPHINXERRORHANDLING = -W
 
-ALLSPHINXOPTS = -b $(BUILDER) -d build/doctrees -D latex_paper_size=$(PAPER) \
-                $(SPHINXOPTS) . build/$(BUILDER) $(SOURCES)
+# Internal variables.
+PAPEROPT_a4     = -D latex_elements.papersize=a4paper
+PAPEROPT_letter = -D latex_elements.papersize=letterpaper
 
-.PHONY: help checkout update build html htmlhelp latex text changes linkcheck \
+ALLSPHINXOPTS = -b $(BUILDER) -d build/doctrees $(PAPEROPT_$(PAPER)) \
+                $(SPHINXOPTS) $(SPHINXERRORHANDLING) . build/$(BUILDER) $(SOURCES)
+
+.PHONY: help build html htmlhelp latex text texinfo changes linkcheck \
 	suspicious coverage doctest pydoc-topics htmlview clean dist check serve \
-	autobuild-dev autobuild-stable
+	autobuild-dev autobuild-stable venv
 
 help:
 	@echo "Please use \`make <target>' where <target> is one of"
 	@echo "  clean      to remove build files"
-	@echo "  update     to update build tools"
+	@echo "  venv       to create a venv with necessary tools"
 	@echo "  html       to make standalone HTML files"
+	@echo "  htmlview   to open the index page built by the html target in your browser"
 	@echo "  htmlhelp   to make HTML files and a HTML help project"
 	@echo "  latex      to make LaTeX files, you can set PAPER=a4 or PAPER=letter"
 	@echo "  text       to make plain text files"
+	@echo "  texinfo    to make Texinfo file"
+	@echo "  epub       to make EPUB files"
 	@echo "  changes    to make an overview over all changed/added/deprecated items"
 	@echo "  linkcheck  to check all external links for integrity"
 	@echo "  coverage   to check documentation coverage for library and C API"
@@ -36,30 +45,30 @@ help:
 	@echo "  check      to run a check for frequent markup errors"
 	@echo "  serve      to serve the documentation on the localhost (8000)"
 
-# Note: if you update versions here, do the same in make.bat and README.txt
-checkout:
-	@if [ ! -d tools/sphinx ]; then \
-	  echo "Checking out Sphinx..."; \
-	  svn checkout $(SVNROOT)/external/Sphinx-1.0.7/sphinx tools/sphinx; \
+build:
+	-mkdir -p build
+# Look first for a Misc/NEWS file (building from a source release tarball
+# or old repo) and use that, otherwise look for a Misc/NEWS.d directory
+# (building from a newer repo) and use blurb to generate the NEWS file.
+	@if [ -f  ../Misc/NEWS ] ; then \
+		echo "Using existing Misc/NEWS file"; \
+		cp ../Misc/NEWS build/NEWS; \
+	elif $(BLURB) help >/dev/null 2>&1 && $(SPHINXBUILD) --version >/dev/null 2>&1; then \
+		if [ -d ../Misc/NEWS.d ]; then \
+			echo "Building NEWS from Misc/NEWS.d with blurb"; \
+			$(BLURB) merge -f build/NEWS; \
+		else \
+			echo "Neither Misc/NEWS.d nor Misc/NEWS found; cannot build docs"; \
+			exit 1; \
+		fi \
+	else \
+		echo ""; \
+		echo "Missing the required blurb or sphinx-build tools."; \
+		echo "Please run 'make venv' to install local copies."; \
+		echo ""; \
+		exit 1; \
 	fi
-	@if [ ! -d tools/docutils ]; then \
-	  echo "Checking out Docutils..."; \
-	  svn checkout $(SVNROOT)/external/docutils-0.6/docutils tools/docutils; \
-	fi
-	@if [ ! -d tools/jinja2 ]; then \
-	  echo "Checking out Jinja..."; \
-	  svn checkout $(SVNROOT)/external/Jinja-2.3.1/jinja2 tools/jinja2; \
-	fi
-	@if [ ! -d tools/pygments ]; then \
-	  echo "Checking out Pygments..."; \
-	  svn checkout $(SVNROOT)/external/Pygments-1.3.1/pygments tools/pygments; \
-	fi
-
-update: clean checkout
-
-build: checkout
-	mkdir -p build/$(BUILDER) build/doctrees
-	$(PYTHON) tools/sphinx-build.py $(ALLSPHINXOPTS)
+	$(SPHINXBUILD) $(ALLSPHINXOPTS)
 	@echo
 
 html: BUILDER = html
@@ -81,44 +90,61 @@ text: BUILDER = text
 text: build
 	@echo "Build finished; the text files are in build/text."
 
+texinfo: BUILDER = texinfo
+texinfo: build
+	@echo "Build finished; the python.texi file is in build/texinfo."
+	@echo "Run \`make info' in that directory to run it through makeinfo."
+
+epub: BUILDER = epub
+epub: build
+	@echo "Build finished; the epub files are in build/epub."
+
 changes: BUILDER = changes
 changes: build
 	@echo "The overview file is in build/changes."
 
 linkcheck: BUILDER = linkcheck
-linkcheck: build
-	@echo "Link check complete; look for any errors in the above output" \
-	      "or in build/$(BUILDER)/output.txt"
+linkcheck:
+	@$(MAKE) build BUILDER=$(BUILDER) || { \
+	echo "Link check complete; look for any errors in the above output" \
+	     "or in build/$(BUILDER)/output.txt"; \
+	false; }
 
 suspicious: BUILDER = suspicious
-suspicious: build
-	@echo "Suspicious check complete; look for any errors in the above output" \
-	      "or in build/$(BUILDER)/suspicious.csv.  If all issues are false" \
-	      "positives, append that file to tools/sphinxext/susp-ignored.csv."
+suspicious:
+	@$(MAKE) build BUILDER=$(BUILDER) || { \
+	echo "Suspicious check complete; look for any errors in the above output" \
+	     "or in build/$(BUILDER)/suspicious.csv.  If all issues are false" \
+	     "positives, append that file to tools/susp-ignored.csv."; \
+	false; }
 
 coverage: BUILDER = coverage
 coverage: build
 	@echo "Coverage finished; see c.txt and python.txt in build/coverage"
 
 doctest: BUILDER = doctest
-doctest: build
-	@echo "Testing of doctests in the sources finished, look at the" \
-	      "results in build/doctest/output.txt"
+doctest:
+	@$(MAKE) build BUILDER=$(BUILDER) || { \
+	echo "Testing of doctests in the sources finished, look at the" \
+	     "results in build/doctest/output.txt"; \
+	false; }
 
 pydoc-topics: BUILDER = pydoc-topics
 pydoc-topics: build
-	@echo "Building finished; now copy build/pydoc-topics/topics.py" \
-	      "to Lib/pydoc_data/topics.py"
+	@echo "Building finished; now run this:" \
+	      "cp build/pydoc-topics/topics.py ../Lib/pydoc_data/topics.py"
 
 htmlview: html
 	 $(PYTHON) -c "import webbrowser; webbrowser.open('build/html/index.html')"
 
 clean:
-	-rm -rf build/*
-	-rm -rf tools/sphinx
-	-rm -rf tools/pygments
-	-rm -rf tools/jinja2
-	-rm -rf tools/docutils
+	-rm -rf build/* $(VENVDIR)/*
+
+venv:
+	$(PYTHON) -m venv $(VENVDIR)
+	$(VENVDIR)/bin/python3 -m pip install -U pip setuptools
+	$(VENVDIR)/bin/python3 -m pip install -r requirements.txt
+	@echo "The venv has been created in the $(VENVDIR) directory"
 
 dist:
 	rm -rf dist
@@ -158,28 +184,56 @@ dist:
 	cp build/latex/docs-pdf.zip dist/python-$(DISTVERSION)-docs-pdf-letter.zip
 	cp build/latex/docs-pdf.tar.bz2 dist/python-$(DISTVERSION)-docs-pdf-letter.tar.bz2
 
+	# copy the epub build
+	rm -rf build/epub
+	make epub
+	cp -pPR build/epub/Python.epub dist/python-$(DISTVERSION)-docs.epub
+
+	# archive the texinfo build
+	rm -rf build/texinfo
+	make texinfo
+	make info --directory=build/texinfo
+	cp -pPR build/texinfo dist/python-$(DISTVERSION)-docs-texinfo
+	tar -C dist -cf dist/python-$(DISTVERSION)-docs-texinfo.tar python-$(DISTVERSION)-docs-texinfo
+	bzip2 -9 -k dist/python-$(DISTVERSION)-docs-texinfo.tar
+	(cd dist; zip -q -r -9 python-$(DISTVERSION)-docs-texinfo.zip python-$(DISTVERSION)-docs-texinfo)
+	rm -r dist/python-$(DISTVERSION)-docs-texinfo
+	rm dist/python-$(DISTVERSION)-docs-texinfo.tar
+
 check:
-	$(PYTHON) tools/rstlint.py -i tools
+	$(PYTHON) tools/rstlint.py -i tools -i $(VENVDIR) -i README.rst
 
 serve:
-	../Tools/scripts/serve.py build/html
+	$(PYTHON) ../Tools/scripts/serve.py build/html
 
 # Targets for daily automated doc build
+# By default, Sphinx only rebuilds pages where the page content has changed.
+# This means it doesn't always pick up changes to preferred link targets, etc
+# To ensure such changes are picked up, we build the published docs with
+# `-E` (to ignore the cached environment) and `-a` (to ignore already existing
+# output files)
 
 # for development releases: always build
 autobuild-dev:
-	make update
-	make dist SPHINXOPTS='-A daily=1 -A versionswitcher=1'
+	make dist SPHINXOPTS='$(SPHINXOPTS) -Ea -A daily=1 -A switchers=1'
+	-make suspicious
 
 # for quick rebuilds (HTML only)
-autobuild-html:
-	make html SPHINXOPTS='-A daily=1 -A versionswitcher=1'
+autobuild-dev-html:
+	make html SPHINXOPTS='$(SPHINXOPTS) -Ea -A daily=1 -A switchers=1'
 
-# for stable releases: only build if not in pre-release stage (alpha, beta, rc)
+# for stable releases: only build if not in pre-release stage (alpha, beta)
+# release candidate downloads are okay, since the stable tree can be in that stage
 autobuild-stable:
-	@case $(DISTVERSION) in *[abc]*) \
+	@case $(DISTVERSION) in *[ab]*) \
 		echo "Not building; $(DISTVERSION) is not a release version."; \
 		exit 1;; \
 	esac
 	@make autobuild-dev
 
+autobuild-stable-html:
+	@case $(DISTVERSION) in *[ab]*) \
+		echo "Not building; $(DISTVERSION) is not a release version."; \
+		exit 1;; \
+	esac
+	@make autobuild-dev-html

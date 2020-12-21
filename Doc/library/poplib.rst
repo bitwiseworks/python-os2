@@ -3,18 +3,22 @@
 
 .. module:: poplib
    :synopsis: POP3 protocol client (requires sockets).
+
 .. sectionauthor:: Andrew T. Csillag
 .. revised by ESR, January 2000
 
-.. index:: pair: POP3; protocol
-
 **Source code:** :source:`Lib/poplib.py`
+
+.. index:: pair: POP3; protocol
 
 --------------
 
 This module defines a class, :class:`POP3`, which encapsulates a connection to a
-POP3 server and implements the protocol as defined in :rfc:`1725`.  The
-:class:`POP3` class supports both the minimal and optional command sets.
+POP3 server and implements the protocol as defined in :rfc:`1939`. The
+:class:`POP3` class supports both the minimal and optional command sets from
+:rfc:`1939`. The :class:`POP3` class also supports the ``STLS`` command introduced
+in :rfc:`2595` to enable encrypted communication on an already established connection.
+
 Additionally, this module provides a class :class:`POP3_SSL`, which provides
 support for connecting to POP3 servers that use SSL as an underlying protocol
 layer.
@@ -27,7 +31,7 @@ mailserver supports IMAP, you would be better off using the
 The :mod:`poplib` module provides two classes:
 
 
-.. class:: POP3(host[, port[, timeout]])
+.. class:: POP3(host, port=POP3_PORT[, timeout])
 
    This class implements the actual POP3 protocol.  The connection is created when
    the instance is initialized. If *port* is omitted, the standard POP3 port (110)
@@ -35,18 +39,58 @@ The :mod:`poplib` module provides two classes:
    connection attempt (if not specified, the global default timeout setting will
    be used).
 
-   .. versionchanged:: 2.6
-      *timeout* was added.
+   .. audit-event:: poplib.connect self,host,port poplib.POP3
 
+   .. audit-event:: poplib.putline self,line poplib.POP3
 
-.. class:: POP3_SSL(host[, port[, keyfile[, certfile]]])
+      All commands will raise an :ref:`auditing event <auditing>`
+      ``poplib.putline`` with arguments ``self`` and ``line``,
+      where ``line`` is the bytes about to be sent to the remote host.
+
+   .. versionchanged:: 3.9
+      If the *timeout* parameter is set to be zero, it will raise a
+      :class:`ValueError` to prevent the creation of a non-blocking socket.
+
+.. class:: POP3_SSL(host, port=POP3_SSL_PORT, keyfile=None, certfile=None, timeout=None, context=None)
 
    This is a subclass of :class:`POP3` that connects to the server over an SSL
    encrypted socket.  If *port* is not specified, 995, the standard POP3-over-SSL
-   port is used.  *keyfile* and *certfile* are also optional - they can contain a
-   PEM formatted private key and certificate chain file for the SSL connection.
+   port is used.  *timeout* works as in the :class:`POP3` constructor.
+   *context* is an optional :class:`ssl.SSLContext` object which allows
+   bundling SSL configuration options, certificates and private keys into a
+   single (potentially long-lived) structure.  Please read :ref:`ssl-security`
+   for best practices.
 
-   .. versionadded:: 2.4
+   *keyfile* and *certfile* are a legacy alternative to *context* - they can
+   point to PEM-formatted private key and certificate chain files,
+   respectively, for the SSL connection.
+
+   .. audit-event:: poplib.connect self,host,port poplib.POP3_SSL
+
+   .. audit-event:: poplib.putline self,line poplib.POP3_SSL
+
+      All commands will raise an :ref:`auditing event <auditing>`
+      ``poplib.putline`` with arguments ``self`` and ``line``,
+      where ``line`` is the bytes about to be sent to the remote host.
+
+   .. versionchanged:: 3.2
+      *context* parameter added.
+
+   .. versionchanged:: 3.4
+      The class now supports hostname check with
+      :attr:`ssl.SSLContext.check_hostname` and *Server Name Indication* (see
+      :data:`ssl.HAS_SNI`).
+
+   .. deprecated:: 3.6
+
+       *keyfile* and *certfile* are deprecated in favor of *context*.
+       Please use :meth:`ssl.SSLContext.load_cert_chain` instead, or let
+       :func:`ssl.create_default_context` select the system's trusted CA
+       certificates for you.
+
+   .. versionchanged:: 3.9
+      If the *timeout* parameter is set to be zero, it will raise a
+      :class:`ValueError` to prevent the creation of a non-blocking socket.
 
 One exception is defined as an attribute of the :mod:`poplib` module:
 
@@ -92,6 +136,14 @@ An :class:`POP3` instance has the following methods:
 .. method:: POP3.getwelcome()
 
    Returns the greeting string sent by the POP3 server.
+
+
+.. method:: POP3.capa()
+
+   Query the server's capabilities as specified in :rfc:`2449`.
+   Returns a dictionary in the form ``{'name': ['param'...]}``.
+
+   .. versionadded:: 3.4
 
 
 .. method:: POP3.user(username)
@@ -167,11 +219,37 @@ An :class:`POP3` instance has the following methods:
    POP3 servers you will use before trusting it.
 
 
-.. method:: POP3.uidl([which])
+.. method:: POP3.uidl(which=None)
 
    Return message digest (unique id) list. If *which* is specified, result contains
    the unique id for that message in the form ``'response mesgnum uid``, otherwise
    result is list ``(response, ['mesgnum uid', ...], octets)``.
+
+
+.. method:: POP3.utf8()
+
+   Try to switch to UTF-8 mode. Returns the server response if successful,
+   raises :class:`error_proto` if not. Specified in :RFC:`6856`.
+
+   .. versionadded:: 3.5
+
+
+.. method:: POP3.stls(context=None)
+
+   Start a TLS session on the active connection as specified in :rfc:`2595`.
+   This is only allowed before user authentication
+
+   *context* parameter is a :class:`ssl.SSLContext` object which allows
+   bundling SSL configuration options, certificates and private keys into
+   a single (potentially long-lived) structure.  Please read :ref:`ssl-security`
+   for best practices.
+
+   This method supports hostname checking via
+   :attr:`ssl.SSLContext.check_hostname` and *Server Name Indication* (see
+   :data:`ssl.HAS_SNI`).
+
+   .. versionadded:: 3.4
+
 
 Instances of :class:`POP3_SSL` have no additional methods. The interface of this
 subclass is identical to its parent.
@@ -193,8 +271,7 @@ retrieves and prints all messages::
    numMessages = len(M.list()[1])
    for i in range(numMessages):
        for j in M.retr(i+1)[1]:
-           print j
+           print(j)
 
 At the end of the module, there is a test section that contains a more extensive
 example of usage.
-

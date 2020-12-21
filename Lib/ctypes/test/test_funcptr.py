@@ -1,4 +1,4 @@
-import os, unittest
+import unittest
 from ctypes import *
 
 try:
@@ -39,7 +39,7 @@ class CFuncPtrTestCase(unittest.TestCase):
         # possible, as in C, to call cdecl functions with more parameters.
         #self.assertRaises(TypeError, c, 1, 2, 3)
         self.assertEqual(c(1, 2, 3, 4, 5, 6), 3)
-        if not WINFUNCTYPE is CFUNCTYPE and os.name != "ce":
+        if not WINFUNCTYPE is CFUNCTYPE:
             self.assertRaises(TypeError, s, 1, 2, 3)
 
     def test_structures(self):
@@ -75,7 +75,7 @@ class CFuncPtrTestCase(unittest.TestCase):
         ##                  "lpfnWndProc", WNDPROC_2(wndproc))
         # instead:
 
-        self.assertTrue(WNDPROC is WNDPROC_2)
+        self.assertIs(WNDPROC, WNDPROC_2)
         # 'wndclass.lpfnWndProc' leaks 94 references.  Why?
         self.assertEqual(wndclass.lpfnWndProc(1, 2, 3, 4), 10)
 
@@ -97,8 +97,8 @@ class CFuncPtrTestCase(unittest.TestCase):
         strchr = lib.my_strchr
         strchr.restype = c_char_p
         strchr.argtypes = (c_char_p, c_char)
-        self.assertEqual(strchr("abcdefghi", "b"), "bcdefghi")
-        self.assertEqual(strchr("abcdefghi", "x"), None)
+        self.assertEqual(strchr(b"abcdefghi", b"b"), b"bcdefghi")
+        self.assertEqual(strchr(b"abcdefghi", b"x"), None)
 
 
         strtok = lib.my_strtok
@@ -111,17 +111,22 @@ class CFuncPtrTestCase(unittest.TestCase):
             size = len(init) + 1
             return (c_char*size)(*init)
 
-        s = "a\nb\nc"
+        s = b"a\nb\nc"
         b = c_string(s)
 
 ##        b = (c_char * (len(s)+1))()
 ##        b.value = s
 
 ##        b = c_string(s)
-        self.assertEqual(strtok(b, "\n"), "a")
-        self.assertEqual(strtok(None, "\n"), "b")
-        self.assertEqual(strtok(None, "\n"), "c")
-        self.assertEqual(strtok(None, "\n"), None)
+        self.assertEqual(strtok(b, b"\n"), b"a")
+        self.assertEqual(strtok(None, b"\n"), b"b")
+        self.assertEqual(strtok(None, b"\n"), b"c")
+        self.assertEqual(strtok(None, b"\n"), None)
+
+    def test_abstract(self):
+        from ctypes import _CFuncPtr
+
+        self.assertRaises(TypeError, _CFuncPtr, 13, "name", 42, "iid")
 
 if __name__ == '__main__':
     unittest.main()

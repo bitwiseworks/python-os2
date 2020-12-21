@@ -1,5 +1,4 @@
 import unittest
-from test import test_support
 
 def funcattrs(**kwds):
     def decorate(func):
@@ -27,7 +26,7 @@ class DbcheckError (Exception):
 def dbcheck(exprstr, globals=None, locals=None):
     "Decorator to implement debugging assertions"
     def decorate(func):
-        expr = compile(exprstr, "dbcheck-%s" % func.func_name, "eval")
+        expr = compile(exprstr, "dbcheck-%s" % func.__name__, "eval")
         def check(*args, **kwds):
             if not eval(expr, globals, locals):
                 raise DbcheckError(exprstr, func, args, kwds)
@@ -40,12 +39,12 @@ def dbcheck(exprstr, globals=None, locals=None):
 def countcalls(counts):
     "Decorator to count calls to a function"
     def decorate(func):
-        func_name = func.func_name
+        func_name = func.__name__
         counts[func_name] = 0
         def call(*args, **kwds):
             counts[func_name] += 1
             return func(*args, **kwds)
-        call.func_name = func_name
+        call.__name__ = func_name
         return call
     return decorate
 
@@ -63,7 +62,7 @@ def memoize(func):
         except TypeError:
             # Unhashable argument
             return func(*args)
-    call.func_name = func.func_name
+    call.__name__ = func.__name__
     return call
 
 # -----------------------------------------------
@@ -131,7 +130,7 @@ class TestDecorators(unittest.TestCase):
         @countcalls(counts)
         def double(x):
             return x * 2
-        self.assertEqual(double.func_name, 'double')
+        self.assertEqual(double.__name__, 'double')
 
         self.assertEqual(counts, dict(double=0))
 
@@ -152,21 +151,18 @@ class TestDecorators(unittest.TestCase):
         self.assertEqual(counts['double'], 4)
 
     def test_errors(self):
-        # Test syntax restrictions - these are all compile-time errors:
-        #
-        for expr in [ "1+2", "x[3]", "(1, 2)" ]:
-            # Sanity check: is expr is a valid expression by itself?
-            compile(expr, "testexpr", "exec")
 
-            codestr = "@%s\ndef f(): pass" % expr
-            self.assertRaises(SyntaxError, compile, codestr, "test", "exec")
+        # Test SyntaxErrors:
+        for stmt in ("x,", "x, y", "x = y", "pass", "import sys"):
+            compile(stmt, "test", "exec")  # Sanity check.
+            with self.assertRaises(SyntaxError):
+                compile(f"@{stmt}\ndef f(): pass", "test", "exec")
 
-        # You can't put multiple decorators on a single line:
-        #
-        self.assertRaises(SyntaxError, compile,
-                          "@f1 @f2\ndef f(): pass", "test", "exec")
-
-        # Test runtime errors
+        # Test TypeErrors that used to be SyntaxErrors:
+        for expr in ("1.+2j", "[1, 2][-1]", "(1, 2)", "True", "...", "None"):
+            compile(expr, "test", "eval")  # Sanity check.
+            with self.assertRaises(TypeError):
+                exec(f"@{expr}\ndef f(): pass")
 
         def unimp(func):
             raise NotImplementedError
@@ -179,6 +175,13 @@ class TestDecorators(unittest.TestCase):
             codestr = "@%s\ndef f(): pass\nassert f() is None" % expr
             code = compile(codestr, "test", "exec")
             self.assertRaises(exc, eval, code, context)
+
+    def test_expressions(self):
+        for expr in (
+            "(x,)", "(x, y)", "x := y", "(x := y)", "x @y", "(x @ y)", "x[0]",
+            "w[x].y.z", "w + x - (y + z)", "x(y)()(z)", "[w, x, y][z]", "x.y",
+        ):
+            compile(f"@{expr}\ndef f(): pass", "test", "exec")
 
     def test_double(self):
         class C(object):
@@ -266,6 +269,45 @@ class TestDecorators(unittest.TestCase):
         self.assertEqual(bar(), 42)
         self.assertEqual(actions, expected_actions)
 
+    def test_wrapped_descriptor_inside_classmethod(self):
+        class BoundWrapper:
+            def __init__(self, wrapped):
+                self.__wrapped__ = wrapped
+
+            def __call__(self, *args, **kwargs):
+                return self.__wrapped__(*args, **kwargs)
+
+        class Wrapper:
+            def __init__(self, wrapped):
+                self.__wrapped__ = wrapped
+
+            def __get__(self, instance, owner):
+                bound_function = self.__wrapped__.__get__(instance, owner)
+                return BoundWrapper(bound_function)
+
+        def decorator(wrapped):
+            return Wrapper(wrapped)
+
+        class Class:
+            @decorator
+            @classmethod
+            def inner(cls):
+                # This should already work.
+                return 'spam'
+
+            @classmethod
+            @decorator
+            def outer(cls):
+                # Raised TypeError with a message saying that the 'Wrapper'
+                # object is not callable.
+                return 'eggs'
+
+        self.assertEqual(Class.inner(), 'spam')
+        self.assertEqual(Class.outer(), 'eggs')
+        self.assertEqual(Class().inner(), 'spam')
+        self.assertEqual(Class().outer(), 'eggs')
+
+
 class TestClassDecorators(unittest.TestCase):
 
     def test_simple(self):
@@ -301,9 +343,5 @@ class TestClassDecorators(unittest.TestCase):
         class C(object): pass
         self.assertEqual(C.extra, 'second')
 
-def test_main():
-    test_support.run_unittest(TestDecorators)
-    test_support.run_unittest(TestClassDecorators)
-
-if __name__=="__main__":
-    test_main()
+if __name__ == "__main__":
+    unittest.main()

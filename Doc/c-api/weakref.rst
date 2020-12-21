@@ -1,4 +1,4 @@
-.. highlightlang:: c
+.. highlight:: c
 
 .. _weakrefobjects:
 
@@ -15,21 +15,15 @@ as much as it can.
 
    Return true if *ob* is either a reference or proxy object.
 
-   .. versionadded:: 2.2
-
 
 .. c:function:: int PyWeakref_CheckRef(ob)
 
    Return true if *ob* is a reference object.
 
-   .. versionadded:: 2.2
-
 
 .. c:function:: int PyWeakref_CheckProxy(ob)
 
    Return true if *ob* is a proxy object.
-
-   .. versionadded:: 2.2
 
 
 .. c:function:: PyObject* PyWeakref_NewRef(PyObject *ob, PyObject *callback)
@@ -39,11 +33,9 @@ as much as it can.
    reference object may be returned.  The second parameter, *callback*, can be a
    callable object that receives notification when *ob* is garbage collected; it
    should accept a single parameter, which will be the weak reference object
-   itself. *callback* may also be ``None`` or *NULL*.  If *ob* is not a
+   itself. *callback* may also be ``None`` or ``NULL``.  If *ob* is not a
    weakly-referencable object, or if *callback* is not callable, ``None``, or
-   *NULL*, this will return *NULL* and raise :exc:`TypeError`.
-
-   .. versionadded:: 2.2
+   ``NULL``, this will return ``NULL`` and raise :exc:`TypeError`.
 
 
 .. c:function:: PyObject* PyWeakref_NewProxy(PyObject *ob, PyObject *callback)
@@ -53,11 +45,9 @@ as much as it can.
    existing proxy object may be returned.  The second parameter, *callback*, can
    be a callable object that receives notification when *ob* is garbage
    collected; it should accept a single parameter, which will be the weak
-   reference object itself. *callback* may also be ``None`` or *NULL*.  If *ob*
+   reference object itself. *callback* may also be ``None`` or ``NULL``.  If *ob*
    is not a weakly-referencable object, or if *callback* is not callable,
-   ``None``, or *NULL*, this will return *NULL* and raise :exc:`TypeError`.
-
-   .. versionadded:: 2.2
+   ``None``, or ``NULL``, this will return ``NULL`` and raise :exc:`TypeError`.
 
 
 .. c:function:: PyObject* PyWeakref_GetObject(PyObject *ref)
@@ -65,9 +55,7 @@ as much as it can.
    Return the referenced object from a weak reference, *ref*.  If the referent is
    no longer live, returns :const:`Py_None`.
 
-   .. versionadded:: 2.2
-
-   .. warning::
+   .. note::
 
       This function returns a **borrowed reference** to the referenced object.
       This means that you should always call :c:func:`Py_INCREF` on the object
@@ -79,5 +67,3 @@ as much as it can.
 
    Similar to :c:func:`PyWeakref_GetObject`, but implemented as a macro that does no
    error checking.
-
-   .. versionadded:: 2.2

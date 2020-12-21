@@ -9,7 +9,7 @@
    Greg Stein (gstein@lyra.org)
    Trevor Perrin (trevp@trevp.net)
 
-   Copyright (C) 2005   Gregory P. Smith (greg@krypto.org)
+   Copyright (C) 2005-2007   Gregory P. Smith (greg@krypto.org)
    Licensed to PSF under a Contributor Agreement.
 
 */
@@ -17,27 +17,22 @@
 /* SHA objects */
 
 #include "Python.h"
-#include "structmember.h"
+#include "pycore_byteswap.h"      // _Py_bswap32()
+#include "structmember.h"         // PyMemberDef
+#include "hashlib.h"
+#include "pystrhex.h"
 
-#ifdef PY_LONG_LONG /* If no PY_LONG_LONG, don't compile anything! */
-
-/* Endianness testing and definitions */
-#define TestEndianness(variable) {int i=1; variable=PCT_BIG_ENDIAN;\
-        if (*((char*)&i)==1) variable=PCT_LITTLE_ENDIAN;}
-
-#define PCT_LITTLE_ENDIAN 1
-#define PCT_BIG_ENDIAN 0
+/*[clinic input]
+module _sha512
+class SHA512Type "SHAobject *" "&PyType_Type"
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=81a3ccde92bcfe8d]*/
 
 /* Some useful types */
 
 typedef unsigned char SHA_BYTE;
-
-#if SIZEOF_INT == 4
-typedef unsigned int SHA_INT32; /* 32-bit integer */
-typedef unsigned PY_LONG_LONG SHA_INT64;        /* 64-bit integer */
-#else
-/* not defined. compilation will die. */
-#endif
+typedef uint32_t SHA_INT32;  /* 32-bit integer */
+typedef uint64_t SHA_INT64;  /* 64-bit integer */
 
 /* The SHA block size and message digest sizes, in bytes */
 
@@ -51,41 +46,27 @@ typedef struct {
     SHA_INT64 digest[8];                /* Message digest */
     SHA_INT32 count_lo, count_hi;       /* 64-bit bit count */
     SHA_BYTE data[SHA_BLOCKSIZE];       /* SHA data buffer */
-    int Endianness;
     int local;                          /* unprocessed amount in data */
     int digestsize;
 } SHAobject;
 
+#include "clinic/sha512module.c.h"
+
 /* When run on a little-endian CPU we need to perform byte reversal on an
    array of longwords. */
 
-static void longReverse(SHA_INT64 *buffer, int byteCount, int Endianness)
+#if PY_LITTLE_ENDIAN
+static void longReverse(SHA_INT64 *buffer, int byteCount)
 {
-    SHA_INT64 value;
-
-    if ( Endianness == PCT_BIG_ENDIAN )
-        return;
-
     byteCount /= sizeof(*buffer);
-    while (byteCount--) {
-        value = *buffer;
-
-                ((unsigned char*)buffer)[0] = (unsigned char)(value >> 56) & 0xff;
-                ((unsigned char*)buffer)[1] = (unsigned char)(value >> 48) & 0xff;
-                ((unsigned char*)buffer)[2] = (unsigned char)(value >> 40) & 0xff;
-                ((unsigned char*)buffer)[3] = (unsigned char)(value >> 32) & 0xff;
-                ((unsigned char*)buffer)[4] = (unsigned char)(value >> 24) & 0xff;
-                ((unsigned char*)buffer)[5] = (unsigned char)(value >> 16) & 0xff;
-                ((unsigned char*)buffer)[6] = (unsigned char)(value >>  8) & 0xff;
-                ((unsigned char*)buffer)[7] = (unsigned char)(value      ) & 0xff;
-
-                buffer++;
+    for (; byteCount--; buffer++) {
+        *buffer = _Py_bswap64(*buffer);
     }
 }
+#endif
 
 static void SHAcopy(SHAobject *src, SHAobject *dest)
 {
-    dest->Endianness = src->Endianness;
     dest->local = src->local;
     dest->digestsize = src->digestsize;
     dest->count_lo = src->count_lo;
@@ -111,9 +92,9 @@ static void SHAcopy(SHAobject *src, SHAobject *dest)
  * algorithms in a highly modular and flexible manner.
  *
  * The library is free for all purposes without any express
- * gurantee it works.
+ * guarantee it works.
  *
- * Tom St Denis, tomstdenis@iahu.ca, http://libtomcrypt.org
+ * Tom St Denis, tomstdenis@iahu.ca, http://libtom.org
  */
 
 
@@ -121,12 +102,12 @@ static void SHAcopy(SHAobject *src, SHAobject *dest)
 
 /* Various logical functions */
 #define ROR64(x, y) \
-    ( ((((x) & Py_ULL(0xFFFFFFFFFFFFFFFF))>>((unsigned PY_LONG_LONG)(y) & 63)) | \
-      ((x)<<((unsigned PY_LONG_LONG)(64-((y) & 63))))) & Py_ULL(0xFFFFFFFFFFFFFFFF))
+    ( ((((x) & 0xFFFFFFFFFFFFFFFFULL)>>((unsigned long long)(y) & 63)) | \
+      ((x)<<((unsigned long long)(64-((y) & 63))))) & 0xFFFFFFFFFFFFFFFFULL)
 #define Ch(x,y,z)       (z ^ (x & (y ^ z)))
 #define Maj(x,y,z)      (((x | y) & z) | (x & y))
 #define S(x, n)         ROR64((x),(n))
-#define R(x, n)         (((x) & Py_ULL(0xFFFFFFFFFFFFFFFF)) >> ((unsigned PY_LONG_LONG)n))
+#define R(x, n)         (((x) & 0xFFFFFFFFFFFFFFFFULL) >> ((unsigned long long)n))
 #define Sigma0(x)       (S(x, 28) ^ S(x, 34) ^ S(x, 39))
 #define Sigma1(x)       (S(x, 14) ^ S(x, 18) ^ S(x, 41))
 #define Gamma0(x)       (S(x, 1) ^ S(x, 8) ^ R(x, 7))
@@ -140,7 +121,9 @@ sha512_transform(SHAobject *sha_info)
     SHA_INT64 S[8], W[80], t0, t1;
 
     memcpy(W, sha_info->data, sizeof(sha_info->data));
-    longReverse(W, (int)sizeof(sha_info->data), sha_info->Endianness);
+#if PY_LITTLE_ENDIAN
+    longReverse(W, (int)sizeof(sha_info->data));
+#endif
 
     for (i = 16; i < 80; ++i) {
                 W[i] = Gamma1(W[i - 2]) + W[i - 7] + Gamma0(W[i - 15]) + W[i - 16];
@@ -156,86 +139,86 @@ sha512_transform(SHAobject *sha_info)
      d += t0;                                        \
      h  = t0 + t1;
 
-    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],0,Py_ULL(0x428a2f98d728ae22));
-    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],1,Py_ULL(0x7137449123ef65cd));
-    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],2,Py_ULL(0xb5c0fbcfec4d3b2f));
-    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],3,Py_ULL(0xe9b5dba58189dbbc));
-    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],4,Py_ULL(0x3956c25bf348b538));
-    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],5,Py_ULL(0x59f111f1b605d019));
-    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],6,Py_ULL(0x923f82a4af194f9b));
-    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],7,Py_ULL(0xab1c5ed5da6d8118));
-    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],8,Py_ULL(0xd807aa98a3030242));
-    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],9,Py_ULL(0x12835b0145706fbe));
-    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],10,Py_ULL(0x243185be4ee4b28c));
-    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],11,Py_ULL(0x550c7dc3d5ffb4e2));
-    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],12,Py_ULL(0x72be5d74f27b896f));
-    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],13,Py_ULL(0x80deb1fe3b1696b1));
-    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],14,Py_ULL(0x9bdc06a725c71235));
-    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],15,Py_ULL(0xc19bf174cf692694));
-    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],16,Py_ULL(0xe49b69c19ef14ad2));
-    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],17,Py_ULL(0xefbe4786384f25e3));
-    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],18,Py_ULL(0x0fc19dc68b8cd5b5));
-    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],19,Py_ULL(0x240ca1cc77ac9c65));
-    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],20,Py_ULL(0x2de92c6f592b0275));
-    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],21,Py_ULL(0x4a7484aa6ea6e483));
-    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],22,Py_ULL(0x5cb0a9dcbd41fbd4));
-    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],23,Py_ULL(0x76f988da831153b5));
-    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],24,Py_ULL(0x983e5152ee66dfab));
-    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],25,Py_ULL(0xa831c66d2db43210));
-    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],26,Py_ULL(0xb00327c898fb213f));
-    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],27,Py_ULL(0xbf597fc7beef0ee4));
-    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],28,Py_ULL(0xc6e00bf33da88fc2));
-    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],29,Py_ULL(0xd5a79147930aa725));
-    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],30,Py_ULL(0x06ca6351e003826f));
-    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],31,Py_ULL(0x142929670a0e6e70));
-    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],32,Py_ULL(0x27b70a8546d22ffc));
-    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],33,Py_ULL(0x2e1b21385c26c926));
-    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],34,Py_ULL(0x4d2c6dfc5ac42aed));
-    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],35,Py_ULL(0x53380d139d95b3df));
-    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],36,Py_ULL(0x650a73548baf63de));
-    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],37,Py_ULL(0x766a0abb3c77b2a8));
-    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],38,Py_ULL(0x81c2c92e47edaee6));
-    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],39,Py_ULL(0x92722c851482353b));
-    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],40,Py_ULL(0xa2bfe8a14cf10364));
-    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],41,Py_ULL(0xa81a664bbc423001));
-    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],42,Py_ULL(0xc24b8b70d0f89791));
-    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],43,Py_ULL(0xc76c51a30654be30));
-    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],44,Py_ULL(0xd192e819d6ef5218));
-    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],45,Py_ULL(0xd69906245565a910));
-    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],46,Py_ULL(0xf40e35855771202a));
-    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],47,Py_ULL(0x106aa07032bbd1b8));
-    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],48,Py_ULL(0x19a4c116b8d2d0c8));
-    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],49,Py_ULL(0x1e376c085141ab53));
-    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],50,Py_ULL(0x2748774cdf8eeb99));
-    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],51,Py_ULL(0x34b0bcb5e19b48a8));
-    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],52,Py_ULL(0x391c0cb3c5c95a63));
-    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],53,Py_ULL(0x4ed8aa4ae3418acb));
-    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],54,Py_ULL(0x5b9cca4f7763e373));
-    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],55,Py_ULL(0x682e6ff3d6b2b8a3));
-    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],56,Py_ULL(0x748f82ee5defb2fc));
-    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],57,Py_ULL(0x78a5636f43172f60));
-    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],58,Py_ULL(0x84c87814a1f0ab72));
-    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],59,Py_ULL(0x8cc702081a6439ec));
-    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],60,Py_ULL(0x90befffa23631e28));
-    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],61,Py_ULL(0xa4506cebde82bde9));
-    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],62,Py_ULL(0xbef9a3f7b2c67915));
-    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],63,Py_ULL(0xc67178f2e372532b));
-    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],64,Py_ULL(0xca273eceea26619c));
-    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],65,Py_ULL(0xd186b8c721c0c207));
-    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],66,Py_ULL(0xeada7dd6cde0eb1e));
-    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],67,Py_ULL(0xf57d4f7fee6ed178));
-    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],68,Py_ULL(0x06f067aa72176fba));
-    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],69,Py_ULL(0x0a637dc5a2c898a6));
-    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],70,Py_ULL(0x113f9804bef90dae));
-    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],71,Py_ULL(0x1b710b35131c471b));
-    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],72,Py_ULL(0x28db77f523047d84));
-    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],73,Py_ULL(0x32caab7b40c72493));
-    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],74,Py_ULL(0x3c9ebe0a15c9bebc));
-    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],75,Py_ULL(0x431d67c49c100d4c));
-    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],76,Py_ULL(0x4cc5d4becb3e42b6));
-    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],77,Py_ULL(0x597f299cfc657e2a));
-    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],78,Py_ULL(0x5fcb6fab3ad6faec));
-    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],79,Py_ULL(0x6c44198c4a475817));
+    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],0,0x428a2f98d728ae22ULL);
+    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],1,0x7137449123ef65cdULL);
+    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],2,0xb5c0fbcfec4d3b2fULL);
+    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],3,0xe9b5dba58189dbbcULL);
+    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],4,0x3956c25bf348b538ULL);
+    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],5,0x59f111f1b605d019ULL);
+    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],6,0x923f82a4af194f9bULL);
+    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],7,0xab1c5ed5da6d8118ULL);
+    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],8,0xd807aa98a3030242ULL);
+    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],9,0x12835b0145706fbeULL);
+    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],10,0x243185be4ee4b28cULL);
+    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],11,0x550c7dc3d5ffb4e2ULL);
+    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],12,0x72be5d74f27b896fULL);
+    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],13,0x80deb1fe3b1696b1ULL);
+    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],14,0x9bdc06a725c71235ULL);
+    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],15,0xc19bf174cf692694ULL);
+    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],16,0xe49b69c19ef14ad2ULL);
+    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],17,0xefbe4786384f25e3ULL);
+    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],18,0x0fc19dc68b8cd5b5ULL);
+    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],19,0x240ca1cc77ac9c65ULL);
+    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],20,0x2de92c6f592b0275ULL);
+    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],21,0x4a7484aa6ea6e483ULL);
+    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],22,0x5cb0a9dcbd41fbd4ULL);
+    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],23,0x76f988da831153b5ULL);
+    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],24,0x983e5152ee66dfabULL);
+    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],25,0xa831c66d2db43210ULL);
+    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],26,0xb00327c898fb213fULL);
+    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],27,0xbf597fc7beef0ee4ULL);
+    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],28,0xc6e00bf33da88fc2ULL);
+    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],29,0xd5a79147930aa725ULL);
+    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],30,0x06ca6351e003826fULL);
+    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],31,0x142929670a0e6e70ULL);
+    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],32,0x27b70a8546d22ffcULL);
+    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],33,0x2e1b21385c26c926ULL);
+    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],34,0x4d2c6dfc5ac42aedULL);
+    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],35,0x53380d139d95b3dfULL);
+    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],36,0x650a73548baf63deULL);
+    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],37,0x766a0abb3c77b2a8ULL);
+    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],38,0x81c2c92e47edaee6ULL);
+    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],39,0x92722c851482353bULL);
+    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],40,0xa2bfe8a14cf10364ULL);
+    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],41,0xa81a664bbc423001ULL);
+    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],42,0xc24b8b70d0f89791ULL);
+    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],43,0xc76c51a30654be30ULL);
+    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],44,0xd192e819d6ef5218ULL);
+    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],45,0xd69906245565a910ULL);
+    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],46,0xf40e35855771202aULL);
+    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],47,0x106aa07032bbd1b8ULL);
+    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],48,0x19a4c116b8d2d0c8ULL);
+    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],49,0x1e376c085141ab53ULL);
+    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],50,0x2748774cdf8eeb99ULL);
+    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],51,0x34b0bcb5e19b48a8ULL);
+    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],52,0x391c0cb3c5c95a63ULL);
+    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],53,0x4ed8aa4ae3418acbULL);
+    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],54,0x5b9cca4f7763e373ULL);
+    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],55,0x682e6ff3d6b2b8a3ULL);
+    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],56,0x748f82ee5defb2fcULL);
+    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],57,0x78a5636f43172f60ULL);
+    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],58,0x84c87814a1f0ab72ULL);
+    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],59,0x8cc702081a6439ecULL);
+    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],60,0x90befffa23631e28ULL);
+    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],61,0xa4506cebde82bde9ULL);
+    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],62,0xbef9a3f7b2c67915ULL);
+    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],63,0xc67178f2e372532bULL);
+    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],64,0xca273eceea26619cULL);
+    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],65,0xd186b8c721c0c207ULL);
+    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],66,0xeada7dd6cde0eb1eULL);
+    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],67,0xf57d4f7fee6ed178ULL);
+    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],68,0x06f067aa72176fbaULL);
+    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],69,0x0a637dc5a2c898a6ULL);
+    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],70,0x113f9804bef90daeULL);
+    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],71,0x1b710b35131c471bULL);
+    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],72,0x28db77f523047d84ULL);
+    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],73,0x32caab7b40c72493ULL);
+    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],74,0x3c9ebe0a15c9bebcULL);
+    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],75,0x431d67c49c100d4cULL);
+    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],76,0x4cc5d4becb3e42b6ULL);
+    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],77,0x597f299cfc657e2aULL);
+    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],78,0x5fcb6fab3ad6faecULL);
+    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],79,0x6c44198c4a475817ULL);
 
 #undef RND
 
@@ -253,7 +236,6 @@ sha512_transform(SHAobject *sha_info)
 static void
 sha512_init(SHAobject *sha_info)
 {
-    TestEndianness(sha_info->Endianness)
     sha_info->digest[0] = Py_ULL(0x6a09e667f3bcc908);
     sha_info->digest[1] = Py_ULL(0xbb67ae8584caa73b);
     sha_info->digest[2] = Py_ULL(0x3c6ef372fe94f82b);
@@ -271,7 +253,6 @@ sha512_init(SHAobject *sha_info)
 static void
 sha384_init(SHAobject *sha_info)
 {
-    TestEndianness(sha_info->Endianness)
     sha_info->digest[0] = Py_ULL(0xcbbb9d5dc1059ed8);
     sha_info->digest[1] = Py_ULL(0x629a292a367cd507);
     sha_info->digest[2] = Py_ULL(0x9159015a3070dd17);
@@ -290,9 +271,9 @@ sha384_init(SHAobject *sha_info)
 /* update the SHA digest */
 
 static void
-sha512_update(SHAobject *sha_info, SHA_BYTE *buffer, int count)
+sha512_update(SHAobject *sha_info, SHA_BYTE *buffer, Py_ssize_t count)
 {
-    int i;
+    Py_ssize_t i;
     SHA_INT32 clo;
 
     clo = sha_info->count_lo + ((SHA_INT32) count << 3);
@@ -309,7 +290,7 @@ sha512_update(SHAobject *sha_info, SHA_BYTE *buffer, int count)
         memcpy(((SHA_BYTE *) sha_info->data) + sha_info->local, buffer, i);
         count -= i;
         buffer += i;
-        sha_info->local += i;
+        sha_info->local += (int)i;
         if (sha_info->local == SHA_BLOCKSIZE) {
             sha512_transform(sha_info);
         }
@@ -324,7 +305,7 @@ sha512_update(SHAobject *sha_info, SHA_BYTE *buffer, int count)
         sha512_transform(sha_info);
     }
     memcpy(sha_info->data, buffer, count);
-    sha_info->local = count;
+    sha_info->local = (int)count;
 }
 
 /* finish computing the SHA digest */
@@ -468,14 +449,19 @@ SHA512_dealloc(PyObject *ptr)
 
 /* External methods for a hash object */
 
-PyDoc_STRVAR(SHA512_copy__doc__, "Return a copy of the hash object.");
+/*[clinic input]
+SHA512Type.copy
+
+Return a copy of the hash object.
+[clinic start generated code]*/
 
 static PyObject *
-SHA512_copy(SHAobject *self, PyObject *unused)
+SHA512Type_copy_impl(SHAobject *self)
+/*[clinic end generated code: output=adea896ed3164821 input=9f5f31e6c457776a]*/
 {
     SHAobject *newobj;
 
-    if (((PyObject*)self)->ob_type == &SHA512type) {
+    if (Py_IS_TYPE((PyObject*)self, &SHA512type)) {
         if ( (newobj = newSHA512object())==NULL)
             return NULL;
     } else {
@@ -487,69 +473,60 @@ SHA512_copy(SHAobject *self, PyObject *unused)
     return (PyObject *)newobj;
 }
 
-PyDoc_STRVAR(SHA512_digest__doc__,
-"Return the digest value as a string of binary data.");
+/*[clinic input]
+SHA512Type.digest
+
+Return the digest value as a bytes object.
+[clinic start generated code]*/
 
 static PyObject *
-SHA512_digest(SHAobject *self, PyObject *unused)
+SHA512Type_digest_impl(SHAobject *self)
+/*[clinic end generated code: output=1080bbeeef7dde1b input=f6470dd359071f4b]*/
 {
     unsigned char digest[SHA_DIGESTSIZE];
     SHAobject temp;
 
     SHAcopy(self, &temp);
     sha512_final(digest, &temp);
-    return PyString_FromStringAndSize((const char *)digest, self->digestsize);
+    return PyBytes_FromStringAndSize((const char *)digest, self->digestsize);
 }
 
-PyDoc_STRVAR(SHA512_hexdigest__doc__,
-"Return the digest value as a string of hexadecimal digits.");
+/*[clinic input]
+SHA512Type.hexdigest
+
+Return the digest value as a string of hexadecimal digits.
+[clinic start generated code]*/
 
 static PyObject *
-SHA512_hexdigest(SHAobject *self, PyObject *unused)
+SHA512Type_hexdigest_impl(SHAobject *self)
+/*[clinic end generated code: output=7373305b8601e18b input=498b877b25cbe0a2]*/
 {
     unsigned char digest[SHA_DIGESTSIZE];
     SHAobject temp;
-    PyObject *retval;
-    char *hex_digest;
-    int i, j;
 
     /* Get the raw (binary) digest value */
     SHAcopy(self, &temp);
     sha512_final(digest, &temp);
 
-    /* Create a new string */
-    retval = PyString_FromStringAndSize(NULL, self->digestsize * 2);
-    if (!retval)
-            return NULL;
-    hex_digest = PyString_AsString(retval);
-    if (!hex_digest) {
-            Py_DECREF(retval);
-            return NULL;
-    }
-
-    /* Make hex version of the digest */
-    for (i=j=0; i<self->digestsize; i++) {
-        char c;
-        c = (digest[i] >> 4) & 0xf;
-        c = (c>9) ? c+'a'-10 : c + '0';
-        hex_digest[j++] = c;
-        c = (digest[i] & 0xf);
-        c = (c>9) ? c+'a'-10 : c + '0';
-        hex_digest[j++] = c;
-    }
-    return retval;
+    return _Py_strhex((const char *)digest, self->digestsize);
 }
 
-PyDoc_STRVAR(SHA512_update__doc__,
-"Update this hash object's state with the provided string.");
+/*[clinic input]
+SHA512Type.update
+
+    obj: object
+    /
+
+Update this hash object's state with the provided string.
+[clinic start generated code]*/
 
 static PyObject *
-SHA512_update(SHAobject *self, PyObject *args)
+SHA512Type_update(SHAobject *self, PyObject *obj)
+/*[clinic end generated code: output=1cf333e73995a79e input=ded2b46656566283]*/
 {
     Py_buffer buf;
 
-    if (!PyArg_ParseTuple(args, "s*:update", &buf))
-        return NULL;
+    GET_BUFFER_VIEW_OR_ERROUT(obj, &buf);
 
     sha512_update(self, buf.buf, buf.len);
 
@@ -558,26 +535,26 @@ SHA512_update(SHAobject *self, PyObject *args)
 }
 
 static PyMethodDef SHA_methods[] = {
-    {"copy",      (PyCFunction)SHA512_copy,      METH_NOARGS, SHA512_copy__doc__},
-    {"digest",    (PyCFunction)SHA512_digest,    METH_NOARGS, SHA512_digest__doc__},
-    {"hexdigest", (PyCFunction)SHA512_hexdigest, METH_NOARGS, SHA512_hexdigest__doc__},
-    {"update",    (PyCFunction)SHA512_update,    METH_VARARGS, SHA512_update__doc__},
+    SHA512TYPE_COPY_METHODDEF
+    SHA512TYPE_DIGEST_METHODDEF
+    SHA512TYPE_HEXDIGEST_METHODDEF
+    SHA512TYPE_UPDATE_METHODDEF
     {NULL,        NULL}         /* sentinel */
 };
 
 static PyObject *
 SHA512_get_block_size(PyObject *self, void *closure)
 {
-    return PyInt_FromLong(SHA_BLOCKSIZE);
+    return PyLong_FromLong(SHA_BLOCKSIZE);
 }
 
 static PyObject *
 SHA512_get_name(PyObject *self, void *closure)
 {
     if (((SHAobject *)self)->digestsize == 64)
-        return PyString_FromStringAndSize("SHA512", 6);
+        return PyUnicode_FromStringAndSize("sha512", 6);
     else
-        return PyString_FromStringAndSize("SHA384", 6);
+        return PyUnicode_FromStringAndSize("sha384", 6);
 }
 
 static PyGetSetDef SHA_getseters[] = {
@@ -594,23 +571,20 @@ static PyGetSetDef SHA_getseters[] = {
 
 static PyMemberDef SHA_members[] = {
     {"digest_size", T_INT, offsetof(SHAobject, digestsize), READONLY, NULL},
-    /* the old md5 and sha modules support 'digest_size' as in PEP 247.
-     * the old sha module also supported 'digestsize'.  ugh. */
-    {"digestsize", T_INT, offsetof(SHAobject, digestsize), READONLY, NULL},
     {NULL}  /* Sentinel */
 };
 
 static PyTypeObject SHA384type = {
     PyVarObject_HEAD_INIT(NULL, 0)
     "_sha512.sha384",   /*tp_name*/
-    sizeof(SHAobject),  /*tp_size*/
+    sizeof(SHAobject),  /*tp_basicsize*/
     0,                  /*tp_itemsize*/
     /* methods */
     SHA512_dealloc,     /*tp_dealloc*/
-    0,                  /*tp_print*/
+    0,                  /*tp_vectorcall_offset*/
     0,                  /*tp_getattr*/
     0,                  /*tp_setattr*/
-    0,                  /*tp_compare*/
+    0,                  /*tp_as_async*/
     0,                  /*tp_repr*/
     0,                  /*tp_as_number*/
     0,                  /*tp_as_sequence*/
@@ -637,14 +611,14 @@ static PyTypeObject SHA384type = {
 static PyTypeObject SHA512type = {
     PyVarObject_HEAD_INIT(NULL, 0)
     "_sha512.sha512",   /*tp_name*/
-    sizeof(SHAobject),  /*tp_size*/
+    sizeof(SHAobject),  /*tp_basicsize*/
     0,                  /*tp_itemsize*/
     /* methods */
     SHA512_dealloc,     /*tp_dealloc*/
-    0,                  /*tp_print*/
+    0,                  /*tp_vectorcall_offset*/
     0,                  /*tp_getattr*/
     0,                  /*tp_setattr*/
-    0,                  /*tp_compare*/
+    0,                  /*tp_as_async*/
     0,                  /*tp_repr*/
     0,                  /*tp_as_number*/
     0,                  /*tp_as_sequence*/
@@ -671,23 +645,29 @@ static PyTypeObject SHA512type = {
 
 /* The single module-level function: new() */
 
-PyDoc_STRVAR(SHA512_new__doc__,
-"Return a new SHA-512 hash object; optionally initialized with a string.");
+/*[clinic input]
+_sha512.sha512
+
+    string: object(c_default="NULL") = b''
+    *
+    usedforsecurity: bool = True
+
+Return a new SHA-512 hash object; optionally initialized with a string.
+[clinic start generated code]*/
 
 static PyObject *
-SHA512_new(PyObject *self, PyObject *args, PyObject *kwdict)
+_sha512_sha512_impl(PyObject *module, PyObject *string, int usedforsecurity)
+/*[clinic end generated code: output=a8d9e5f9e6a0831c input=23b4daebc2ebb9c9]*/
 {
-    static char *kwlist[] = {"string", NULL};
     SHAobject *new;
-    Py_buffer buf = { 0 };
+    Py_buffer buf;
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwdict, "|s*:new", kwlist,
-                                     &buf)) {
-        return NULL;
-    }
+    if (string)
+        GET_BUFFER_VIEW_OR_ERROUT(string, &buf);
 
     if ((new = newSHA512object()) == NULL) {
-        PyBuffer_Release(&buf);
+        if (string)
+            PyBuffer_Release(&buf);
         return NULL;
     }
 
@@ -695,34 +675,41 @@ SHA512_new(PyObject *self, PyObject *args, PyObject *kwdict)
 
     if (PyErr_Occurred()) {
         Py_DECREF(new);
-        PyBuffer_Release(&buf);
+        if (string)
+            PyBuffer_Release(&buf);
         return NULL;
     }
-    if (buf.len > 0) {
+    if (string) {
         sha512_update(new, buf.buf, buf.len);
+        PyBuffer_Release(&buf);
     }
-    PyBuffer_Release(&buf);
 
     return (PyObject *)new;
 }
 
-PyDoc_STRVAR(SHA384_new__doc__,
-"Return a new SHA-384 hash object; optionally initialized with a string.");
+/*[clinic input]
+_sha512.sha384
+
+    string: object(c_default="NULL") = b''
+    *
+    usedforsecurity: bool = True
+
+Return a new SHA-384 hash object; optionally initialized with a string.
+[clinic start generated code]*/
 
 static PyObject *
-SHA384_new(PyObject *self, PyObject *args, PyObject *kwdict)
+_sha512_sha384_impl(PyObject *module, PyObject *string, int usedforsecurity)
+/*[clinic end generated code: output=da7d594a08027ac3 input=59ef72f039a6b431]*/
 {
-    static char *kwlist[] = {"string", NULL};
     SHAobject *new;
-    Py_buffer buf = { 0 };
+    Py_buffer buf;
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwdict, "|s*:new", kwlist,
-                                     &buf)) {
-        return NULL;
-    }
+    if (string)
+        GET_BUFFER_VIEW_OR_ERROUT(string, &buf);
 
     if ((new = newSHA384object()) == NULL) {
-        PyBuffer_Release(&buf);
+        if (string)
+            PyBuffer_Release(&buf);
         return NULL;
     }
 
@@ -730,13 +717,14 @@ SHA384_new(PyObject *self, PyObject *args, PyObject *kwdict)
 
     if (PyErr_Occurred()) {
         Py_DECREF(new);
-        PyBuffer_Release(&buf);
+        if (string)
+            PyBuffer_Release(&buf);
         return NULL;
     }
-    if (buf.len > 0) {
+    if (string) {
         sha512_update(new, buf.buf, buf.len);
+        PyBuffer_Release(&buf);
     }
-    PyBuffer_Release(&buf);
 
     return (PyObject *)new;
 }
@@ -745,30 +733,48 @@ SHA384_new(PyObject *self, PyObject *args, PyObject *kwdict)
 /* List of functions exported by this module */
 
 static struct PyMethodDef SHA_functions[] = {
-    {"sha512", (PyCFunction)SHA512_new, METH_VARARGS|METH_KEYWORDS, SHA512_new__doc__},
-    {"sha384", (PyCFunction)SHA384_new, METH_VARARGS|METH_KEYWORDS, SHA384_new__doc__},
+    _SHA512_SHA512_METHODDEF
+    _SHA512_SHA384_METHODDEF
     {NULL,      NULL}            /* Sentinel */
 };
 
 
 /* Initialize this module. */
 
-#define insint(n,v) { PyModule_AddIntConstant(m,n,v); }
+static struct PyModuleDef _sha512module = {
+        PyModuleDef_HEAD_INIT,
+        "_sha512",
+        NULL,
+        -1,
+        SHA_functions,
+        NULL,
+        NULL,
+        NULL,
+        NULL
+};
 
 PyMODINIT_FUNC
-init_sha512(void)
+PyInit__sha512(void)
 {
     PyObject *m;
 
-    Py_TYPE(&SHA384type) = &PyType_Type;
-    if (PyType_Ready(&SHA384type) < 0)
-        return;
-    Py_TYPE(&SHA512type) = &PyType_Type;
-    if (PyType_Ready(&SHA512type) < 0)
-        return;
-    m = Py_InitModule("_sha512", SHA_functions);
-    if (m == NULL)
-        return;
-}
+    Py_SET_TYPE(&SHA384type, &PyType_Type);
+    if (PyType_Ready(&SHA384type) < 0) {
+        return NULL;
+    }
+    Py_SET_TYPE(&SHA512type, &PyType_Type);
+    if (PyType_Ready(&SHA512type) < 0) {
+        return NULL;
+    }
 
-#endif
+    m = PyModule_Create(&_sha512module);
+    if (m == NULL) {
+        return NULL;
+    }
+
+    Py_INCREF((PyObject *)&SHA384type);
+    PyModule_AddObject(m, "SHA384Type", (PyObject *)&SHA384type);
+    Py_INCREF((PyObject *)&SHA512type);
+    PyModule_AddObject(m, "SHA512Type", (PyObject *)&SHA512type);
+    return m;
+}

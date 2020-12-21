@@ -1,43 +1,34 @@
-import os
 import unittest
-from test import test_support
+from test import support
 
 # Skip this test if _tkinter wasn't built.
-test_support.import_module('_tkinter')
-
-this_dir = os.path.dirname(os.path.abspath(__file__))
-lib_tk_test = os.path.abspath(os.path.join(this_dir, os.path.pardir,
-    'lib-tk', 'test'))
-
-with test_support.DirsOnSysPath(lib_tk_test):
-    import runtktests
+support.import_module('_tkinter')
 
 # Skip test if tk cannot be initialized.
-runtktests.check_tk_availability()
+support.requires('gui')
 
-import ttk
+import tkinter
 from _tkinter import TclError
+from tkinter import ttk
+from tkinter.test import runtktests
 
+root = None
 try:
-    ttk.Button()
-except TclError, msg:
+    root = tkinter.Tk()
+    button = ttk.Button(root)
+    button.destroy()
+    del button
+except TclError as msg:
     # assuming ttk is not available
     raise unittest.SkipTest("ttk not available: %s" % msg)
+finally:
+    if root is not None:
+        root.destroy()
+    del root
 
-def test_main(enable_gui=False):
-    if enable_gui:
-        if test_support.use_resources is None:
-            test_support.use_resources = ['gui']
-        elif 'gui' not in test_support.use_resources:
-            test_support.use_resources.append('gui')
-
-    with test_support.DirsOnSysPath(lib_tk_test):
-        from test_ttk.support import get_tk_root
-        try:
-            test_support.run_unittest(
-                *runtktests.get_tests(text=False, packages=['test_ttk']))
-        finally:
-            get_tk_root().destroy()
+def test_main():
+    support.run_unittest(
+            *runtktests.get_tests(text=False, packages=['test_ttk']))
 
 if __name__ == '__main__':
-    test_main(enable_gui=True)
+    test_main()

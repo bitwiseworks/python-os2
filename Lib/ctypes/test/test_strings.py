@@ -1,53 +1,47 @@
 import unittest
 from ctypes import *
-from test import test_support
+from ctypes.test import need_symbol
 
 class StringArrayTestCase(unittest.TestCase):
     def test(self):
         BUF = c_char * 4
 
-        buf = BUF("a", "b", "c")
-        self.assertEqual(buf.value, "abc")
-        self.assertEqual(buf.raw, "abc\000")
+        buf = BUF(b"a", b"b", b"c")
+        self.assertEqual(buf.value, b"abc")
+        self.assertEqual(buf.raw, b"abc\000")
 
-        buf.value = "ABCD"
-        self.assertEqual(buf.value, "ABCD")
-        self.assertEqual(buf.raw, "ABCD")
+        buf.value = b"ABCD"
+        self.assertEqual(buf.value, b"ABCD")
+        self.assertEqual(buf.raw, b"ABCD")
 
-        buf.value = "x"
-        self.assertEqual(buf.value, "x")
-        self.assertEqual(buf.raw, "x\000CD")
+        buf.value = b"x"
+        self.assertEqual(buf.value, b"x")
+        self.assertEqual(buf.raw, b"x\000CD")
 
-        buf[1] = "Z"
-        self.assertEqual(buf.value, "xZCD")
-        self.assertEqual(buf.raw, "xZCD")
+        buf[1] = b"Z"
+        self.assertEqual(buf.value, b"xZCD")
+        self.assertEqual(buf.raw, b"xZCD")
 
-        self.assertRaises(ValueError, setattr, buf, "value", "aaaaaaaa")
+        self.assertRaises(ValueError, setattr, buf, "value", b"aaaaaaaa")
         self.assertRaises(TypeError, setattr, buf, "value", 42)
 
-    def test_c_buffer_value(self, memoryview=memoryview):
+    def test_c_buffer_value(self):
         buf = c_buffer(32)
 
-        buf.value = "Hello, World"
-        self.assertEqual(buf.value, "Hello, World")
+        buf.value = b"Hello, World"
+        self.assertEqual(buf.value, b"Hello, World")
 
-        self.assertRaises(TypeError, setattr, buf, "value", memoryview("Hello, World"))
-        self.assertRaises(TypeError, setattr, buf, "value", memoryview("abc"))
-        self.assertRaises(ValueError, setattr, buf, "raw", memoryview("x" * 100))
+        self.assertRaises(TypeError, setattr, buf, "value", memoryview(b"Hello, World"))
+        self.assertRaises(TypeError, setattr, buf, "value", memoryview(b"abc"))
+        self.assertRaises(ValueError, setattr, buf, "raw", memoryview(b"x" * 100))
 
-    def test_c_buffer_raw(self, memoryview=memoryview):
+    def test_c_buffer_raw(self):
         buf = c_buffer(32)
 
-        buf.raw = memoryview("Hello, World")
-        self.assertEqual(buf.value, "Hello, World")
-        self.assertRaises(TypeError, setattr, buf, "value", memoryview("abc"))
-        self.assertRaises(ValueError, setattr, buf, "raw", memoryview("x" * 100))
-
-    def test_c_buffer_deprecated(self):
-        # Compatibility with 2.x
-        with test_support.check_py3k_warnings():
-            self.test_c_buffer_value(buffer)
-            self.test_c_buffer_raw(buffer)
+        buf.raw = memoryview(b"Hello, World")
+        self.assertEqual(buf.value, b"Hello, World")
+        self.assertRaises(TypeError, setattr, buf, "value", memoryview(b"abc"))
+        self.assertRaises(ValueError, setattr, buf, "raw", memoryview(b"x" * 100))
 
     def test_param_1(self):
         BUF = c_char * 4
@@ -60,29 +54,40 @@ class StringArrayTestCase(unittest.TestCase):
 ##        print BUF.from_param(c_char_p("python"))
 ##        print BUF.from_param(BUF(*"pyth"))
 
-try:
-    c_wchar
-except NameError:
-    pass
-else:
-    class WStringArrayTestCase(unittest.TestCase):
-        def test(self):
-            BUF = c_wchar * 4
+    def test_del_segfault(self):
+        BUF = c_char * 4
+        buf = BUF()
+        with self.assertRaises(AttributeError):
+            del buf.raw
 
-            buf = BUF(u"a", u"b", u"c")
-            self.assertEqual(buf.value, u"abc")
 
-            buf.value = u"ABCD"
-            self.assertEqual(buf.value, u"ABCD")
+@need_symbol('c_wchar')
+class WStringArrayTestCase(unittest.TestCase):
+    def test(self):
+        BUF = c_wchar * 4
 
-            buf.value = u"x"
-            self.assertEqual(buf.value, u"x")
+        buf = BUF("a", "b", "c")
+        self.assertEqual(buf.value, "abc")
 
-            buf[1] = u"Z"
-            self.assertEqual(buf.value, u"xZCD")
+        buf.value = "ABCD"
+        self.assertEqual(buf.value, "ABCD")
+
+        buf.value = "x"
+        self.assertEqual(buf.value, "x")
+
+        buf[1] = "Z"
+        self.assertEqual(buf.value, "xZCD")
+
+    @unittest.skipIf(sizeof(c_wchar) < 4,
+                     "sizeof(wchar_t) is smaller than 4 bytes")
+    def test_nonbmp(self):
+        u = chr(0x10ffff)
+        w = c_wchar(u)
+        self.assertEqual(w.value, u)
 
 class StringTestCase(unittest.TestCase):
-    def XX_test_basic_strings(self):
+    @unittest.skip('test disabled')
+    def test_basic_strings(self):
         cs = c_string("abcdef")
 
         # Cannot call len on a c_string any longer
@@ -106,35 +111,38 @@ class StringTestCase(unittest.TestCase):
         self.assertEqual(cs.value, "XY")
         self.assertEqual(cs.raw, "XY\000\000\000\000\000")
 
-        self.assertRaises(TypeError, c_string, u"123")
+        self.assertRaises(TypeError, c_string, "123")
 
-    def XX_test_sized_strings(self):
+    @unittest.skip('test disabled')
+    def test_sized_strings(self):
 
         # New in releases later than 0.4.0:
         self.assertRaises(TypeError, c_string, None)
 
         # New in releases later than 0.4.0:
         # c_string(number) returns an empty string of size number
-        self.assertTrue(len(c_string(32).raw) == 32)
+        self.assertEqual(len(c_string(32).raw), 32)
         self.assertRaises(ValueError, c_string, -1)
         self.assertRaises(ValueError, c_string, 0)
 
         # These tests fail, because it is no longer initialized
-##        self.assertTrue(c_string(2).value == "")
-##        self.assertTrue(c_string(2).raw == "\000\000")
-        self.assertTrue(c_string(2).raw[-1] == "\000")
-        self.assertTrue(len(c_string(2).raw) == 2)
+##        self.assertEqual(c_string(2).value, "")
+##        self.assertEqual(c_string(2).raw, "\000\000")
+        self.assertEqual(c_string(2).raw[-1], "\000")
+        self.assertEqual(len(c_string(2).raw), 2)
 
-    def XX_test_initialized_strings(self):
+    @unittest.skip('test disabled')
+    def test_initialized_strings(self):
 
-        self.assertTrue(c_string("ab", 4).raw[:2] == "ab")
-        self.assertTrue(c_string("ab", 4).raw[:2:] == "ab")
-        self.assertTrue(c_string("ab", 4).raw[:2:-1] == "ba")
-        self.assertTrue(c_string("ab", 4).raw[:2:2] == "a")
-        self.assertTrue(c_string("ab", 4).raw[-1] == "\000")
-        self.assertTrue(c_string("ab", 2).raw == "a\000")
+        self.assertEqual(c_string("ab", 4).raw[:2], "ab")
+        self.assertEqual(c_string("ab", 4).raw[:2:], "ab")
+        self.assertEqual(c_string("ab", 4).raw[:2:-1], "ba")
+        self.assertEqual(c_string("ab", 4).raw[:2:2], "a")
+        self.assertEqual(c_string("ab", 4).raw[-1], "\000")
+        self.assertEqual(c_string("ab", 2).raw, "a\000")
 
-    def XX_test_toolong(self):
+    @unittest.skip('test disabled')
+    def test_toolong(self):
         cs = c_string("abcdef")
         # Much too long string:
         self.assertRaises(ValueError, setattr, cs, "value", "123456789012345")
@@ -142,64 +150,63 @@ class StringTestCase(unittest.TestCase):
         # One char too long values:
         self.assertRaises(ValueError, setattr, cs, "value", "1234567")
 
-##    def test_perf(self):
-##        check_perf()
+    @unittest.skip('test disabled')
+    def test_perf(self):
+        check_perf()
 
-try:
-    c_wchar
-except NameError:
-    pass
-else:
-    class WStringTestCase(unittest.TestCase):
-        def test_wchar(self):
-            c_wchar(u"x")
-            repr(byref(c_wchar(u"x")))
-            c_wchar("x")
+@need_symbol('c_wchar')
+class WStringTestCase(unittest.TestCase):
+    def test_wchar(self):
+        c_wchar("x")
+        repr(byref(c_wchar("x")))
+        c_wchar("x")
 
 
-        def X_test_basic_wstrings(self):
-            cs = c_wstring(u"abcdef")
+    @unittest.skip('test disabled')
+    def test_basic_wstrings(self):
+        cs = c_wstring("abcdef")
 
-            # XXX This behaviour is about to change:
-            # len returns the size of the internal buffer in bytes.
-            # This includes the terminating NUL character.
-            self.assertTrue(sizeof(cs) == 14)
+        # XXX This behaviour is about to change:
+        # len returns the size of the internal buffer in bytes.
+        # This includes the terminating NUL character.
+        self.assertEqual(sizeof(cs), 14)
 
-            # The value property is the string up to the first terminating NUL.
-            self.assertTrue(cs.value == u"abcdef")
-            self.assertTrue(c_wstring(u"abc\000def").value == u"abc")
+        # The value property is the string up to the first terminating NUL.
+        self.assertEqual(cs.value, "abcdef")
+        self.assertEqual(c_wstring("abc\000def").value, "abc")
 
-            self.assertTrue(c_wstring(u"abc\000def").value == u"abc")
+        self.assertEqual(c_wstring("abc\000def").value, "abc")
 
-            # The raw property is the total buffer contents:
-            self.assertTrue(cs.raw == u"abcdef\000")
-            self.assertTrue(c_wstring(u"abc\000def").raw == u"abc\000def\000")
+        # The raw property is the total buffer contents:
+        self.assertEqual(cs.raw, "abcdef\000")
+        self.assertEqual(c_wstring("abc\000def").raw, "abc\000def\000")
 
-            # We can change the value:
-            cs.value = u"ab"
-            self.assertTrue(cs.value == u"ab")
-            self.assertTrue(cs.raw == u"ab\000\000\000\000\000")
+        # We can change the value:
+        cs.value = "ab"
+        self.assertEqual(cs.value, "ab")
+        self.assertEqual(cs.raw, "ab\000\000\000\000\000")
 
-            self.assertRaises(TypeError, c_wstring, "123")
-            self.assertRaises(ValueError, c_wstring, 0)
+        self.assertRaises(TypeError, c_wstring, "123")
+        self.assertRaises(ValueError, c_wstring, 0)
 
-        def X_test_toolong(self):
-            cs = c_wstring(u"abcdef")
-            # Much too long string:
-            self.assertRaises(ValueError, setattr, cs, "value", u"123456789012345")
+    @unittest.skip('test disabled')
+    def test_toolong(self):
+        cs = c_wstring("abcdef")
+        # Much too long string:
+        self.assertRaises(ValueError, setattr, cs, "value", "123456789012345")
 
-            # One char too long values:
-            self.assertRaises(ValueError, setattr, cs, "value", u"1234567")
+        # One char too long values:
+        self.assertRaises(ValueError, setattr, cs, "value", "1234567")
 
 
 def run_test(rep, msg, func, arg):
     items = range(rep)
-    from time import clock
+    from time import perf_counter as clock
     start = clock()
     for i in items:
         func(arg); func(arg); func(arg); func(arg); func(arg)
     stop = clock()
-    print "%20s: %.2f us" % (msg, ((stop-start)*1e6/5/rep))
+    print("%20s: %.2f us" % (msg, ((stop-start)*1e6/5/rep)))
 
 def check_perf():
     # Construct 5 objects

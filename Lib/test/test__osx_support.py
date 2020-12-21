@@ -4,12 +4,11 @@ Test suite for _osx_support: shared OS X support functions.
 
 import os
 import platform
-import shutil
 import stat
 import sys
 import unittest
 
-import test.test_support
+import test.support
 
 import _osx_support
 
@@ -20,12 +19,12 @@ class Test_OSXSupport(unittest.TestCase):
         self.maxDiff = None
         self.prog_name = 'bogus_program_xxxx'
         self.temp_path_dir = os.path.abspath(os.getcwd())
-        self.env = test.test_support.EnvironmentVarGuard()
+        self.env = test.support.EnvironmentVarGuard()
         self.addCleanup(self.env.__exit__)
         for cv in ('CFLAGS', 'LDFLAGS', 'CPPFLAGS',
                             'BASECFLAGS', 'BLDSHARED', 'LDSHARED', 'CC',
                             'CXX', 'PY_CFLAGS', 'PY_LDFLAGS', 'PY_CPPFLAGS',
-                            'PY_CORE_CFLAGS'):
+                            'PY_CORE_CFLAGS', 'PY_CORE_LDFLAGS'):
             if cv in self.env:
                 self.env.unset(cv)
 
@@ -40,9 +39,9 @@ class Test_OSXSupport(unittest.TestCase):
         if self.env['PATH']:
             self.env['PATH'] = self.env['PATH'] + ':'
         self.env['PATH'] = self.env['PATH'] + os.path.abspath(self.temp_path_dir)
-        test.test_support.unlink(self.prog_name)
+        test.support.unlink(self.prog_name)
         self.assertIsNone(_osx_support._find_executable(self.prog_name))
-        self.addCleanup(test.test_support.unlink, self.prog_name)
+        self.addCleanup(test.support.unlink, self.prog_name)
         with open(self.prog_name, 'w') as f:
             f.write("#!/bin/sh\n/bin/echo OK\n")
         os.chmod(self.prog_name, stat.S_IRWXU)
@@ -53,8 +52,8 @@ class Test_OSXSupport(unittest.TestCase):
         if self.env['PATH']:
             self.env['PATH'] = self.env['PATH'] + ':'
         self.env['PATH'] = self.env['PATH'] + os.path.abspath(self.temp_path_dir)
-        test.test_support.unlink(self.prog_name)
-        self.addCleanup(test.test_support.unlink, self.prog_name)
+        test.support.unlink(self.prog_name)
+        self.addCleanup(test.support.unlink, self.prog_name)
         with open(self.prog_name, 'w') as f:
             f.write("#!/bin/sh\n/bin/echo ExpectedOutput\n")
         os.chmod(self.prog_name, stat.S_IRWXU)
@@ -109,7 +108,9 @@ class Test_OSXSupport(unittest.TestCase):
 
     def test__supports_universal_builds(self):
         import platform
-        self.assertEqual(platform.mac_ver()[0].split('.') >= ['10', '4'],
+        mac_ver_tuple = tuple(int(i) for i in
+                            platform.mac_ver()[0].split('.')[0:2])
+        self.assertEqual(mac_ver_tuple >= (10, 4),
                             _osx_support._supports_universal_builds())
 
     def test__find_appropriate_compiler(self):
@@ -142,8 +143,8 @@ class Test_OSXSupport(unittest.TestCase):
         suffix = (':' + self.env['PATH']) if self.env['PATH'] else ''
         self.env['PATH'] = os.path.abspath(self.temp_path_dir) + suffix
         for c_name, c_output in compilers:
-            test.test_support.unlink(c_name)
-            self.addCleanup(test.test_support.unlink, c_name)
+            test.support.unlink(c_name)
+            self.addCleanup(test.support.unlink, c_name)
             with open(c_name, 'w') as f:
                 f.write("#!/bin/sh\n/bin/echo " + c_output)
             os.chmod(c_name, stat.S_IRWXU)
@@ -159,6 +160,29 @@ class Test_OSXSupport(unittest.TestCase):
         'BLDSHARED': 'gcc-4.0 -bundle  -arch ppc -arch i386 -g',
         'LDSHARED': 'gcc-4.0 -bundle  -arch ppc -arch i386 '
                         '-isysroot /Developer/SDKs/MacOSX10.4u.sdk -g',
+        }
+        expected_vars = {
+        'CFLAGS': '-fno-strict-aliasing  -g -O3    ',
+        'LDFLAGS': '    -g',
+        'CPPFLAGS': '-I.  ',
+        'BLDSHARED': 'gcc-4.0 -bundle    -g',
+        'LDSHARED': 'gcc-4.0 -bundle      -g',
+        }
+        self.add_expected_saved_initial_values(config_vars, expected_vars)
+
+        self.assertEqual(expected_vars,
+                            _osx_support._remove_universal_flags(
+                                    config_vars))
+
+    def test__remove_universal_flags_alternate(self):
+        # bpo-38360: also test the alternate single-argument form of -isysroot
+        config_vars = {
+        'CFLAGS': '-fno-strict-aliasing  -g -O3 -arch ppc -arch i386  ',
+        'LDFLAGS': '-arch ppc -arch i386   -g',
+        'CPPFLAGS': '-I. -isysroot/Developer/SDKs/MacOSX10.4u.sdk',
+        'BLDSHARED': 'gcc-4.0 -bundle  -arch ppc -arch i386 -g',
+        'LDSHARED': 'gcc-4.0 -bundle  -arch ppc -arch i386 '
+                        '-isysroot/Developer/SDKs/MacOSX10.4u.sdk -g',
         }
         expected_vars = {
         'CFLAGS': '-fno-strict-aliasing  -g -O3    ',
@@ -197,8 +221,8 @@ class Test_OSXSupport(unittest.TestCase):
         suffix = (':' + self.env['PATH']) if self.env['PATH'] else ''
         self.env['PATH'] = os.path.abspath(self.temp_path_dir) + suffix
         c_name = 'clang'
-        test.test_support.unlink(c_name)
-        self.addCleanup(test.test_support.unlink, c_name)
+        test.support.unlink(c_name)
+        self.addCleanup(test.support.unlink, c_name)
         # exit status 255 means no PPC support in this compiler chain
         with open(c_name, 'w') as f:
             f.write("#!/bin/sh\nexit 255")
@@ -260,6 +284,34 @@ class Test_OSXSupport(unittest.TestCase):
                             _osx_support._check_for_unavailable_sdk(
                                     config_vars))
 
+    def test__check_for_unavailable_sdk_alternate(self):
+        # bpo-38360: also test the alternate single-argument form of -isysroot
+        config_vars = {
+        'CC': 'clang',
+        'CFLAGS': '-fno-strict-aliasing  -g -O3 -arch ppc -arch i386  '
+                        '-isysroot/Developer/SDKs/MacOSX10.1.sdk',
+        'LDFLAGS': '-arch ppc -arch i386   -g',
+        'CPPFLAGS': '-I. -isysroot/Developer/SDKs/MacOSX10.1.sdk',
+        'BLDSHARED': 'gcc-4.0 -bundle  -arch ppc -arch i386 -g',
+        'LDSHARED': 'gcc-4.0 -bundle  -arch ppc -arch i386 '
+                        '-isysroot/Developer/SDKs/MacOSX10.1.sdk -g',
+        }
+        expected_vars = {
+        'CC': 'clang',
+        'CFLAGS': '-fno-strict-aliasing  -g -O3 -arch ppc -arch i386  '
+                        ' ',
+        'LDFLAGS': '-arch ppc -arch i386   -g',
+        'CPPFLAGS': '-I.  ',
+        'BLDSHARED': 'gcc-4.0 -bundle  -arch ppc -arch i386 -g',
+        'LDSHARED': 'gcc-4.0 -bundle  -arch ppc -arch i386 '
+                        ' -g',
+        }
+        self.add_expected_saved_initial_values(config_vars, expected_vars)
+
+        self.assertEqual(expected_vars,
+                            _osx_support._check_for_unavailable_sdk(
+                                    config_vars))
+
     def test_get_platform_osx(self):
         # Note, get_platform_osx is currently tested more extensively
         # indirectly by test_sysconfig and test_distutils
@@ -271,9 +323,5 @@ class Test_OSXSupport(unittest.TestCase):
         result = _osx_support.get_platform_osx(config_vars, ' ', ' ', ' ')
         self.assertEqual(('macosx', '10.6', 'fat'), result)
 
-def test_main():
-    if sys.platform == 'darwin':
-        test.test_support.run_unittest(Test_OSXSupport)
-
 if __name__ == "__main__":
-    test_main()
+    unittest.main()
