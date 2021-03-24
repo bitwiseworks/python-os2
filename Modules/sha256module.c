@@ -9,7 +9,7 @@
    Greg Stein (gstein@lyra.org)
    Trevor Perrin (trevp@trevp.net)
 
-   Copyright (C) 2005   Gregory P. Smith (greg@krypto.org)
+   Copyright (C) 2005-2007   Gregory P. Smith (greg@krypto.org)
    Licensed to PSF under a Contributor Agreement.
 
 */
@@ -17,25 +17,21 @@
 /* SHA objects */
 
 #include "Python.h"
-#include "structmember.h"
+#include "pycore_byteswap.h"      // _Py_bswap32()
+#include "structmember.h"         // PyMemberDef
+#include "hashlib.h"
+#include "pystrhex.h"
 
-
-/* Endianness testing and definitions */
-#define TestEndianness(variable) {int i=1; variable=PCT_BIG_ENDIAN;\
-        if (*((char*)&i)==1) variable=PCT_LITTLE_ENDIAN;}
-
-#define PCT_LITTLE_ENDIAN 1
-#define PCT_BIG_ENDIAN 0
+/*[clinic input]
+module _sha256
+class SHA256Type "SHAobject *" "&PyType_Type"
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=71a39174d4f0a744]*/
 
 /* Some useful types */
 
 typedef unsigned char SHA_BYTE;
-
-#if SIZEOF_INT == 4
-typedef unsigned int SHA_INT32; /* 32-bit integer */
-#else
-/* not defined. compilation will die. */
-#endif
+typedef uint32_t SHA_INT32;  /* 32-bit integer */
 
 /* The SHA block size and message digest sizes, in bytes */
 
@@ -49,33 +45,27 @@ typedef struct {
     SHA_INT32 digest[8];                /* Message digest */
     SHA_INT32 count_lo, count_hi;       /* 64-bit bit count */
     SHA_BYTE data[SHA_BLOCKSIZE];       /* SHA data buffer */
-    int Endianness;
     int local;                          /* unprocessed amount in data */
     int digestsize;
 } SHAobject;
 
+#include "clinic/sha256module.c.h"
+
 /* When run on a little-endian CPU we need to perform byte reversal on an
    array of longwords. */
 
-static void longReverse(SHA_INT32 *buffer, int byteCount, int Endianness)
+#if PY_LITTLE_ENDIAN
+static void longReverse(SHA_INT32 *buffer, int byteCount)
 {
-    SHA_INT32 value;
-
-    if ( Endianness == PCT_BIG_ENDIAN )
-        return;
-
     byteCount /= sizeof(*buffer);
-    while (byteCount--) {
-        value = *buffer;
-        value = ( ( value & 0xFF00FF00L ) >> 8  ) | \
-                ( ( value & 0x00FF00FFL ) << 8 );
-        *buffer++ = ( value << 16 ) | ( value >> 16 );
+    for (; byteCount--; buffer++) {
+        *buffer = _Py_bswap32(*buffer);
     }
 }
+#endif
 
 static void SHAcopy(SHAobject *src, SHAobject *dest)
 {
-    dest->Endianness = src->Endianness;
     dest->local = src->local;
     dest->digestsize = src->digestsize;
     dest->count_lo = src->count_lo;
@@ -101,9 +91,9 @@ static void SHAcopy(SHAobject *src, SHAobject *dest)
  * algorithms in a highly modular and flexible manner.
  *
  * The library is free for all purposes without any express
- * gurantee it works.
+ * guarantee it works.
  *
- * Tom St Denis, tomstdenis@iahu.ca, http://libtomcrypt.org
+ * Tom St Denis, tomstdenis@iahu.ca, https://www.libtom.net
  */
 
 
@@ -130,7 +120,9 @@ sha_transform(SHAobject *sha_info)
         SHA_INT32 S[8], W[64], t0, t1;
 
     memcpy(W, sha_info->data, sizeof(sha_info->data));
-    longReverse(W, (int)sizeof(sha_info->data), sha_info->Endianness);
+#if PY_LITTLE_ENDIAN
+    longReverse(W, (int)sizeof(sha_info->data));
+#endif
 
     for (i = 16; i < 64; ++i) {
                 W[i] = Gamma1(W[i - 2]) + W[i - 7] + Gamma0(W[i - 15]) + W[i - 16];
@@ -227,7 +219,6 @@ sha_transform(SHAobject *sha_info)
 static void
 sha_init(SHAobject *sha_info)
 {
-    TestEndianness(sha_info->Endianness)
     sha_info->digest[0] = 0x6A09E667L;
     sha_info->digest[1] = 0xBB67AE85L;
     sha_info->digest[2] = 0x3C6EF372L;
@@ -245,7 +236,6 @@ sha_init(SHAobject *sha_info)
 static void
 sha224_init(SHAobject *sha_info)
 {
-    TestEndianness(sha_info->Endianness)
     sha_info->digest[0] = 0xc1059ed8L;
     sha_info->digest[1] = 0x367cd507L;
     sha_info->digest[2] = 0x3070dd17L;
@@ -264,9 +254,9 @@ sha224_init(SHAobject *sha_info)
 /* update the SHA digest */
 
 static void
-sha_update(SHAobject *sha_info, SHA_BYTE *buffer, int count)
+sha_update(SHAobject *sha_info, SHA_BYTE *buffer, Py_ssize_t count)
 {
-    int i;
+    Py_ssize_t i;
     SHA_INT32 clo;
 
     clo = sha_info->count_lo + ((SHA_INT32) count << 3);
@@ -283,7 +273,7 @@ sha_update(SHAobject *sha_info, SHA_BYTE *buffer, int count)
         memcpy(((SHA_BYTE *) sha_info->data) + sha_info->local, buffer, i);
         count -= i;
         buffer += i;
-        sha_info->local += i;
+        sha_info->local += (int)i;
         if (sha_info->local == SHA_BLOCKSIZE) {
             sha_transform(sha_info);
         }
@@ -298,7 +288,7 @@ sha_update(SHAobject *sha_info, SHA_BYTE *buffer, int count)
         sha_transform(sha_info);
     }
     memcpy(sha_info->data, buffer, count);
-    sha_info->local = count;
+    sha_info->local = (int)count;
 }
 
 /* finish computing the SHA digest */
@@ -402,14 +392,19 @@ SHA_dealloc(PyObject *ptr)
 
 /* External methods for a hash object */
 
-PyDoc_STRVAR(SHA256_copy__doc__, "Return a copy of the hash object.");
+/*[clinic input]
+SHA256Type.copy
+
+Return a copy of the hash object.
+[clinic start generated code]*/
 
 static PyObject *
-SHA256_copy(SHAobject *self, PyObject *unused)
+SHA256Type_copy_impl(SHAobject *self)
+/*[clinic end generated code: output=1a8bbd66a0c9c168 input=f58840a618d4f2a7]*/
 {
     SHAobject *newobj;
 
-    if (Py_TYPE(self) == &SHA256type) {
+    if (Py_IS_TYPE(self, &SHA256type)) {
         if ( (newobj = newSHA256object())==NULL)
             return NULL;
     } else {
@@ -421,69 +416,60 @@ SHA256_copy(SHAobject *self, PyObject *unused)
     return (PyObject *)newobj;
 }
 
-PyDoc_STRVAR(SHA256_digest__doc__,
-"Return the digest value as a string of binary data.");
+/*[clinic input]
+SHA256Type.digest
+
+Return the digest value as a bytes object.
+[clinic start generated code]*/
 
 static PyObject *
-SHA256_digest(SHAobject *self, PyObject *unused)
+SHA256Type_digest_impl(SHAobject *self)
+/*[clinic end generated code: output=46616a5e909fbc3d input=f1f4cfea5cbde35c]*/
 {
     unsigned char digest[SHA_DIGESTSIZE];
     SHAobject temp;
 
     SHAcopy(self, &temp);
     sha_final(digest, &temp);
-    return PyString_FromStringAndSize((const char *)digest, self->digestsize);
+    return PyBytes_FromStringAndSize((const char *)digest, self->digestsize);
 }
 
-PyDoc_STRVAR(SHA256_hexdigest__doc__,
-"Return the digest value as a string of hexadecimal digits.");
+/*[clinic input]
+SHA256Type.hexdigest
+
+Return the digest value as a string of hexadecimal digits.
+[clinic start generated code]*/
 
 static PyObject *
-SHA256_hexdigest(SHAobject *self, PyObject *unused)
+SHA256Type_hexdigest_impl(SHAobject *self)
+/*[clinic end generated code: output=725f8a7041ae97f3 input=0cc4c714693010d1]*/
 {
     unsigned char digest[SHA_DIGESTSIZE];
     SHAobject temp;
-    PyObject *retval;
-    char *hex_digest;
-    int i, j;
 
     /* Get the raw (binary) digest value */
     SHAcopy(self, &temp);
     sha_final(digest, &temp);
 
-    /* Create a new string */
-    retval = PyString_FromStringAndSize(NULL, self->digestsize * 2);
-    if (!retval)
-            return NULL;
-    hex_digest = PyString_AsString(retval);
-    if (!hex_digest) {
-            Py_DECREF(retval);
-            return NULL;
-    }
-
-    /* Make hex version of the digest */
-    for(i=j=0; i<self->digestsize; i++) {
-        char c;
-        c = (digest[i] >> 4) & 0xf;
-        c = (c>9) ? c+'a'-10 : c + '0';
-        hex_digest[j++] = c;
-        c = (digest[i] & 0xf);
-        c = (c>9) ? c+'a'-10 : c + '0';
-        hex_digest[j++] = c;
-    }
-    return retval;
+    return _Py_strhex((const char *)digest, self->digestsize);
 }
 
-PyDoc_STRVAR(SHA256_update__doc__,
-"Update this hash object's state with the provided string.");
+/*[clinic input]
+SHA256Type.update
+
+    obj: object
+    /
+
+Update this hash object's state with the provided string.
+[clinic start generated code]*/
 
 static PyObject *
-SHA256_update(SHAobject *self, PyObject *args)
+SHA256Type_update(SHAobject *self, PyObject *obj)
+/*[clinic end generated code: output=0967fb2860c66af7 input=b2d449d5b30f0f5a]*/
 {
     Py_buffer buf;
 
-    if (!PyArg_ParseTuple(args, "s*:update", &buf))
-        return NULL;
+    GET_BUFFER_VIEW_OR_ERROUT(obj, &buf);
 
     sha_update(self, buf.buf, buf.len);
 
@@ -492,26 +478,26 @@ SHA256_update(SHAobject *self, PyObject *args)
 }
 
 static PyMethodDef SHA_methods[] = {
-    {"copy",      (PyCFunction)SHA256_copy,      METH_NOARGS,  SHA256_copy__doc__},
-    {"digest",    (PyCFunction)SHA256_digest,    METH_NOARGS,  SHA256_digest__doc__},
-    {"hexdigest", (PyCFunction)SHA256_hexdigest, METH_NOARGS,  SHA256_hexdigest__doc__},
-    {"update",    (PyCFunction)SHA256_update,    METH_VARARGS, SHA256_update__doc__},
+    SHA256TYPE_COPY_METHODDEF
+    SHA256TYPE_DIGEST_METHODDEF
+    SHA256TYPE_HEXDIGEST_METHODDEF
+    SHA256TYPE_UPDATE_METHODDEF
     {NULL,        NULL}         /* sentinel */
 };
 
 static PyObject *
 SHA256_get_block_size(PyObject *self, void *closure)
 {
-    return PyInt_FromLong(SHA_BLOCKSIZE);
+    return PyLong_FromLong(SHA_BLOCKSIZE);
 }
 
 static PyObject *
 SHA256_get_name(PyObject *self, void *closure)
 {
     if (((SHAobject *)self)->digestsize == 32)
-        return PyString_FromStringAndSize("SHA256", 6);
+        return PyUnicode_FromStringAndSize("sha256", 6);
     else
-        return PyString_FromStringAndSize("SHA224", 6);
+        return PyUnicode_FromStringAndSize("sha224", 6);
 }
 
 static PyGetSetDef SHA_getseters[] = {
@@ -528,23 +514,20 @@ static PyGetSetDef SHA_getseters[] = {
 
 static PyMemberDef SHA_members[] = {
     {"digest_size", T_INT, offsetof(SHAobject, digestsize), READONLY, NULL},
-    /* the old md5 and sha modules support 'digest_size' as in PEP 247.
-     * the old sha module also supported 'digestsize'.  ugh. */
-    {"digestsize", T_INT, offsetof(SHAobject, digestsize), READONLY, NULL},
     {NULL}  /* Sentinel */
 };
 
 static PyTypeObject SHA224type = {
     PyVarObject_HEAD_INIT(NULL, 0)
     "_sha256.sha224",   /*tp_name*/
-    sizeof(SHAobject),  /*tp_size*/
+    sizeof(SHAobject),  /*tp_basicsize*/
     0,                  /*tp_itemsize*/
     /* methods */
     SHA_dealloc,        /*tp_dealloc*/
-    0,                  /*tp_print*/
+    0,                  /*tp_vectorcall_offset*/
     0,                  /*tp_getattr*/
     0,                  /*tp_setattr*/
-    0,                  /*tp_compare*/
+    0,                  /*tp_as_async*/
     0,                  /*tp_repr*/
     0,                  /*tp_as_number*/
     0,                  /*tp_as_sequence*/
@@ -571,14 +554,14 @@ static PyTypeObject SHA224type = {
 static PyTypeObject SHA256type = {
     PyVarObject_HEAD_INIT(NULL, 0)
     "_sha256.sha256",   /*tp_name*/
-    sizeof(SHAobject),  /*tp_size*/
+    sizeof(SHAobject),  /*tp_basicsize*/
     0,                  /*tp_itemsize*/
     /* methods */
     SHA_dealloc,        /*tp_dealloc*/
-    0,                  /*tp_print*/
+    0,                  /*tp_vectorcall_offset*/
     0,                  /*tp_getattr*/
     0,                  /*tp_setattr*/
-    0,                  /*tp_compare*/
+    0,                  /*tp_as_async*/
     0,                  /*tp_repr*/
     0,                  /*tp_as_number*/
     0,                  /*tp_as_sequence*/
@@ -605,23 +588,29 @@ static PyTypeObject SHA256type = {
 
 /* The single module-level function: new() */
 
-PyDoc_STRVAR(SHA256_new__doc__,
-"Return a new SHA-256 hash object; optionally initialized with a string.");
+/*[clinic input]
+_sha256.sha256
+
+    string: object(c_default="NULL") = b''
+    *
+    usedforsecurity: bool = True
+
+Return a new SHA-256 hash object; optionally initialized with a string.
+[clinic start generated code]*/
 
 static PyObject *
-SHA256_new(PyObject *self, PyObject *args, PyObject *kwdict)
+_sha256_sha256_impl(PyObject *module, PyObject *string, int usedforsecurity)
+/*[clinic end generated code: output=a1de327e8e1185cf input=9be86301aeb14ea5]*/
 {
-    static char *kwlist[] = {"string", NULL};
     SHAobject *new;
-    Py_buffer buf = { 0 };
+    Py_buffer buf;
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwdict, "|s*:new", kwlist,
-                                     &buf)) {
-        return NULL;
-    }
+    if (string)
+        GET_BUFFER_VIEW_OR_ERROUT(string, &buf);
 
     if ((new = newSHA256object()) == NULL) {
-        PyBuffer_Release(&buf);
+        if (string)
+            PyBuffer_Release(&buf);
         return NULL;
     }
 
@@ -629,34 +618,41 @@ SHA256_new(PyObject *self, PyObject *args, PyObject *kwdict)
 
     if (PyErr_Occurred()) {
         Py_DECREF(new);
-        PyBuffer_Release(&buf);
+        if (string)
+            PyBuffer_Release(&buf);
         return NULL;
     }
-    if (buf.len > 0) {
+    if (string) {
         sha_update(new, buf.buf, buf.len);
+        PyBuffer_Release(&buf);
     }
-    PyBuffer_Release(&buf);
 
     return (PyObject *)new;
 }
 
-PyDoc_STRVAR(SHA224_new__doc__,
-"Return a new SHA-224 hash object; optionally initialized with a string.");
+/*[clinic input]
+_sha256.sha224
+
+    string: object(c_default="NULL") = b''
+    *
+    usedforsecurity: bool = True
+
+Return a new SHA-224 hash object; optionally initialized with a string.
+[clinic start generated code]*/
 
 static PyObject *
-SHA224_new(PyObject *self, PyObject *args, PyObject *kwdict)
+_sha256_sha224_impl(PyObject *module, PyObject *string, int usedforsecurity)
+/*[clinic end generated code: output=08be6b36569bc69c input=9fcfb46e460860ac]*/
 {
-    static char *kwlist[] = {"string", NULL};
     SHAobject *new;
-    Py_buffer buf = { 0 };
+    Py_buffer buf;
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwdict, "|s*:new", kwlist,
-                                     &buf)) {
-        return NULL;
-    }
+    if (string)
+        GET_BUFFER_VIEW_OR_ERROUT(string, &buf);
 
     if ((new = newSHA224object()) == NULL) {
-        PyBuffer_Release(&buf);
+        if (string)
+            PyBuffer_Release(&buf);
         return NULL;
     }
 
@@ -664,13 +660,14 @@ SHA224_new(PyObject *self, PyObject *args, PyObject *kwdict)
 
     if (PyErr_Occurred()) {
         Py_DECREF(new);
-        PyBuffer_Release(&buf);
+        if (string)
+            PyBuffer_Release(&buf);
         return NULL;
     }
-    if (buf.len > 0) {
+    if (string) {
         sha_update(new, buf.buf, buf.len);
+        PyBuffer_Release(&buf);
     }
-    PyBuffer_Release(&buf);
 
     return (PyObject *)new;
 }
@@ -679,28 +676,48 @@ SHA224_new(PyObject *self, PyObject *args, PyObject *kwdict)
 /* List of functions exported by this module */
 
 static struct PyMethodDef SHA_functions[] = {
-    {"sha256", (PyCFunction)SHA256_new, METH_VARARGS|METH_KEYWORDS, SHA256_new__doc__},
-    {"sha224", (PyCFunction)SHA224_new, METH_VARARGS|METH_KEYWORDS, SHA224_new__doc__},
+    _SHA256_SHA256_METHODDEF
+    _SHA256_SHA224_METHODDEF
     {NULL,      NULL}            /* Sentinel */
 };
 
 
 /* Initialize this module. */
 
-#define insint(n,v) { PyModule_AddIntConstant(m,n,v); }
+static struct PyModuleDef _sha256module = {
+        PyModuleDef_HEAD_INIT,
+        "_sha256",
+        NULL,
+        -1,
+        SHA_functions,
+        NULL,
+        NULL,
+        NULL,
+        NULL
+};
 
 PyMODINIT_FUNC
-init_sha256(void)
+PyInit__sha256(void)
 {
     PyObject *m;
 
-    Py_TYPE(&SHA224type) = &PyType_Type;
-    if (PyType_Ready(&SHA224type) < 0)
-        return;
-    Py_TYPE(&SHA256type) = &PyType_Type;
-    if (PyType_Ready(&SHA256type) < 0)
-        return;
-    m = Py_InitModule("_sha256", SHA_functions);
+    Py_SET_TYPE(&SHA224type, &PyType_Type);
+    if (PyType_Ready(&SHA224type) < 0) {
+        return NULL;
+    }
+    Py_SET_TYPE(&SHA256type, &PyType_Type);
+    if (PyType_Ready(&SHA256type) < 0) {
+        return NULL;
+    }
+
+    m = PyModule_Create(&_sha256module);
     if (m == NULL)
-        return;
+        return NULL;
+
+    Py_INCREF((PyObject *)&SHA224type);
+    PyModule_AddObject(m, "SHA224Type", (PyObject *)&SHA224type);
+    Py_INCREF((PyObject *)&SHA256type);
+    PyModule_AddObject(m, "SHA256Type", (PyObject *)&SHA256type);
+    return m;
+
 }

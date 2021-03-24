@@ -1,6 +1,6 @@
 /* cursor.h - definitions for the cursor type
  *
- * Copyright (C) 2004-2010 Gerhard Häring <gh@ghaering.de>
+ * Copyright (C) 2004-2010 Gerhard HÃ¤ring <gh@ghaering.de>
  *
  * This file is part of pysqlite.
  *
@@ -23,6 +23,7 @@
 
 #ifndef PYSQLITE_CURSOR_H
 #define PYSQLITE_CURSOR_H
+#define PY_SSIZE_T_CLEAN
 #include "Python.h"
 
 #include "statement.h"
@@ -50,12 +51,6 @@ typedef struct
 
     PyObject* in_weakreflist; /* List of weak references */
 } pysqlite_Cursor;
-
-typedef enum {
-    STATEMENT_INVALID, STATEMENT_INSERT, STATEMENT_DELETE,
-    STATEMENT_UPDATE, STATEMENT_REPLACE, STATEMENT_SELECT,
-    STATEMENT_OTHER
-} pysqlite_StatementKind;
 
 extern PyTypeObject pysqlite_CursorType;
 

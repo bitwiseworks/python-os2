@@ -11,6 +11,13 @@ extern "C" {
 #include "token.h"      /* For token types */
 
 #define MAXINDENT 100   /* Max indentation level */
+#define MAXLEVEL 200    /* Max parentheses level */
+
+enum decoding_state {
+    STATE_INIT,
+    STATE_RAW,
+    STATE_NORMAL        /* have a codec associated with input */
+};
 
 /* Tokenizer state */
 struct tok_state {
@@ -19,8 +26,8 @@ struct tok_state {
     char *buf;          /* Input buffer, or NULL; malloc'ed if fp != NULL */
     char *cur;          /* Next character in buffer */
     char *inp;          /* End of data in buffer */
-    char *end;          /* End of input buffer if buf != NULL */
-    char *start;        /* Start of current token if not NULL */
+    const char *end;    /* End of input buffer if buf != NULL */
+    const char *start;  /* Start of current token if not NULL */
     int done;           /* E_OK normally, E_EOF at EOF, otherwise error code */
     /* NB If done != E_OK, cur must be == inp!!! */
     FILE *fp;           /* Rest of input; NULL if tokenizing a string */
@@ -29,40 +36,51 @@ struct tok_state {
     int indstack[MAXINDENT];            /* Stack of indents */
     int atbol;          /* Nonzero if at begin of new line */
     int pendin;         /* Pending indents (if > 0) or dedents (if < 0) */
-    char *prompt, *nextprompt;          /* For interactive prompting */
+    const char *prompt, *nextprompt;          /* For interactive prompting */
     int lineno;         /* Current line number */
+    int first_lineno;   /* First line of a single line or multi line string
+                           expression (cf. issue 16806) */
     int level;          /* () [] {} Parentheses nesting level */
             /* Used to allow free continuations inside them */
+    char parenstack[MAXLEVEL];
+    int parenlinenostack[MAXLEVEL];
+    PyObject *filename;
     /* Stuff for checking on different tab sizes */
-    const char *filename;       /* For error messages */
-    int altwarning;     /* Issue warning if alternate tabs don't match */
-    int alterror;       /* Issue error if alternate tabs don't match */
-    int alttabsize;     /* Alternate tab spacing */
     int altindstack[MAXINDENT];         /* Stack of alternate indents */
     /* Stuff for PEP 0263 */
-    int decoding_state;         /* -1:decoding, 0:init, 1:raw */
+    enum decoding_state decoding_state;
     int decoding_erred;         /* whether erred in decoding  */
     int read_coding_spec;       /* whether 'coding:...' has been read  */
-    char *encoding;
+    char *encoding;         /* Source encoding. */
     int cont_line;          /* whether we are in a continuation line. */
     const char* line_start;     /* pointer to start of current line */
-#ifndef PGEN
-    PyObject *decoding_readline; /* codecs.open(...).readline */
+    const char* multi_line_start; /* pointer to start of first line of
+                                     a single line or multi line string
+                                     expression (cf. issue 16806) */
+    PyObject *decoding_readline; /* open(...).readline */
     PyObject *decoding_buffer;
-#endif
-    const char* enc;
-    const char* str;
-    const char* input; /* Tokenizer's newline translated copy of the string. */
+    const char* enc;        /* Encoding for the current str. */
+    char* str;
+    char* input;       /* Tokenizer's newline translated copy of the string. */
+
+    int type_comments;      /* Whether to look for type comments */
+
+    /* async/await related fields (still needed depending on feature_version) */
+    int async_hacks;     /* =1 if async/await aren't always keywords */
+    int async_def;        /* =1 if tokens are inside an 'async def' body. */
+    int async_def_indent; /* Indentation level of the outermost 'async def'. */
+    int async_def_nl;     /* =1 if the outermost 'async def' had at least one
+                             NEWLINE token after it. */
 };
 
 extern struct tok_state *PyTokenizer_FromString(const char *, int);
-extern struct tok_state *PyTokenizer_FromFile(FILE *, char *, char *);
+extern struct tok_state *PyTokenizer_FromUTF8(const char *, int);
+extern struct tok_state *PyTokenizer_FromFile(FILE *, const char*,
+                                              const char *, const char *);
 extern void PyTokenizer_Free(struct tok_state *);
-extern int PyTokenizer_Get(struct tok_state *, char **, char **);
-#if defined(PGEN) || defined(Py_USING_UNICODE)
-extern char * PyTokenizer_RestoreEncoding(struct tok_state* tok,
-                                          int len, int *offset);
-#endif
+extern int PyTokenizer_Get(struct tok_state *, const char **, const char **);
+
+#define tok_dump _Py_tok_dump
 
 #ifdef __cplusplus
 }

@@ -1,31 +1,31 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 # Format du output in a tree shape
 
 import os, sys, errno
 
 def main():
-    p = os.popen('du ' + ' '.join(sys.argv[1:]), 'r')
     total, d = None, {}
-    for line in p.readlines():
-        i = 0
-        while line[i] in '0123456789': i = i+1
-        size = eval(line[:i])
-        while line[i] in ' \t': i = i+1
-        filename = line[i:-1]
-        comps = filename.split('/')
-        if comps[0] == '': comps[0] = '/'
-        if comps[len(comps)-1] == '': del comps[len(comps)-1]
-        total, d = store(size, comps, total, d)
+    with os.popen('du ' + ' '.join(sys.argv[1:])) as p:
+        for line in p:
+            i = 0
+            while line[i] in '0123456789': i = i+1
+            size = eval(line[:i])
+            while line[i] in ' \t': i = i+1
+            filename = line[i:-1]
+            comps = filename.split('/')
+            if comps[0] == '': comps[0] = '/'
+            if comps[len(comps)-1] == '': del comps[len(comps)-1]
+            total, d = store(size, comps, total, d)
     try:
         display(total, d)
-    except IOError, e:
+    except IOError as e:
         if e.errno != errno.EPIPE:
             raise
 
 def store(size, comps, total, d):
     if comps == []:
         return size, d
-    if not d.has_key(comps[0]):
+    if comps[0] not in d:
         d[comps[0]] = None, {}
     t1, d1 = d[comps[0]]
     d[comps[0]] = store(size, comps[1:], t1, d1)
@@ -51,9 +51,9 @@ def show(total, d, prefix):
         if tsub is None:
             psub = prefix
         else:
-            print prefix + repr(tsub).rjust(width) + ' ' + key
+            print(prefix + repr(tsub).rjust(width) + ' ' + key)
             psub = prefix + ' '*(width-1) + '|' + ' '*(len(key)+1)
-        if d.has_key(key):
+        if key in d:
             show(tsub, d[key][1], psub)
 
 if __name__ == '__main__':

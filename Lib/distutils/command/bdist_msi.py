@@ -1,21 +1,21 @@
-# -*- coding: iso-8859-1 -*-
-# Copyright (C) 2005, 2006 Martin von Löwis
+# Copyright (C) 2005, 2006 Martin von LÃ¶wis
 # Licensed to PSF under a Contributor Agreement.
 # The bdist_wininst command proper
 # based on bdist_wininst
 """
 Implements the bdist_msi command.
 """
-import sys, os
-from sysconfig import get_python_version
 
+import os
+import sys
+import warnings
 from distutils.core import Command
 from distutils.dir_util import remove_tree
+from distutils.sysconfig import get_python_version
 from distutils.version import StrictVersion
 from distutils.errors import DistutilsOptionError
-from distutils import log
 from distutils.util import get_platform
-
+from distutils import log
 import msilib
 from msilib import schema, sequence, text
 from msilib import Directory, Feature, Dialog, add_data
@@ -29,6 +29,7 @@ class PyDialog(Dialog):
         default, cancel, bitmap=true)"""
         Dialog.__init__(self, *args)
         ruler = self.h - 36
+        bmwidth = 152*ruler/328
         #if kw.get("bitmap", True):
         #    self.bitmap("Bitmap", 0, 0, bmwidth, ruler, "PythonWin")
         self.line("BottomLine", 0, ruler, self.w, 0)
@@ -81,7 +82,7 @@ class PyDialog(Dialog):
         Return the button, so that events can be associated"""
         return self.pushbutton(name, int(self.w*xpos - 28), self.h-27, 56, 17, 3, title, next)
 
-class bdist_msi (Command):
+class bdist_msi(Command):
 
     description = "create a Microsoft Installer (.msi) binary distribution"
 
@@ -99,14 +100,14 @@ class bdist_msi (Command):
                     ('no-target-compile', 'c',
                      "do not compile .py to .pyc on the target system"),
                     ('no-target-optimize', 'o',
-                     "do not compile .py to .pyo (optimized)"
+                     "do not compile .py to .pyo (optimized) "
                      "on the target system"),
                     ('dist-dir=', 'd',
                      "directory to put final built distributions in"),
                     ('skip-build', None,
                      "skip rebuilding everything (for testing/debugging)"),
                     ('install-script=', None,
-                     "basename of installation script to be run after"
+                     "basename of installation script to be run after "
                      "installation or before deinstallation"),
                     ('pre-install-script=', None,
                      "Fully qualified filename of a script to be run before "
@@ -123,7 +124,13 @@ class bdist_msi (Command):
                     '3.5', '3.6', '3.7', '3.8', '3.9']
     other_version = 'X'
 
-    def initialize_options (self):
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        warnings.warn("bdist_msi command is deprecated since Python 3.9, "
+                      "use bdist_wheel (wheel packages) instead",
+                      DeprecationWarning, 2)
+
+    def initialize_options(self):
         self.bdist_dir = None
         self.plat_name = None
         self.keep_temp = 0
@@ -136,7 +143,7 @@ class bdist_msi (Command):
         self.pre_install_script = None
         self.versions = None
 
-    def finalize_options (self):
+    def finalize_options(self):
         self.set_undefined_options('bdist', ('skip_build', 'skip_build'))
 
         if self.bdist_dir is None:
@@ -151,9 +158,9 @@ class bdist_msi (Command):
             self.versions = [self.target_version]
             if not self.skip_build and self.distribution.has_ext_modules()\
                and self.target_version != short_version:
-                raise DistutilsOptionError, \
-                      "target version can only be %s, or the '--skip-build'" \
-                      " option must be specified" % (short_version,)
+                raise DistutilsOptionError(
+                      "target version can only be %s, or the '--skip-build'"
+                      " option must be specified" % (short_version,))
         else:
             self.versions = list(self.all_versions)
 
@@ -163,21 +170,20 @@ class bdist_msi (Command):
                                    )
 
         if self.pre_install_script:
-            raise DistutilsOptionError, "the pre-install-script feature is not yet implemented"
+            raise DistutilsOptionError(
+                  "the pre-install-script feature is not yet implemented")
 
         if self.install_script:
             for script in self.distribution.scripts:
                 if self.install_script == os.path.basename(script):
                     break
             else:
-                raise DistutilsOptionError, \
-                      "install_script '%s' not found in scripts" % \
-                      self.install_script
+                raise DistutilsOptionError(
+                      "install_script '%s' not found in scripts"
+                      % self.install_script)
         self.install_script_key = None
-    # finalize_options()
 
-
-    def run (self):
+    def run(self):
         if not self.skip_build:
             self.run_command('build')
 
@@ -201,7 +207,7 @@ class bdist_msi (Command):
             target_version = self.target_version
             if not target_version:
                 assert self.skip_build, "Should have already checked this"
-                target_version = sys.version[0:3]
+                target_version = '%d.%d' % sys.version_info[:2]
             plat_specifier = ".%s-%s" % (self.plat_name, target_version)
             build = self.get_finalized_command('build')
             build.build_lib = os.path.join(build.build_base,
@@ -392,18 +398,18 @@ class bdist_msi (Command):
         #     entries for each version as the above code does
         if self.pre_install_script:
             scriptfn = os.path.join(self.bdist_dir, "preinstall.bat")
-            f = open(scriptfn, "w")
-            # The batch file will be executed with [PYTHON], so that %1
-            # is the path to the Python interpreter; %0 will be the path
-            # of the batch file.
-            # rem ="""
-            # %1 %0
-            # exit
-            # """
-            # <actual script>
-            f.write('rem ="""\n%1 %0\nexit\n"""\n')
-            f.write(open(self.pre_install_script).read())
-            f.close()
+            with open(scriptfn, "w") as f:
+                # The batch file will be executed with [PYTHON], so that %1
+                # is the path to the Python interpreter; %0 will be the path
+                # of the batch file.
+                # rem ="""
+                # %1 %0
+                # exit
+                # """
+                # <actual script>
+                f.write('rem ="""\n%1 %0\nexit\n"""\n')
+                with open(self.pre_install_script) as fin:
+                    f.write(fin.read())
             add_data(self.db, "Binary",
                 [("PreInstall", msilib.Binary(scriptfn))
                 ])
@@ -424,6 +430,7 @@ class bdist_msi (Command):
         # see "Dialog Style Bits"
         modal = 3      # visible | modal
         modeless = 1   # visible
+        track_disk_space = 32
 
         # UI customization properties
         add_data(db, "Property",
@@ -624,7 +631,7 @@ class bdist_msi (Command):
         cost = PyDialog(db, "DiskCostDlg", x, y, w, h, modal, title,
                         "OK", "OK", "OK", bitmap=False)
         cost.text("Title", 15, 6, 200, 15, 0x30003,
-                  "{\DlgFontBold8}Disk Space Requirements")
+                 r"{\DlgFontBold8}Disk Space Requirements")
         cost.text("Description", 20, 20, 280, 20, 0x30003,
                   "The disk space required for the installation of the selected features.")
         cost.text("Text", 20, 53, 330, 60, 3,
@@ -671,7 +678,7 @@ class bdist_msi (Command):
         progress = PyDialog(db, "ProgressDlg", x, y, w, h, modeless, title,
                             "Cancel", "Cancel", "Cancel", bitmap=False)
         progress.text("Title", 20, 15, 200, 15, 0x30003,
-                      "{\DlgFontBold8}[Progress1] [ProductName]")
+                     r"{\DlgFontBold8}[Progress1] [ProductName]")
         progress.text("Text", 35, 65, 300, 30, 3,
                       "Please wait while the Installer [Progress2] [ProductName]. "
                       "This may take several minutes.")

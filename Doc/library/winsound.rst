@@ -1,15 +1,14 @@
-
 :mod:`winsound` --- Sound-playing interface for Windows
 =======================================================
 
 .. module:: winsound
    :platform: Windows
    :synopsis: Access to the sound-playing machinery for Windows.
+
 .. moduleauthor:: Toby Dickenson <htrd90@zepler.org>
 .. sectionauthor:: Fred L. Drake, Jr. <fdrake@acm.org>
 
-
-.. versionadded:: 1.5.2
+--------------
 
 The :mod:`winsound` module provides access to the basic sound-playing machinery
 provided by Windows platforms.  It includes functions and several constants.
@@ -22,29 +21,27 @@ provided by Windows platforms.  It includes functions and several constants.
    parameter specifies the number of milliseconds the sound should last.  If the
    system is not able to beep the speaker, :exc:`RuntimeError` is raised.
 
-   .. versionadded:: 1.6
-
 
 .. function:: PlaySound(sound, flags)
 
    Call the underlying :c:func:`PlaySound` function from the Platform API.  The
-   *sound* parameter may be a filename, audio data as a string, or ``None``.  Its
+   *sound* parameter may be a filename, a system sound alias, audio data as a
+   :term:`bytes-like object`, or ``None``.  Its
    interpretation depends on the value of *flags*, which can be a bitwise ORed
    combination of the constants described below. If the *sound* parameter is
    ``None``, any currently playing waveform sound is stopped. If the system
    indicates an error, :exc:`RuntimeError` is raised.
 
 
-.. function:: MessageBeep([type=MB_OK])
+.. function:: MessageBeep(type=MB_OK)
 
    Call the underlying :c:func:`MessageBeep` function from the Platform API.  This
    plays a sound as specified in the registry.  The *type* argument specifies which
    sound to play; possible values are ``-1``, ``MB_ICONASTERISK``,
    ``MB_ICONEXCLAMATION``, ``MB_ICONHAND``, ``MB_ICONQUESTION``, and ``MB_OK``, all
    described below.  The value ``-1`` produces a "simple beep"; this is the final
-   fallback if a sound cannot be played otherwise.
-
-   .. versionadded:: 2.3
+   fallback if a sound cannot be played otherwise.  If the system indicates an
+   error, :exc:`RuntimeError` is raised.
 
 
 .. data:: SND_FILENAME
@@ -97,7 +94,7 @@ provided by Windows platforms.  It includes functions and several constants.
 .. data:: SND_MEMORY
 
    The *sound* parameter to :func:`PlaySound` is a memory image of a WAV file, as a
-   string.
+   :term:`bytes-like object`.
 
    .. note::
 

@@ -1,12 +1,13 @@
-from test.test_support import have_unicode, run_unittest
+from collections import deque
 import unittest
+from test.support import NEVER_EQ
 
 
 class base_set:
     def __init__(self, el):
         self.el = el
 
-class set(base_set):
+class myset(base_set):
     def __contains__(self, el):
         return self.el == el
 
@@ -14,11 +15,10 @@ class seq(base_set):
     def __getitem__(self, n):
         return [self.el][n]
 
-
 class TestContains(unittest.TestCase):
     def test_common_tests(self):
         a = base_set(1)
-        b = set(1)
+        b = myset(1)
         c = seq(1)
         self.assertIn(1, b)
         self.assertNotIn(0, b)
@@ -35,28 +35,6 @@ class TestContains(unittest.TestCase):
         self.assertIn('', 'abc')
 
         self.assertRaises(TypeError, lambda: None in 'abc')
-
-    if have_unicode:
-        def test_char_in_unicode(self):
-            self.assertIn('c', unicode('abc'))
-            self.assertNotIn('d', unicode('abc'))
-
-            self.assertIn('', unicode(''))
-            self.assertIn(unicode(''), '')
-            self.assertIn(unicode(''), unicode(''))
-            self.assertIn('', unicode('abc'))
-            self.assertIn(unicode(''), 'abc')
-            self.assertIn(unicode(''), unicode('abc'))
-
-            self.assertRaises(TypeError, lambda: None in unicode('abc'))
-
-            # test Unicode char in Unicode
-            self.assertIn(unicode('c'), unicode('abc'))
-            self.assertNotIn(unicode('d'), unicode('abc'))
-
-            # test Unicode char in string
-            self.assertIn(unicode('c'), 'abc')
-            self.assertNotIn(unicode('d'), 'abc')
 
     def test_builtin_sequence_types(self):
         # a collection of tests on builtin sequence types
@@ -78,34 +56,54 @@ class TestContains(unittest.TestCase):
             This class is designed to make sure that the contains code
             works when the list is modified during the check.
             """
-            aList = range(15)
-            def __cmp__(self, other):
+            aList = list(range(15))
+            def __eq__(self, other):
                 if other == 12:
                     self.aList.remove(12)
                     self.aList.remove(13)
                     self.aList.remove(14)
-                return 1
+                return 0
 
         self.assertNotIn(Deviant1(), Deviant1.aList)
 
-        class Deviant2:
-            """Behaves strangely when compared
+    def test_nonreflexive(self):
+        # containment and equality tests involving elements that are
+        # not necessarily equal to themselves
 
-            This class raises an exception during comparison.  That in
-            turn causes the comparison to fail with a TypeError.
+        values = float('nan'), 1, None, 'abc', NEVER_EQ
+        constructors = list, tuple, dict.fromkeys, set, frozenset, deque
+        for constructor in constructors:
+            container = constructor(values)
+            for elem in container:
+                self.assertIn(elem, container)
+            self.assertTrue(container == constructor(values))
+            self.assertTrue(container == container)
+
+    def test_block_fallback(self):
+        # blocking fallback with __contains__ = None
+        class ByContains(object):
+            def __contains__(self, other):
+                return False
+        c = ByContains()
+        class BlockContains(ByContains):
+            """Is not a container
+
+            This class is a perfectly good iterable (as tested by
+            list(bc)), as well as inheriting from a perfectly good
+            container, but __contains__ = None prevents the usual
+            fallback to iteration in the container protocol. That
+            is, normally, 0 in bc would fall back to the equivalent
+            of any(x==0 for x in bc), but here it's blocked from
+            doing so.
             """
-            def __cmp__(self, other):
-                if other == 4:
-                    raise RuntimeError, "gotcha"
-
-        try:
-            self.assertNotIn(Deviant2(), a)
-        except TypeError:
-            pass
-
-
-def test_main():
-    run_unittest(TestContains)
+            def __iter__(self):
+                while False:
+                    yield None
+            __contains__ = None
+        bc = BlockContains()
+        self.assertFalse(0 in c)
+        self.assertFalse(0 in list(bc))
+        self.assertRaises(TypeError, lambda: 0 in bc)
 
 if __name__ == '__main__':
-    test_main()
+    unittest.main()

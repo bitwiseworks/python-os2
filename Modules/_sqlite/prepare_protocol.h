@@ -1,6 +1,6 @@
 /* prepare_protocol.h - the protocol for preparing values for SQLite
  *
- * Copyright (C) 2005-2010 Gerhard Häring <gh@ghaering.de>
+ * Copyright (C) 2005-2010 Gerhard HÃ¤ring <gh@ghaering.de>
  *
  * This file is part of pysqlite.
  *
@@ -23,6 +23,7 @@
 
 #ifndef PYSQLITE_PREPARE_PROTOCOL_H
 #define PYSQLITE_PREPARE_PROTOCOL_H
+#define PY_SSIZE_T_CLEAN
 #include "Python.h"
 
 typedef struct

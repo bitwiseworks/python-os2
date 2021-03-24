@@ -2,35 +2,36 @@
    Test cases for codeop.py
    Nick Mathewson
 """
+import sys
 import unittest
-from test.test_support import run_unittest, is_jython
+import warnings
+from test import support
 
 from codeop import compile_command, PyCF_DONT_IMPLY_DEDENT
+import io
 
-if is_jython:
-    import sys
-    import cStringIO
+if support.is_jython:
 
     def unify_callables(d):
         for n,v in d.items():
-            if callable(v):
-                d[n] = callable
+            if hasattr(v, '__call__'):
+                d[n] = True
         return d
 
 class CodeopTests(unittest.TestCase):
 
     def assertValid(self, str, symbol='single'):
         '''succeed iff str is a valid piece of code'''
-        if is_jython:
+        if support.is_jython:
             code = compile_command(str, "<input>", symbol)
             self.assertTrue(code)
             if symbol == "single":
                 d,r = {},{}
                 saved_stdout = sys.stdout
-                sys.stdout = cStringIO.StringIO()
+                sys.stdout = io.StringIO()
                 try:
-                    exec code in d
-                    exec compile(str,"<input>","single") in r
+                    exec(code, d)
+                    exec(compile(str,"<input>","single"), r)
                 finally:
                     sys.stdout = saved_stdout
             elif symbol == 'eval':
@@ -60,7 +61,7 @@ class CodeopTests(unittest.TestCase):
         av = self.assertValid
 
         # special case
-        if not is_jython:
+        if not support.is_jython:
             self.assertEqual(compile_command(""),
                              compile("pass", "<input>", 'single',
                                      PyCF_DONT_IMPLY_DEDENT))
@@ -282,12 +283,20 @@ class CodeopTests(unittest.TestCase):
         ai("if (a == 1 and b = 2): pass")
 
         ai("del 1")
-        ai("del ()")
         ai("del (1,)")
         ai("del [1]")
         ai("del '1'")
 
         ai("[i for i in range(10)] = (1, 2, 3)")
+
+    def test_invalid_exec(self):
+        ai = self.assertInvalid
+        ai("raise = 4", symbol="exec")
+        ai('def a-b', symbol='exec')
+        ai('await?', symbol='exec')
+        ai('=!=', symbol='exec')
+        ai('a await raise b', symbol='exec')
+        ai('a await raise b?+1', symbol='exec')
 
     def test_filename(self):
         self.assertEqual(compile_command("a = 1\n", "abc").co_filename,
@@ -295,10 +304,20 @@ class CodeopTests(unittest.TestCase):
         self.assertNotEqual(compile_command("a = 1\n", "abc").co_filename,
                             compile("a = 1\n", "def", 'single').co_filename)
 
+    def test_warning(self):
+        # Test that the warning is only returned once.
+        with support.check_warnings(
+                (".*literal", SyntaxWarning),
+                (".*invalid", DeprecationWarning),
+                ) as w:
+            compile_command(r"'\e' is 0")
+            self.assertEqual(len(w.warnings), 2)
 
-def test_main():
-    run_unittest(CodeopTests)
+        # bpo-41520: check SyntaxWarning treated as an SyntaxError
+        with warnings.catch_warnings(), self.assertRaises(SyntaxError):
+            warnings.simplefilter('error', SyntaxWarning)
+            compile_command('1 is 1', symbol='exec')
 
 
 if __name__ == "__main__":
-    test_main()
+    unittest.main()

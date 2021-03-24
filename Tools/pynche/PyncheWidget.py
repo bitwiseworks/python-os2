@@ -6,9 +6,8 @@ It is used to bring up other windows.
 
 import sys
 import os
-from Tkinter import *
-import tkMessageBox
-import tkFileDialog
+from tkinter import *
+from tkinter import messagebox, filedialog
 import ColorDB
 
 # Milliseconds between interrupt checks
@@ -37,15 +36,11 @@ class PyncheWidget:
         else:
             # Is there already a default root for Tk, say because we're
             # running under Guido's IDE? :-) Two conditions say no, either the
-            # import fails or _default_root is None.
-            tkroot = None
-            try:
-                from Tkinter import _default_root
-                tkroot = self.__tkroot = _default_root
-            except ImportError:
-                pass
+            # _default_root is None or it is unset.
+            tkroot = getattr(tkinter, '_default_root', None)
             if not tkroot:
-                tkroot = self.__tkroot = Tk(className='Pynche')
+                tkroot = Tk(className='Pynche')
+            self.__tkroot = tkroot
             # but this isn't our top level widget, so make it invisible
             tkroot.withdraw()
         # create the menubar
@@ -150,7 +145,7 @@ class PyncheWidget:
 
     def __popup_about(self, event=None):
         from Main import __version__
-        tkMessageBox.showinfo('About Pynche ' + __version__,
+        messagebox.showinfo('About Pynche ' + __version__,
                               '''\
 Pynche %s
 The PYthonically Natural
@@ -168,7 +163,7 @@ email:   bwarsaw@python.org''' % __version__)
     def __load(self, event=None):
         while 1:
             idir, ifile = os.path.split(self.__sb.colordb().filename())
-            file = tkFileDialog.askopenfilename(
+            file = filedialog.askopenfilename(
                 filetypes=[('Text files', '*.txt'),
                            ('All files', '*'),
                            ],
@@ -180,12 +175,12 @@ email:   bwarsaw@python.org''' % __version__)
             try:
                 colordb = ColorDB.get_colordb(file)
             except IOError:
-                tkMessageBox.showerror('Read error', '''\
+                messagebox.showerror('Read error', '''\
 Could not open file for reading:
 %s''' % file)
                 continue
             if colordb is None:
-                tkMessageBox.showerror('Unrecognized color file type', '''\
+                messagebox.showerror('Unrecognized color file type', '''\
 Unrecognized color file type in file:
 %s''' % file)
                 continue
@@ -249,6 +244,8 @@ class Helpwin:
 
 
 
+import functools
+@functools.total_ordering
 class PopupViewer:
     def __init__(self, module, name, switchboard, root):
         self.__m = module
@@ -279,8 +276,15 @@ class PopupViewer:
             self.__sb.add_view(self.__window)
         self.__window.deiconify()
 
-    def __cmp__(self, other):
-        return cmp(self.__menutext, other.__menutext)
+    def __eq__(self, other):
+        if isinstance(self, PopupViewer):
+            return self.__menutext == other.__menutext
+        return NotImplemented
+
+    def __lt__(self, other):
+        if isinstance(self, PopupViewer):
+            return self.__menutext < other.__menutext
+        return NotImplemented
 
 
 def make_view_popups(switchboard, root, extrapath):

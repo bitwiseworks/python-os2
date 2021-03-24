@@ -1,14 +1,13 @@
 """
 Tests for kqueue wrapper.
 """
-import socket
 import errno
-import time
+import os
 import select
-import sys
+import socket
+import time
 import unittest
 
-from test import test_support
 if not hasattr(select, "kqueue"):
     raise unittest.SkipTest("test works only on BSD")
 
@@ -22,7 +21,11 @@ class TestKQueue(unittest.TestCase):
         self.assertRaises(ValueError, kq.fileno)
 
     def test_create_event(self):
-        fd = sys.stderr.fileno()
+        from operator import lt, le, gt, ge
+
+        fd = os.open(os.devnull, os.O_WRONLY)
+        self.addCleanup(os.close, fd)
+
         ev = select.kevent(fd)
         other = select.kevent(1000)
         self.assertEqual(ev.ident, fd)
@@ -33,12 +36,12 @@ class TestKQueue(unittest.TestCase):
         self.assertEqual(ev.udata, 0)
         self.assertEqual(ev, ev)
         self.assertNotEqual(ev, other)
-        self.assertEqual(cmp(ev, other), -1)
         self.assertTrue(ev < other)
         self.assertTrue(other >= ev)
-        self.assertRaises(TypeError, cmp, ev, None)
-        self.assertRaises(TypeError, cmp, ev, 1)
-        self.assertRaises(TypeError, cmp, ev, "ev")
+        for op in lt, le, gt, ge:
+            self.assertRaises(TypeError, op, ev, None)
+            self.assertRaises(TypeError, op, ev, 1)
+            self.assertRaises(TypeError, op, ev, "ev")
 
         ev = select.kevent(fd, select.KQ_FILTER_WRITE)
         self.assertEqual(ev.ident, fd)
@@ -81,15 +84,38 @@ class TestKQueue(unittest.TestCase):
         self.assertEqual(ev, ev)
         self.assertNotEqual(ev, other)
 
+        # Issue 11973
+        bignum = 0xffff
+        ev = select.kevent(0, 1, bignum)
+        self.assertEqual(ev.ident, 0)
+        self.assertEqual(ev.filter, 1)
+        self.assertEqual(ev.flags, bignum)
+        self.assertEqual(ev.fflags, 0)
+        self.assertEqual(ev.data, 0)
+        self.assertEqual(ev.udata, 0)
+        self.assertEqual(ev, ev)
+        self.assertNotEqual(ev, other)
+
+        # Issue 11973
+        bignum = 0xffffffff
+        ev = select.kevent(0, 1, 2, bignum)
+        self.assertEqual(ev.ident, 0)
+        self.assertEqual(ev.filter, 1)
+        self.assertEqual(ev.flags, 2)
+        self.assertEqual(ev.fflags, bignum)
+        self.assertEqual(ev.data, 0)
+        self.assertEqual(ev.udata, 0)
+        self.assertEqual(ev, ev)
+        self.assertNotEqual(ev, other)
+
+
     def test_queue_event(self):
-        serverSocket = socket.socket()
-        serverSocket.bind(('127.0.0.1', 0))
-        serverSocket.listen(1)
+        serverSocket = socket.create_server(('127.0.0.1', 0))
         client = socket.socket()
         client.setblocking(False)
         try:
             client.connect(('127.0.0.1', serverSocket.getsockname()[1]))
-        except socket.error, e:
+        except OSError as e:
             self.assertEqual(e.args[0], errno.EINPROGRESS)
         else:
             #raise AssertionError("Connect should have raised EINPROGRESS")
@@ -122,8 +148,8 @@ class TestKQueue(unittest.TestCase):
             (client.fileno(), select.KQ_FILTER_WRITE),
             (server.fileno(), select.KQ_FILTER_WRITE)]))
 
-        client.send("Hello!")
-        server.send("world!!!")
+        client.send(b"Hello!")
+        server.send(b"world!!!")
 
         # We may need to call it several times
         for i in range(10):
@@ -180,8 +206,56 @@ class TestKQueue(unittest.TestCase):
         b.close()
         kq.close()
 
-def test_main():
-    test_support.run_unittest(TestKQueue)
+    def test_issue30058(self):
+        # changelist must be an iterable
+        kq = select.kqueue()
+        a, b = socket.socketpair()
+        ev = select.kevent(a, select.KQ_FILTER_READ, select.KQ_EV_ADD | select.KQ_EV_ENABLE)
+
+        kq.control([ev], 0)
+        # not a list
+        kq.control((ev,), 0)
+        # __len__ is not consistent with __iter__
+        class BadList:
+            def __len__(self):
+                return 0
+            def __iter__(self):
+                for i in range(100):
+                    yield ev
+        kq.control(BadList(), 0)
+        # doesn't have __len__
+        kq.control(iter([ev]), 0)
+
+        a.close()
+        b.close()
+        kq.close()
+
+    def test_close(self):
+        open_file = open(__file__, "rb")
+        self.addCleanup(open_file.close)
+        fd = open_file.fileno()
+        kqueue = select.kqueue()
+
+        # test fileno() method and closed attribute
+        self.assertIsInstance(kqueue.fileno(), int)
+        self.assertFalse(kqueue.closed)
+
+        # test close()
+        kqueue.close()
+        self.assertTrue(kqueue.closed)
+        self.assertRaises(ValueError, kqueue.fileno)
+
+        # close() can be called more than once
+        kqueue.close()
+
+        # operations must fail with ValueError("I/O operation on closed ...")
+        self.assertRaises(ValueError, kqueue.control, None, 4)
+
+    def test_fd_non_inheritable(self):
+        kqueue = select.kqueue()
+        self.addCleanup(kqueue.close)
+        self.assertEqual(os.get_inheritable(kqueue.fileno()), False)
+
 
 if __name__ == "__main__":
-    test_main()
+    unittest.main()

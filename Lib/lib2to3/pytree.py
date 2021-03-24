@@ -13,8 +13,7 @@ There's also a pattern matching implementation here.
 __author__ = "Guido van Rossum <guido@python.org>"
 
 import sys
-import warnings
-from StringIO import StringIO
+from io import StringIO
 
 HUGE = 0x7FFFFFFF  # maximum repeat count, default max
 
@@ -64,16 +63,6 @@ class Base(object):
 
     __hash__ = None # For Py3 compatibility.
 
-    def __ne__(self, other):
-        """
-        Compare two nodes for inequality.
-
-        This calls the method _eq().
-        """
-        if self.__class__ is not other.__class__:
-            return NotImplemented
-        return not self._eq(other)
-
     def _eq(self, other):
         """
         Compare two nodes for equality.
@@ -108,26 +97,6 @@ class Base(object):
         This must be implemented by the concrete subclass.
         """
         raise NotImplementedError
-
-    def set_prefix(self, prefix):
-        """
-        Set the prefix for the node (see Leaf class).
-
-        DEPRECATED; use the prefix property directly.
-        """
-        warnings.warn("set_prefix() is deprecated; use the prefix property",
-                      DeprecationWarning, stacklevel=2)
-        self.prefix = prefix
-
-    def get_prefix(self):
-        """
-        Return the prefix for the node (see Leaf class).
-
-        DEPRECATED; use the prefix property directly.
-        """
-        warnings.warn("get_prefix() is deprecated; use the prefix property",
-                      DeprecationWarning, stacklevel=2)
-        return self.prefix
 
     def replace(self, new):
         """Replace this node with a new one in the parent."""
@@ -214,8 +183,7 @@ class Base(object):
 
     def leaves(self):
         for child in self.children:
-            for x in child.leaves():
-                yield x
+            yield from child.leaves()
 
     def depth(self):
         if self.parent is None:
@@ -229,12 +197,12 @@ class Base(object):
         """
         next_sib = self.next_sibling
         if next_sib is None:
-            return u""
+            return ""
         return next_sib.prefix
 
     if sys.version_info < (3, 0):
         def __str__(self):
-            return unicode(self).encode("ascii")
+            return str(self).encode("ascii")
 
 class Node(Base):
 
@@ -277,7 +245,7 @@ class Node(Base):
 
         This reproduces the input source exactly.
         """
-        return u"".join(map(unicode, self.children))
+        return "".join(map(str, self.children))
 
     if sys.version_info > (3, 0):
         __str__ = __unicode__
@@ -294,18 +262,17 @@ class Node(Base):
     def post_order(self):
         """Return a post-order iterator for the tree."""
         for child in self.children:
-            for node in child.post_order():
-                yield node
+            yield from child.post_order()
         yield self
 
     def pre_order(self):
         """Return a pre-order iterator for the tree."""
         yield self
         for child in self.children:
-            for node in child.pre_order():
-                yield node
+            yield from child.pre_order()
 
-    def _prefix_getter(self):
+    @property
+    def prefix(self):
         """
         The whitespace and comments preceding this node in the input.
         """
@@ -313,11 +280,10 @@ class Node(Base):
             return ""
         return self.children[0].prefix
 
-    def _prefix_setter(self, prefix):
+    @prefix.setter
+    def prefix(self, prefix):
         if self.children:
             self.children[0].prefix = prefix
-
-    prefix = property(_prefix_getter, _prefix_setter)
 
     def set_child(self, i, child):
         """
@@ -388,7 +354,7 @@ class Leaf(Base):
 
         This reproduces the input source exactly.
         """
-        return self.prefix + unicode(self.value)
+        return self.prefix + str(self.value)
 
     if sys.version_info > (3, 0):
         __str__ = __unicode__
@@ -414,17 +380,17 @@ class Leaf(Base):
         """Return a pre-order iterator for the tree."""
         yield self
 
-    def _prefix_getter(self):
+    @property
+    def prefix(self):
         """
         The whitespace and comments preceding this token in the input.
         """
         return self._prefix
 
-    def _prefix_setter(self, prefix):
+    @prefix.setter
+    def prefix(self, prefix):
         self.changed()
         self._prefix = prefix
-
-    prefix = property(_prefix_getter, _prefix_setter)
 
 def convert(gr, raw_node):
     """
@@ -548,7 +514,7 @@ class LeafPattern(BasePattern):
         if type is not None:
             assert 0 <= type < 256, type
         if content is not None:
-            assert isinstance(content, basestring), repr(content)
+            assert isinstance(content, str), repr(content)
         self.type = type
         self.content = content
         self.name = name
@@ -598,7 +564,7 @@ class NodePattern(BasePattern):
         if type is not None:
             assert type >= 256, type
         if content is not None:
-            assert not isinstance(content, basestring), repr(content)
+            assert not isinstance(content, str), repr(content)
             content = list(content)
             for i, item in enumerate(content):
                 assert isinstance(item, BasePattern), (i, item)
@@ -733,7 +699,7 @@ class WildcardPattern(BasePattern):
         """
         if self.content is None:
             # Shortcut for special case (see __init__.__doc__)
-            for count in xrange(self.min, 1 + min(len(nodes), self.max)):
+            for count in range(self.min, 1 + min(len(nodes), self.max)):
                 r = {}
                 if self.name:
                     r[self.name] = nodes[:count]
@@ -743,8 +709,8 @@ class WildcardPattern(BasePattern):
         else:
             # The reason for this is that hitting the recursion limit usually
             # results in some ugly messages about how RuntimeErrors are being
-            # ignored. We don't do this on non-CPython implementation because
-            # they don't have this problem.
+            # ignored. We only have to do this on CPython, though, because other
+            # implementations don't have this nasty bug in the first place.
             if hasattr(sys, "getrefcount"):
                 save_stderr = sys.stderr
                 sys.stderr = StringIO()

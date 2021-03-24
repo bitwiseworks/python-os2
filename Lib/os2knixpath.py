@@ -1,5 +1,5 @@
-# Module 'os2emxpath' -- common operations on OS/2 pathnames
-"""Common pathname manipulations, OS/2 EMX version.
+# Module 'os2knixpath' -- common operations on OS/2 pathnames
+"""Common pathname manipulations, OS/2 libc version.
 
 Instead of importing this module directly, import os and refer to this
 module as os.path.

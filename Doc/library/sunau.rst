@@ -3,6 +3,7 @@
 
 .. module:: sunau
    :synopsis: Provide an interface to the Sun AU sound format.
+
 .. sectionauthor:: Moshe Zadka <moshez@zadka.site.co.il>
 
 **Source code:** :source:`Lib/sunau.py`
@@ -54,13 +55,8 @@ The :mod:`sunau` module defines the following functions:
 
    Note that it does not allow read/write files.
 
-   A *mode* of ``'r'`` returns a :class:`AU_read` object, while a *mode* of ``'w'``
-   or ``'wb'`` returns a :class:`AU_write` object.
-
-
-.. function:: openfp(file, mode)
-
-   A synonym for :func:`.open`, maintained for backwards compatibility.
+   A *mode* of ``'r'`` returns an :class:`AU_read` object, while a *mode* of ``'w'``
+   or ``'wb'`` returns an :class:`AU_write` object.
 
 
 The :mod:`sunau` module defines the following exception:
@@ -117,7 +113,7 @@ AU_read objects, as returned by :func:`.open` above, have the following methods:
 
 .. method:: AU_read.getnchannels()
 
-   Returns number of audio channels (1 for mone, 2 for stereo).
+   Returns number of audio channels (1 for mono, 2 for stereo).
 
 
 .. method:: AU_read.getsampwidth()
@@ -150,13 +146,14 @@ AU_read objects, as returned by :func:`.open` above, have the following methods:
 
 .. method:: AU_read.getparams()
 
-   Returns a tuple ``(nchannels, sampwidth, framerate, nframes, comptype,
-   compname)``, equivalent to output of the :meth:`get\*` methods.
+   Returns a :func:`~collections.namedtuple` ``(nchannels, sampwidth,
+   framerate, nframes, comptype, compname)``, equivalent to output of the
+   :meth:`get\*` methods.
 
 
 .. method:: AU_read.readframes(n)
 
-   Reads and returns at most *n* frames of audio, as a string of bytes.  The data
+   Reads and returns at most *n* frames of audio, as a :class:`bytes` object.  The data
    will be returned in linear format.  If the original data is in u-LAW format, it
    will be converted.
 
@@ -211,6 +208,9 @@ AU_write objects, as returned by :func:`.open` above, have the following methods
 
    Set the sample width (in bytes.)
 
+   .. versionchanged:: 3.4
+      Added support for 24-bit samples.
+
 
 .. method:: AU_write.setframerate(n)
 
@@ -246,10 +246,16 @@ AU_write objects, as returned by :func:`.open` above, have the following methods
 
    Write audio frames, without correcting *nframes*.
 
+   .. versionchanged:: 3.4
+      Any :term:`bytes-like object` is now accepted.
+
 
 .. method:: AU_write.writeframes(data)
 
    Write audio frames and make sure *nframes* is correct.
+
+   .. versionchanged:: 3.4
+      Any :term:`bytes-like object` is now accepted.
 
 
 .. method:: AU_write.close()

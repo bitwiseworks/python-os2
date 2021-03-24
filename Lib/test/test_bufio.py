@@ -1,5 +1,5 @@
 import unittest
-from test import test_support as support
+from test import support
 
 import io # C implementation.
 import _pyio as pyio # Python implementation.
@@ -11,7 +11,7 @@ import _pyio as pyio # Python implementation.
 lengths = list(range(1, 257)) + [512, 1000, 1024, 2048, 4096, 8192, 10000,
                                  16384, 32768, 65536, 1000000]
 
-class BufferSizeTest(unittest.TestCase):
+class BufferSizeTest:
     def try_one(self, s):
         # Write s + "\n" + s to file, then open it and ensure that successive
         # .readline()s deliver what we wrote.
@@ -34,7 +34,7 @@ class BufferSizeTest(unittest.TestCase):
             line = f.readline()
             self.assertEqual(line, s)
             line = f.readline()
-            self.assertTrue(not line) # Must be at EOF
+            self.assertFalse(line) # Must be at EOF
             f.close()
         finally:
             support.unlink(support.TESTFN)
@@ -59,21 +59,15 @@ class BufferSizeTest(unittest.TestCase):
         self.drive_one(b"1234567890\00\01\02\03\04\05\06")
 
     def test_nullpat(self):
-        self.drive_one(bytes(1000))
+        self.drive_one(b'\0' * 1000)
 
 
-class CBufferSizeTest(BufferSizeTest):
+class CBufferSizeTest(BufferSizeTest, unittest.TestCase):
     open = io.open
 
-class PyBufferSizeTest(BufferSizeTest):
+class PyBufferSizeTest(BufferSizeTest, unittest.TestCase):
     open = staticmethod(pyio.open)
 
-class BuiltinBufferSizeTest(BufferSizeTest):
-    open = open
-
-
-def test_main():
-    support.run_unittest(CBufferSizeTest, PyBufferSizeTest, BuiltinBufferSizeTest)
 
 if __name__ == "__main__":
-    test_main()
+    unittest.main()

@@ -7,33 +7,30 @@ extern "C" {
 
 /* Operating system dependencies */
 
-/* Mod by chrish: QNX has WATCOM, but isn't DOS */
-#if !defined(__QNX__)
-#if defined(MS_WINDOWS) || defined(__BORLANDC__) || defined(__WATCOMC__) || defined(__DJGPP__) || defined(PYOS_OS2)
-#if defined(PYOS_OS2) && defined(PYCC_GCC)
+#ifdef MS_WINDOWS
+#define SEP L'\\'
+#define ALTSEP L'/'
+#define MAXPATHLEN 256
+#define DELIM L';'
+#endif
+
+#ifdef __OS2__
+#ifndef MAXPATHLEN
 #define MAXPATHLEN 260
-#define SEP '/'
-#define ALTSEP '\\'
-#else
-#define SEP '\\'
-#define ALTSEP '/'
-#define MAXPATHLEN 256
 #endif
-#define DRVSEP ':' /* (bird) */
-#define DELIM ';'
-#endif
+#define SEP L'/'
+#define ALTSEP L'\\'
+#define DRVSEP L':'
+#define DELIM L';'
 #endif
 
-#ifdef RISCOS
-#define SEP '.'
-#define MAXPATHLEN 256
-#define DELIM ','
+#ifdef __VXWORKS__
+#define DELIM L';'
 #endif
-
 
 /* Filename separator */
 #ifndef SEP
-#define SEP '/'
+#define SEP L'/'
 #endif
 
 /* Test if `ch' is a filename separator (bird) */
@@ -59,9 +56,9 @@ extern "C" {
 
 /* Test if `path' contains any of the path separators including drive letter. (bird) */
 #ifdef ALTSEP
-#define HAS_ANYSEP(path) ( strchr((path), SEP) || strchr((path), ALTSEP) || HAS_DRV(path) )
+#define HAS_ANYSEP(path) ( wcschr((path), SEP) || wcschr((path), ALTSEP) || HAS_DRV(path) )
 #else
-#define HAS_ANYSEP(path) ( strchr((path), SEP) || HAS_DRV(path) )
+#define HAS_ANYSEP(path) ( wcschr((path), SEP) || HAS_DRV(path) )
 #endif
 
 /* Max pathname length */
@@ -83,7 +80,7 @@ extern "C" {
 
 /* Search path entry delimiter */
 #ifndef DELIM
-#define DELIM ':'
+#define DELIM L':'
 #endif
 
 #ifdef __cplusplus

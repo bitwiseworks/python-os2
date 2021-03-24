@@ -3,11 +3,9 @@
 
 .. module:: platform
    :synopsis: Retrieves as much platform identifying data as possible.
-.. moduleauthor:: Marc-Andre Lemburg <mal@egenix.com>
+
+.. moduleauthor:: Marc-André Lemburg <mal@egenix.com>
 .. sectionauthor:: Bjorn Pettersen <bpettersen@corp.fairisaac.com>
-
-
-.. versionadded:: 2.3
 
 **Source code:** :source:`Lib/platform.py`
 
@@ -33,8 +31,8 @@ Cross Platform
    returned as strings.
 
    Values that cannot be determined are returned as given by the parameter presets.
-   If bits is given as ``''``, the :c:func:`sizeof(pointer)` (or
-   :c:func:`sizeof(long)` on Python version < 1.5.2) is used as indicator for the
+   If bits is given as ``''``, the ``sizeof(pointer)`` (or
+   ``sizeof(long)`` on Python version < 1.5.2) is used as indicator for the
    supported pointer size.
 
    The function relies on the system's :file:`file` command to do the actual work.
@@ -81,6 +79,11 @@ Cross Platform
    Setting *terse* to true causes the function to return only the absolute minimum
    information needed to identify the platform.
 
+   .. versionchanged:: 3.8
+      On macOS, the function now uses :func:`mac_ver`, if it returns a
+      non-empty release string, to get the macOS version rather than the darwin
+      version.
+
 
 .. function:: processor()
 
@@ -106,27 +109,21 @@ Cross Platform
 
    Returns a string identifying the Python implementation SCM branch.
 
-   .. versionadded:: 2.6
-
 
 .. function:: python_implementation()
 
    Returns a string identifying the Python implementation. Possible return values
    are: 'CPython', 'IronPython', 'Jython', 'PyPy'.
 
-   .. versionadded:: 2.6
-
 
 .. function:: python_revision()
 
    Returns a string identifying the Python implementation SCM revision.
 
-   .. versionadded:: 2.6
-
 
 .. function:: python_version()
 
-   Returns the Python version as string ``'major.minor.patchlevel'``
+   Returns the Python version as string ``'major.minor.patchlevel'``.
 
    Note that unlike the Python ``sys.version``, the returned value will always
    include the patchlevel (it defaults to 0).
@@ -148,8 +145,8 @@ Cross Platform
 
 .. function:: system()
 
-   Returns the system/OS name, e.g. ``'Linux'``, ``'Windows'``, or ``'Java'``. An
-   empty string is returned if the value cannot be determined.
+   Returns the system/OS name, such as ``'Linux'``, ``'Darwin'``, ``'Java'``,
+   ``'Windows'``. An empty string is returned if the value cannot be determined.
 
 
 .. function:: system_alias(system, release, version)
@@ -167,13 +164,19 @@ Cross Platform
 
 .. function:: uname()
 
-   Fairly portable uname interface. Returns a tuple of strings ``(system, node,
-   release, version, machine, processor)`` identifying the underlying platform.
+   Fairly portable uname interface. Returns a :func:`~collections.namedtuple`
+   containing six attributes: :attr:`system`, :attr:`node`, :attr:`release`,
+   :attr:`version`, :attr:`machine`, and :attr:`processor`.
 
-   Note that unlike the :func:`os.uname` function this also returns possible
-   processor information as additional tuple entry.
+   Note that this adds a sixth attribute (:attr:`processor`) not present
+   in the :func:`os.uname` result.  Also, the attribute names are different
+   for the first two attributes; :func:`os.uname` names them
+   :attr:`sysname` and :attr:`nodename`.
 
    Entries which cannot be determined are set to ``''``.
+
+   .. versionchanged:: 3.3
+      Result changed from a tuple to a namedtuple.
 
 
 Java Platform
@@ -206,22 +209,20 @@ Windows Platform
    which means the OS version uses debugging code, i.e. code that checks arguments,
    ranges, etc.
 
-   .. note::
+.. function:: win32_edition()
 
-      This function works best with Mark Hammond's
-      :mod:`win32all` package installed, but also on Python 2.3 and
-      later (support for this was added in Python 2.6). It obviously
-      only runs on Win32 compatible platforms.
+   Returns a string representing the current Windows edition.  Possible
+   values include but are not limited to ``'Enterprise'``, ``'IoTUAP'``,
+   ``'ServerStandard'``, and ``'nanoserver'``.
 
+   .. versionadded:: 3.8
 
-Win95/98 specific
-^^^^^^^^^^^^^^^^^
+.. function:: win32_is_iot()
 
-.. function:: popen(cmd, mode='r', bufsize=None)
+   Return ``True`` if the Windows edition returned by :func:`win32_edition`
+   is recognized as an IoT edition.
 
-   Portable :func:`popen` interface.  Find a working popen implementation
-   preferring :func:`win32pipe.popen`.  On Windows NT, :func:`win32pipe.popen`
-   should work; on Windows 9x it hangs due to bugs in the MS C library.
+   .. versionadded:: 3.8
 
 
 Mac OS Platform
@@ -241,38 +242,7 @@ Mac OS Platform
 Unix Platforms
 --------------
 
-
-.. function:: dist(distname='', version='', id='', supported_dists=('SuSE','debian','redhat','mandrake',...))
-
-   This is an old version of the functionality now provided by
-   :func:`linux_distribution`. For new code, please use the
-   :func:`linux_distribution`.
-
-   The only difference between the two is that ``dist()`` always
-   returns the short name of the distribution taken from the
-   ``supported_dists`` parameter.
-
-   .. deprecated:: 2.6
-
-.. function:: linux_distribution(distname='', version='', id='', supported_dists=('SuSE','debian','redhat','mandrake',...), full_distribution_name=1)
-
-   Tries to determine the name of the Linux OS distribution name.
-
-   ``supported_dists`` may be given to define the set of Linux distributions to
-   look for. It defaults to a list of currently supported Linux distributions
-   identified by their release file name.
-
-   If ``full_distribution_name`` is true (default), the full distribution read
-   from the OS is returned. Otherwise the short name taken from
-   ``supported_dists`` is used.
-
-   Returns a tuple ``(distname,version,id)`` which defaults to the args given as
-   parameters.  ``id`` is the item in parentheses after the version number.  It
-   is usually the version codename.
-
-   .. versionadded:: 2.6
-
-.. function:: libc_ver(executable=sys.executable, lib='', version='', chunksize=2048)
+.. function:: libc_ver(executable=sys.executable, lib='', version='', chunksize=16384)
 
    Tries to determine the libc version against which the file executable (defaults
    to the Python interpreter) is linked.  Returns a tuple of strings ``(lib,
@@ -283,4 +253,3 @@ Unix Platforms
    using :program:`gcc`.
 
    The file is read and scanned in chunks of *chunksize* bytes.
-

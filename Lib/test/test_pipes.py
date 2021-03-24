@@ -2,7 +2,8 @@ import pipes
 import os
 import string
 import unittest
-from test.test_support import TESTFN, run_unittest, unlink, reap_children
+import shutil
+from test.support import TESTFN, run_unittest, unlink, reap_children
 
 if os.name != 'posix':
     raise unittest.SkipTest('pipes module only works on posix')
@@ -18,15 +19,18 @@ class SimplePipeTests(unittest.TestCase):
             unlink(f)
 
     def testSimplePipe1(self):
+        if shutil.which('tr') is None:
+            self.skipTest('tr is not available')
         t = pipes.Template()
         t.append(s_command, pipes.STDIN_STDOUT)
-        f = t.open(TESTFN, 'w')
-        f.write('hello world #1')
-        f.close()
+        with t.open(TESTFN, 'w') as f:
+            f.write('hello world #1')
         with open(TESTFN) as f:
             self.assertEqual(f.read(), 'HELLO WORLD #1')
 
     def testSimplePipe2(self):
+        if shutil.which('tr') is None:
+            self.skipTest('tr is not available')
         with open(TESTFN, 'w') as f:
             f.write('hello world #2')
         t = pipes.Template()
@@ -36,12 +40,17 @@ class SimplePipeTests(unittest.TestCase):
             self.assertEqual(f.read(), 'HELLO WORLD #2')
 
     def testSimplePipe3(self):
+        if shutil.which('tr') is None:
+            self.skipTest('tr is not available')
         with open(TESTFN, 'w') as f:
             f.write('hello world #2')
         t = pipes.Template()
         t.append(s_command + ' < $IN', pipes.FILEIN_STDOUT)
-        with t.open(TESTFN, 'r') as f:
+        f = t.open(TESTFN, 'r')
+        try:
             self.assertEqual(f.read(), 'HELLO WORLD #2')
+        finally:
+            f.close()
 
     def testEmptyPipeline1(self):
         # copy through empty pipe
@@ -61,8 +70,11 @@ class SimplePipeTests(unittest.TestCase):
         with open(TESTFN, 'w') as f:
             f.write(d)
         t=pipes.Template()
-        with t.open(TESTFN, 'r') as f:
+        f = t.open(TESTFN, 'r')
+        try:
             self.assertEqual(f.read(), d)
+        finally:
+            f.close()
 
     def testEmptyPipeline3(self):
         # write through empty pipe
@@ -72,20 +84,6 @@ class SimplePipeTests(unittest.TestCase):
             f.write(d)
         with open(TESTFN) as f:
             self.assertEqual(f.read(), d)
-
-    def testQuoting(self):
-        safeunquoted = string.ascii_letters + string.digits + '@%_-+=:,./'
-        unsafe = '"`$\\!'
-
-        self.assertEqual(pipes.quote(''), "''")
-        self.assertEqual(pipes.quote(safeunquoted), safeunquoted)
-        self.assertEqual(pipes.quote('test file name'), "'test file name'")
-        for u in unsafe:
-            self.assertEqual(pipes.quote('test%sname' % u),
-                              "'test%sname'" % u)
-        for u in unsafe:
-            self.assertEqual(pipes.quote("test%s'name'" % u),
-                             "'test%s'\"'\"'name'\"'\"''" % u)
 
     def testRepr(self):
         t = pipes.Template()

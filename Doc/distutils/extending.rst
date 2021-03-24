@@ -4,6 +4,8 @@
 Extending Distutils
 *******************
 
+.. include:: ./_setuptools_disclaimer.rst
+
 Distutils can be extended in various ways.  Most extensions take the form of new
 commands or replacements for existing commands.  New commands may be written to
 support new types of platform-specific packaging, for example, while
@@ -61,8 +63,8 @@ commands to be added which can support existing :file:`setup.py` scripts without
 requiring modifications to the Python installation.  This is expected to allow
 third-party extensions to provide support for additional packaging systems, but
 the commands can be used for anything distutils commands can be used for.  A new
-configuration option, :option:`command_packages` (command-line option
-:option:`--command-packages`), can be used to specify additional packages to be
+configuration option, ``command_packages`` (command-line option
+:option:`!--command-packages`), can be used to specify additional packages to be
 searched for modules implementing commands.  Like all distutils options, this
 can be specified on the command line or in a configuration file.  This option
 can only be set in the ``[global]`` section of a configuration file, or before
@@ -75,7 +77,7 @@ This new option can be used to add any number of packages to the list of
 packages searched for command implementations; multiple package names should be
 separated by commas.  When not specified, the search is only performed in the
 :mod:`distutils.command` package.  When :file:`setup.py` is run with the option
-:option:`--command-packages` :option:`distcmds,buildcmds`, however, the packages
+``--command-packages distcmds,buildcmds``, however, the packages
 :mod:`distutils.command`, :mod:`distcmds`, and :mod:`buildcmds` will be searched
 in that order.  New commands are expected to be implemented in modules of the
 same name as the command by classes sharing the same name.  Given the example

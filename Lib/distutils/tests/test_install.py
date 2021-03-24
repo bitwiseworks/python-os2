@@ -5,7 +5,7 @@ import sys
 import unittest
 import site
 
-from test.test_support import captured_stdout, run_unittest
+from test.support import captured_stdout, run_unittest
 
 from distutils import sysconfig
 from distutils.command.install import install
@@ -17,15 +17,15 @@ from distutils.errors import DistutilsOptionError
 from distutils.extension import Extension
 
 from distutils.tests import support
+from test import support as test_support
 
 
 def _make_ext_name(modname):
-    if os.name == 'nt' and sys.executable.endswith('_d.exe'):
-        modname += '_d'
-    return modname + sysconfig.get_config_var('SO')
+    return modname + sysconfig.get_config_var('EXT_SUFFIX')
 
 
 class InstallTestCase(support.TempdirManager,
+                      support.EnvironGuard,
                       support.LoggingSilencer,
                       unittest.TestCase):
 
@@ -58,7 +58,8 @@ class InstallTestCase(support.TempdirManager,
 
         libdir = os.path.join(destination, "lib", "python")
         check_path(cmd.install_lib, libdir)
-        check_path(cmd.install_platlib, libdir)
+        platlibdir = os.path.join(destination, sys.platlibdir, "python")
+        check_path(cmd.install_platlib, platlibdir)
         check_path(cmd.install_purelib, libdir)
         check_path(cmd.install_headers,
                    os.path.join(destination, "include", "python", "foopkg"))
@@ -66,10 +67,7 @@ class InstallTestCase(support.TempdirManager,
         check_path(cmd.install_data, destination)
 
     def test_user_site(self):
-        # site.USER_SITE was introduced in 2.6
-        if sys.version < '2.6':
-            return
-
+        # test install with --user
         # preparing the environment for the test
         self.old_user_base = site.USER_BASE
         self.old_user_site = site.USER_SITE
@@ -177,7 +175,7 @@ class InstallTestCase(support.TempdirManager,
         project_dir, dist = self.create_dist(py_modules=['hello'],
                                              scripts=['sayhi'])
         os.chdir(project_dir)
-        self.write_file('hello.py', "def main(): print 'o hai'")
+        self.write_file('hello.py', "def main(): print('o hai')")
         self.write_file('sayhi', 'from hello import main; main()')
 
         cmd = install(dist)
@@ -194,11 +192,15 @@ class InstallTestCase(support.TempdirManager,
             f.close()
 
         found = [os.path.basename(line) for line in content.splitlines()]
-        expected = ['hello.py', 'hello.pyc', 'sayhi',
+        expected = ['hello.py', 'hello.%s.pyc' % sys.implementation.cache_tag,
+                    'sayhi',
                     'UNKNOWN-0.0.0-py%s.%s.egg-info' % sys.version_info[:2]]
         self.assertEqual(found, expected)
 
     def test_record_extensions(self):
+        cmd = test_support.missing_compiler_executable()
+        if cmd is not None:
+            self.skipTest('The %r command is not found' % cmd)
         install_dir = self.mkdtemp()
         project_dir, dist = self.create_dist(ext_modules=[
             Extension('xx', ['xxmodule.c'])])
@@ -237,7 +239,7 @@ class InstallTestCase(support.TempdirManager,
                 self.test_record()
         finally:
             install_module.DEBUG = False
-        self.assertTrue(len(self.logs) > old_logs_len)
+        self.assertGreater(len(self.logs), old_logs_len)
 
 
 def test_suite():

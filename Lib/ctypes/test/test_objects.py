@@ -13,18 +13,18 @@ Here is an array of string pointers:
 
 >>> from ctypes import *
 >>> array = (c_char_p * 5)()
->>> print array._objects
+>>> print(array._objects)
 None
 >>>
 
 The memory block stores pointers to strings, and the strings itself
 assigned from Python must be kept.
 
->>> array[4] = 'foo bar'
+>>> array[4] = b'foo bar'
 >>> array._objects
-{'4': 'foo bar'}
+{'4': b'foo bar'}
 >>> array[4]
-'foo bar'
+b'foo bar'
 >>>
 
 It gets more complicated when the ctypes instance itself is contained
@@ -34,37 +34,34 @@ in a 'base' object.
 ...     _fields_ = [("x", c_int), ("y", c_int), ("array", c_char_p * 5)]
 ...
 >>> x = X()
->>> print x._objects
+>>> print(x._objects)
 None
 >>>
 
 The'array' attribute of the 'x' object shares part of the memory buffer
 of 'x' ('_b_base_' is either None, or the root object owning the memory block):
 
->>> print x.array._b_base_ # doctest: +ELLIPSIS
+>>> print(x.array._b_base_) # doctest: +ELLIPSIS
 <ctypes.test.test_objects.X object at 0x...>
 >>>
 
->>> x.array[0] = 'spam spam spam'
+>>> x.array[0] = b'spam spam spam'
 >>> x._objects
-{'0:2': 'spam spam spam'}
+{'0:2': b'spam spam spam'}
 >>> x.array._b_base_._objects
-{'0:2': 'spam spam spam'}
+{'0:2': b'spam spam spam'}
 >>>
 
 '''
 
-import unittest, doctest, sys
+import unittest, doctest
 
 import ctypes.test.test_objects
 
 class TestCase(unittest.TestCase):
-    if sys.hexversion > 0x02040000:
-        # Python 2.3 has no ELLIPSIS flag, so we don't test with this
-        # version:
-        def test(self):
-            doctest.testmod(ctypes.test.test_objects)
+    def test(self):
+        failures, tests = doctest.testmod(ctypes.test.test_objects)
+        self.assertFalse(failures, 'doctests failed, see output above')
 
 if __name__ == '__main__':
-    if sys.hexversion > 0x02040000:
-        doctest.testmod(ctypes.test.test_objects)
+    doctest.testmod(ctypes.test.test_objects)

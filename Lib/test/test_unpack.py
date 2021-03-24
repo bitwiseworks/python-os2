@@ -55,35 +55,35 @@ Unpacking non-sequence
     >>> a, b, c = 7
     Traceback (most recent call last):
       ...
-    TypeError: 'int' object is not iterable
+    TypeError: cannot unpack non-iterable int object
 
 Unpacking tuple of wrong size
 
     >>> a, b = t
     Traceback (most recent call last):
       ...
-    ValueError: too many values to unpack
+    ValueError: too many values to unpack (expected 2)
 
 Unpacking tuple of wrong size
 
     >>> a, b = l
     Traceback (most recent call last):
       ...
-    ValueError: too many values to unpack
+    ValueError: too many values to unpack (expected 2)
 
 Unpacking sequence too short
 
     >>> a, b, c, d = Seq()
     Traceback (most recent call last):
       ...
-    ValueError: need more than 3 values to unpack
+    ValueError: not enough values to unpack (expected 4, got 3)
 
 Unpacking sequence too long
 
     >>> a, b = Seq()
     Traceback (most recent call last):
       ...
-    ValueError: too many values to unpack
+    ValueError: too many values to unpack (expected 2)
 
 Unpacking a sequence where the test for too long raises a different kind of
 error
@@ -107,7 +107,7 @@ error)
     >>> a, b, c, d, e = BadSeq()
     Traceback (most recent call last):
       ...
-    BozoError
+    test.test_unpack.BozoError
 
 Trigger code while expecting an IndexError (unpack sequence too short, wrong
 error)
@@ -115,16 +115,37 @@ error)
     >>> a, b, c = BadSeq()
     Traceback (most recent call last):
       ...
-    BozoError
+    test.test_unpack.BozoError
+
+Allow unpacking empty iterables
+
+    >>> () = []
+    >>> [] = ()
+    >>> [] = []
+    >>> () = ()
+
+Unpacking non-iterables should raise TypeError
+
+    >>> () = 42
+    Traceback (most recent call last):
+      ...
+    TypeError: cannot unpack non-iterable int object
+
+Unpacking to an empty iterable should raise ValueError
+
+    >>> () = [42]
+    Traceback (most recent call last):
+      ...
+    ValueError: too many values to unpack (expected 0)
 
 """
 
 __test__ = {'doctests' : doctests}
 
 def test_main(verbose=False):
-    from test import test_support
+    from test import support
     from test import test_unpack
-    test_support.run_doctest(test_unpack, verbose)
+    support.run_doctest(test_unpack, verbose)
 
 if __name__ == "__main__":
     test_main(verbose=True)

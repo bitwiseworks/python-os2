@@ -24,7 +24,7 @@ select the color under the cursor while you drag it, but be forewarned that
 this can be slow.
 """
 
-from Tkinter import *
+from tkinter import *
 import ColorDB
 
 # Load this script into the Tcl interpreter and call it in
@@ -62,32 +62,32 @@ def constant(numchips):
 # red variations, green+blue = cyan constant
 def constant_red_generator(numchips, red, green, blue):
     seq = constant(numchips)
-    return map(None, [red] * numchips, seq, seq)
+    return list(zip([red] * numchips, seq, seq))
 
 # green variations, red+blue = magenta constant
 def constant_green_generator(numchips, red, green, blue):
     seq = constant(numchips)
-    return map(None, seq, [green] * numchips, seq)
+    return list(zip(seq, [green] * numchips, seq))
 
 # blue variations, red+green = yellow constant
 def constant_blue_generator(numchips, red, green, blue):
     seq = constant(numchips)
-    return map(None, seq, seq, [blue] * numchips)
+    return list(zip(seq, seq, [blue] * numchips))
 
 # red variations, green+blue = cyan constant
 def constant_cyan_generator(numchips, red, green, blue):
     seq = constant(numchips)
-    return map(None, seq, [green] * numchips, [blue] * numchips)
+    return list(zip(seq, [green] * numchips, [blue] * numchips))
 
 # green variations, red+blue = magenta constant
 def constant_magenta_generator(numchips, red, green, blue):
     seq = constant(numchips)
-    return map(None, [red] * numchips, seq, [blue] * numchips)
+    return list(zip([red] * numchips, seq, [blue] * numchips))
 
 # blue variations, red+green = yellow constant
 def constant_yellow_generator(numchips, red, green, blue):
     seq = constant(numchips)
-    return map(None, [red] * numchips, [green] * numchips, seq)
+    return list(zip([red] * numchips, [green] * numchips, seq))
 
 
 
@@ -119,7 +119,7 @@ class LeftArrow:
         return arrow, text
 
     def _x(self):
-        coords = self._canvas.coords(self._TAG)
+        coords = list(self._canvas.coords(self._TAG))
         assert coords
         return coords[0]
 
@@ -151,7 +151,7 @@ class RightArrow(LeftArrow):
         return arrow, text
 
     def _x(self):
-        coords = self._canvas.coords(self._TAG)
+        coords = list(self._canvas.coords(self._TAG))
         assert coords
         return coords[0] + self._ARROWWIDTH
 
@@ -371,22 +371,6 @@ class StripViewer:
                              command=self.__togglehex)
         hexbtn.grid(row=1, column=1, sticky=W)
 
-        # XXX: ignore this feature for now; it doesn't work quite right yet
-
-##        gentypevar = self.__gentypevar = IntVar()
-##        self.__variations = Radiobutton(frame,
-##                                        text='Variations',
-##                                        variable=gentypevar,
-##                                        value=0,
-##                                        command=self.__togglegentype)
-##        self.__variations.grid(row=0, column=1, sticky=W)
-##        self.__constants = Radiobutton(frame,
-##                                       text='Constants',
-##                                       variable=gentypevar,
-##                                       value=1,
-##                                       command=self.__togglegentype)
-##        self.__constants.grid(row=1, column=1, sticky=W)
-
         # create the white button
         whitebtn = Button(frame2,
                           text='White',
@@ -401,26 +385,6 @@ class StripViewer:
     def __togglehex(self, event=None):
         red, green, blue = self.__sb.current_rgb()
         self.update_yourself(red, green, blue)
-
-##    def __togglegentype(self, event=None):
-##        which = self.__gentypevar.get()
-##        if which == 0:
-##            self.__reds.set(label='Red Variations',
-##                            generator=constant_cyan_generator)
-##            self.__greens.set(label='Green Variations',
-##                              generator=constant_magenta_generator)
-##            self.__blues.set(label='Blue Variations',
-##                             generator=constant_yellow_generator)
-##        elif which == 1:
-##            self.__reds.set(label='Red Constant',
-##                            generator=constant_red_generator)
-##            self.__greens.set(label='Green Constant',
-##                              generator=constant_green_generator)
-##            self.__blues.set(label='Blue Constant',
-##                             generator=constant_blue_generator)
-##        else:
-##            assert 0
-##        self.__sb.update_views_current()
 
     def __toblack(self, event=None):
         self.__sb.update_views(0, 0, 0)

@@ -23,13 +23,13 @@ Complete Python programs
 .. index::
    module: sys
    module: __main__
-   module: __builtin__
+   module: builtins
 
 While a language specification need not prescribe how the language interpreter
 is invoked, it is useful to have a notion of a complete Python program.  A
 complete Python program is executed in a minimally initialized environment: all
 built-in and standard modules are available, but none have been initialized,
-except for :mod:`sys` (various system services), :mod:`__builtin__` (built-in
+except for :mod:`sys` (various system services), :mod:`builtins` (built-in
 functions, exceptions and ``None``) and :mod:`__main__`.  The latter is used to
 provide the local and global namespace for execution of the complete program.
 
@@ -48,14 +48,15 @@ a complete program; each statement is executed in the namespace of
 
 .. index::
    single: UNIX
+   single: Windows
    single: command line
    single: standard input
 
-Under Unix, a complete program can be passed to the interpreter in three forms:
-with the :option:`-c` *string* command line option, as a file passed as the
-first command line argument, or as standard input. If the file or standard input
-is a tty device, the interpreter enters interactive mode; otherwise, it executes
-the file as a complete program.
+A complete program can be passed to the interpreter
+in three forms: with the :option:`-c` *string* command line option, as a file
+passed as the first command line argument, or as standard input.  If the file
+or standard input is a tty device, the interpreter enters interactive mode;
+otherwise, it executes the file as a complete program.
 
 
 .. _file-input:
@@ -65,7 +66,7 @@ File input
 
 All input read from non-interactive files has the same form:
 
-.. productionlist::
+.. productionlist:: python-grammar
    file_input: (NEWLINE | `statement`)*
 
 This syntax is used in the following situations:
@@ -74,7 +75,7 @@ This syntax is used in the following situations:
 
 * when parsing a module;
 
-* when parsing a string passed to the :keyword:`exec` statement;
+* when parsing a string passed to the :func:`exec` function;
 
 
 .. _interactive:
@@ -84,7 +85,7 @@ Interactive input
 
 Input in interactive mode is parsed using the following grammar:
 
-.. productionlist::
+.. productionlist:: python-grammar
    interactive_input: [`stmt_list`] NEWLINE | `compound_stmt` NEWLINE
 
 Note that a (top-level) compound statement must be followed by a blank line in
@@ -97,29 +98,10 @@ Expression input
 ================
 
 .. index:: single: input
-
 .. index:: builtin: eval
 
-There are two forms of expression input.  Both ignore leading whitespace. The
+:func:`eval` is used for expression input.  It ignores leading whitespace. The
 string argument to :func:`eval` must have the following form:
 
-.. productionlist::
+.. productionlist:: python-grammar
    eval_input: `expression_list` NEWLINE*
-
-.. index:: builtin: input
-
-The input line read by :func:`input` must have the following form:
-
-.. productionlist::
-   input_input: `expression_list` NEWLINE
-
-.. index::
-   object: file
-   single: input; raw
-   single: raw input
-   builtin: raw_input
-   single: readline() (file method)
-
-Note: to read 'raw' input line without interpretation, you can use the built-in
-function :func:`raw_input` or the :meth:`readline` method of file objects.
-

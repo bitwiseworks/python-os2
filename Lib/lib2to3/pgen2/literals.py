@@ -29,12 +29,12 @@ def escape(m):
         try:
             i = int(hexes, 16)
         except ValueError:
-            raise ValueError("invalid hex string escape ('\\%s')" % tail)
+            raise ValueError("invalid hex string escape ('\\%s')" % tail) from None
     else:
         try:
             i = int(tail, 8)
         except ValueError:
-            raise ValueError("invalid octal string escape ('\\%s')" % tail)
+            raise ValueError("invalid octal string escape ('\\%s')" % tail) from None
     return chr(i)
 
 def evalString(s):
@@ -53,7 +53,7 @@ def test():
         s = repr(c)
         e = evalString(s)
         if e != c:
-            print i, c, s, e
+            print(i, c, s, e)
 
 
 if __name__ == "__main__":

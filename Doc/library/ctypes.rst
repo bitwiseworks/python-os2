@@ -3,10 +3,10 @@
 
 .. module:: ctypes
    :synopsis: A foreign function library for Python.
+
 .. moduleauthor:: Thomas Heller <theller@python.net>
 
-
-.. versionadded:: 2.5
+--------------
 
 :mod:`ctypes` is a foreign function library for Python.  It provides C compatible
 data types, and allows calling functions in DLLs or shared libraries.  It can be
@@ -22,11 +22,10 @@ Note: The code samples in this tutorial use :mod:`doctest` to make sure that
 they actually work.  Since some code samples behave differently under Linux,
 Windows, or Mac OS X, they contain doctest directives in comments.
 
-Note: Some code samples reference the ctypes :class:`c_int` type. This type is
-an alias for the :class:`c_long` type on 32-bit systems.  So, you should not be
-confused if :class:`c_long` is printed if you would expect :class:`c_int` ---
-they are actually the same type.
-
+Note: Some code samples reference the ctypes :class:`c_int` type.  On platforms
+where ``sizeof(long) == sizeof(int)`` it is an alias to :class:`c_long`.
+So, you should not be confused if :class:`c_long` is printed if you would expect
+:class:`c_int` --- they are actually the same type.
 
 .. _ctypes-loading-dynamic-link-libraries:
 
@@ -41,32 +40,43 @@ loads libraries which export functions using the standard ``cdecl`` calling
 convention, while *windll* libraries call functions using the ``stdcall``
 calling convention. *oledll* also uses the ``stdcall`` calling convention, and
 assumes the functions return a Windows :c:type:`HRESULT` error code. The error
-code is used to automatically raise a :class:`WindowsError` exception when the
+code is used to automatically raise an :class:`OSError` exception when the
 function call fails.
+
+.. versionchanged:: 3.3
+   Windows errors used to raise :exc:`WindowsError`, which is now an alias
+   of :exc:`OSError`.
+
 
 Here are some examples for Windows. Note that ``msvcrt`` is the MS standard C
 library containing most standard C functions, and uses the cdecl calling
 convention::
 
    >>> from ctypes import *
-   >>> print windll.kernel32 # doctest: +WINDOWS
+   >>> print(windll.kernel32)  # doctest: +WINDOWS
    <WinDLL 'kernel32', handle ... at ...>
-   >>> print cdll.msvcrt # doctest: +WINDOWS
+   >>> print(cdll.msvcrt)      # doctest: +WINDOWS
    <CDLL 'msvcrt', handle ... at ...>
-   >>> libc = cdll.msvcrt # doctest: +WINDOWS
+   >>> libc = cdll.msvcrt      # doctest: +WINDOWS
    >>>
 
 Windows appends the usual ``.dll`` file suffix automatically.
+
+.. note::
+    Accessing the standard C library through ``cdll.msvcrt`` will use an
+    outdated version of the library that may be incompatible with the one
+    being used by Python. Where possible, use native Python functionality,
+    or else import and use the ``msvcrt`` module.
 
 On Linux, it is required to specify the filename *including* the extension to
 load a library, so attribute access can not be used to load libraries. Either the
 :meth:`LoadLibrary` method of the dll loaders should be used, or you should load
 the library by creating an instance of CDLL by calling the constructor::
 
-   >>> cdll.LoadLibrary("libc.so.6") # doctest: +LINUX
+   >>> cdll.LoadLibrary("libc.so.6")  # doctest: +LINUX
    <CDLL 'libc.so.6', handle ... at ...>
-   >>> libc = CDLL("libc.so.6")     # doctest: +LINUX
-   >>> libc                         # doctest: +LINUX
+   >>> libc = CDLL("libc.so.6")       # doctest: +LINUX
+   >>> libc                           # doctest: +LINUX
    <CDLL 'libc.so.6', handle ... at ...>
    >>>
 
@@ -83,11 +93,11 @@ Functions are accessed as attributes of dll objects::
    >>> from ctypes import *
    >>> libc.printf
    <_FuncPtr object at 0x...>
-   >>> print windll.kernel32.GetModuleHandleA # doctest: +WINDOWS
+   >>> print(windll.kernel32.GetModuleHandleA)  # doctest: +WINDOWS
    <_FuncPtr object at 0x...>
-   >>> print windll.kernel32.MyOwnFunction # doctest: +WINDOWS
+   >>> print(windll.kernel32.MyOwnFunction)     # doctest: +WINDOWS
    Traceback (most recent call last):
-     File "<stdin>", line 1, in ?
+     File "<stdin>", line 1, in <module>
      File "ctypes.py", line 239, in __getattr__
        func = _StdcallFuncPtr(name, self)
    AttributeError: function 'MyOwnFunction' not found
@@ -108,25 +118,24 @@ UNICODE is defined or not::
 
 *windll* does not try to select one of them by magic, you must access the
 version you need by specifying ``GetModuleHandleA`` or ``GetModuleHandleW``
-explicitly, and then call it with strings or unicode strings
-respectively.
+explicitly, and then call it with bytes or string objects respectively.
 
 Sometimes, dlls export functions with names which aren't valid Python
 identifiers, like ``"??2@YAPAXI@Z"``. In this case you have to use
 :func:`getattr` to retrieve the function::
 
-   >>> getattr(cdll.msvcrt, "??2@YAPAXI@Z") # doctest: +WINDOWS
+   >>> getattr(cdll.msvcrt, "??2@YAPAXI@Z")  # doctest: +WINDOWS
    <_FuncPtr object at 0x...>
    >>>
 
 On Windows, some dlls export functions not by name but by ordinal. These
 functions can be accessed by indexing the dll object with the ordinal number::
 
-   >>> cdll.kernel32[1] # doctest: +WINDOWS
+   >>> cdll.kernel32[1]  # doctest: +WINDOWS
    <_FuncPtr object at 0x...>
-   >>> cdll.kernel32[0] # doctest: +WINDOWS
+   >>> cdll.kernel32[0]  # doctest: +WINDOWS
    Traceback (most recent call last):
-     File "<stdin>", line 1, in ?
+     File "<stdin>", line 1, in <module>
      File "ctypes.py", line 310, in __getitem__
        func = _StdcallFuncPtr(name, self)
    AttributeError: function ordinal 0 not found
@@ -143,42 +152,27 @@ the ``time()`` function, which returns system time in seconds since the Unix
 epoch, and the ``GetModuleHandleA()`` function, which returns a win32 module
 handle.
 
-This example calls both functions with a NULL pointer (``None`` should be used
-as the NULL pointer)::
+This example calls both functions with a ``NULL`` pointer (``None`` should be used
+as the ``NULL`` pointer)::
 
-   >>> print libc.time(None) # doctest: +SKIP
+   >>> print(libc.time(None))  # doctest: +SKIP
    1150640792
-   >>> print hex(windll.kernel32.GetModuleHandleA(None)) # doctest: +WINDOWS
+   >>> print(hex(windll.kernel32.GetModuleHandleA(None)))  # doctest: +WINDOWS
    0x1d000000
    >>>
 
-:mod:`ctypes` tries to protect you from calling functions with the wrong number
-of arguments or the wrong calling convention.  Unfortunately this only works on
-Windows.  It does this by examining the stack after the function returns, so
-although an error is raised the function *has* been called::
-
-   >>> windll.kernel32.GetModuleHandleA() # doctest: +WINDOWS
-   Traceback (most recent call last):
-     File "<stdin>", line 1, in ?
-   ValueError: Procedure probably called with not enough arguments (4 bytes missing)
-   >>> windll.kernel32.GetModuleHandleA(0, 0) # doctest: +WINDOWS
-   Traceback (most recent call last):
-     File "<stdin>", line 1, in ?
-   ValueError: Procedure probably called with too many arguments (4 bytes in excess)
-   >>>
-
-The same exception is raised when you call an ``stdcall`` function with the
+:exc:`ValueError` is raised when you call an ``stdcall`` function with the
 ``cdecl`` calling convention, or vice versa::
 
-   >>> cdll.kernel32.GetModuleHandleA(None) # doctest: +WINDOWS
+   >>> cdll.kernel32.GetModuleHandleA(None)  # doctest: +WINDOWS
    Traceback (most recent call last):
-     File "<stdin>", line 1, in ?
+     File "<stdin>", line 1, in <module>
    ValueError: Procedure probably called with not enough arguments (4 bytes missing)
    >>>
 
-   >>> windll.msvcrt.printf("spam") # doctest: +WINDOWS
+   >>> windll.msvcrt.printf(b"spam")  # doctest: +WINDOWS
    Traceback (most recent call last):
-     File "<stdin>", line 1, in ?
+     File "<stdin>", line 1, in <module>
    ValueError: Procedure probably called with too many arguments (4 bytes in excess)
    >>>
 
@@ -189,22 +183,23 @@ On Windows, :mod:`ctypes` uses win32 structured exception handling to prevent
 crashes from general protection faults when functions are called with invalid
 argument values::
 
-   >>> windll.kernel32.GetModuleHandleA(32) # doctest: +WINDOWS
+   >>> windll.kernel32.GetModuleHandleA(32)  # doctest: +WINDOWS
    Traceback (most recent call last):
-     File "<stdin>", line 1, in ?
-   WindowsError: exception: access violation reading 0x00000020
+     File "<stdin>", line 1, in <module>
+   OSError: exception: access violation reading 0x00000020
    >>>
 
 There are, however, enough ways to crash Python with :mod:`ctypes`, so you
-should be careful anyway.
+should be careful anyway.  The :mod:`faulthandler` module can be helpful in
+debugging crashes (e.g. from segmentation faults produced by erroneous C library
+calls).
 
-``None``, integers, longs, byte strings and unicode strings are the only native
+``None``, integers, bytes objects and (unicode) strings are the only native
 Python objects that can directly be used as parameters in these function calls.
-``None`` is passed as a C ``NULL`` pointer, byte strings and unicode strings are
-passed as pointer to the memory block that contains their data (:c:type:`char *`
-or :c:type:`wchar_t *`).  Python integers and Python longs are passed as the
-platforms default C :c:type:`int` type, their value is masked to fit into the C
-type.
+``None`` is passed as a C ``NULL`` pointer, bytes objects and strings are passed
+as pointer to the memory block that contains their data (:c:type:`char *` or
+:c:type:`wchar_t *`).  Python integers are passed as the platforms default C
+:c:type:`int` type, their value is masked to fit into the C type.
 
 Before we move on calling functions with other parameter types, we have to learn
 more about :mod:`ctypes` data types.
@@ -215,37 +210,42 @@ more about :mod:`ctypes` data types.
 Fundamental data types
 ^^^^^^^^^^^^^^^^^^^^^^
 
-:mod:`ctypes` defines a number of primitive C compatible data types :
+:mod:`ctypes` defines a number of primitive C compatible data types:
 
 +----------------------+------------------------------------------+----------------------------+
 | ctypes type          | C type                                   | Python type                |
 +======================+==========================================+============================+
 | :class:`c_bool`      | :c:type:`_Bool`                          | bool (1)                   |
 +----------------------+------------------------------------------+----------------------------+
-| :class:`c_char`      | :c:type:`char`                           | 1-character string         |
+| :class:`c_char`      | :c:type:`char`                           | 1-character bytes object   |
 +----------------------+------------------------------------------+----------------------------+
-| :class:`c_wchar`     | :c:type:`wchar_t`                        | 1-character unicode string |
+| :class:`c_wchar`     | :c:type:`wchar_t`                        | 1-character string         |
 +----------------------+------------------------------------------+----------------------------+
-| :class:`c_byte`      | :c:type:`char`                           | int/long                   |
+| :class:`c_byte`      | :c:type:`char`                           | int                        |
 +----------------------+------------------------------------------+----------------------------+
-| :class:`c_ubyte`     | :c:type:`unsigned char`                  | int/long                   |
+| :class:`c_ubyte`     | :c:type:`unsigned char`                  | int                        |
 +----------------------+------------------------------------------+----------------------------+
-| :class:`c_short`     | :c:type:`short`                          | int/long                   |
+| :class:`c_short`     | :c:type:`short`                          | int                        |
 +----------------------+------------------------------------------+----------------------------+
-| :class:`c_ushort`    | :c:type:`unsigned short`                 | int/long                   |
+| :class:`c_ushort`    | :c:type:`unsigned short`                 | int                        |
 +----------------------+------------------------------------------+----------------------------+
-| :class:`c_int`       | :c:type:`int`                            | int/long                   |
+| :class:`c_int`       | :c:type:`int`                            | int                        |
 +----------------------+------------------------------------------+----------------------------+
-| :class:`c_uint`      | :c:type:`unsigned int`                   | int/long                   |
+| :class:`c_uint`      | :c:type:`unsigned int`                   | int                        |
 +----------------------+------------------------------------------+----------------------------+
-| :class:`c_long`      | :c:type:`long`                           | int/long                   |
+| :class:`c_long`      | :c:type:`long`                           | int                        |
 +----------------------+------------------------------------------+----------------------------+
-| :class:`c_ulong`     | :c:type:`unsigned long`                  | int/long                   |
+| :class:`c_ulong`     | :c:type:`unsigned long`                  | int                        |
 +----------------------+------------------------------------------+----------------------------+
-| :class:`c_longlong`  | :c:type:`__int64` or :c:type:`long long` | int/long                   |
+| :class:`c_longlong`  | :c:type:`__int64` or :c:type:`long long` | int                        |
 +----------------------+------------------------------------------+----------------------------+
-| :class:`c_ulonglong` | :c:type:`unsigned __int64` or            | int/long                   |
+| :class:`c_ulonglong` | :c:type:`unsigned __int64` or            | int                        |
 |                      | :c:type:`unsigned long long`             |                            |
++----------------------+------------------------------------------+----------------------------+
+| :class:`c_size_t`    | :c:type:`size_t`                         | int                        |
++----------------------+------------------------------------------+----------------------------+
+| :class:`c_ssize_t`   | :c:type:`ssize_t` or                     | int                        |
+|                      | :c:type:`Py_ssize_t`                     |                            |
 +----------------------+------------------------------------------+----------------------------+
 | :class:`c_float`     | :c:type:`float`                          | float                      |
 +----------------------+------------------------------------------+----------------------------+
@@ -253,11 +253,11 @@ Fundamental data types
 +----------------------+------------------------------------------+----------------------------+
 | :class:`c_longdouble`| :c:type:`long double`                    | float                      |
 +----------------------+------------------------------------------+----------------------------+
-| :class:`c_char_p`    | :c:type:`char *` (NUL terminated)        | string or ``None``         |
+| :class:`c_char_p`    | :c:type:`char *` (NUL terminated)        | bytes object or ``None``   |
 +----------------------+------------------------------------------+----------------------------+
-| :class:`c_wchar_p`   | :c:type:`wchar_t *` (NUL terminated)     | unicode or ``None``        |
+| :class:`c_wchar_p`   | :c:type:`wchar_t *` (NUL terminated)     | string or ``None``         |
 +----------------------+------------------------------------------+----------------------------+
-| :class:`c_void_p`    | :c:type:`void *`                         | int/long or ``None``       |
+| :class:`c_void_p`    | :c:type:`void *`                         | int or ``None``            |
 +----------------------+------------------------------------------+----------------------------+
 
 (1)
@@ -268,8 +268,8 @@ the correct type and value::
 
    >>> c_int()
    c_long(0)
-   >>> c_char_p("Hello, World")
-   c_char_p('Hello, World')
+   >>> c_wchar_p("Hello, World")
+   c_wchar_p(140018365411392)
    >>> c_ushort(-3)
    c_ushort(65533)
    >>>
@@ -277,28 +277,32 @@ the correct type and value::
 Since these types are mutable, their value can also be changed afterwards::
 
    >>> i = c_int(42)
-   >>> print i
+   >>> print(i)
    c_long(42)
-   >>> print i.value
+   >>> print(i.value)
    42
    >>> i.value = -99
-   >>> print i.value
+   >>> print(i.value)
    -99
    >>>
 
 Assigning a new value to instances of the pointer types :class:`c_char_p`,
 :class:`c_wchar_p`, and :class:`c_void_p` changes the *memory location* they
 point to, *not the contents* of the memory block (of course not, because Python
-strings are immutable)::
+bytes objects are immutable)::
 
    >>> s = "Hello, World"
-   >>> c_s = c_char_p(s)
-   >>> print c_s
-   c_char_p('Hello, World')
+   >>> c_s = c_wchar_p(s)
+   >>> print(c_s)
+   c_wchar_p(139966785747344)
+   >>> print(c_s.value)
+   Hello World
    >>> c_s.value = "Hi, there"
-   >>> print c_s
-   c_char_p('Hi, there')
-   >>> print s                 # first string is unchanged
+   >>> print(c_s)              # the memory location has changed
+   c_wchar_p(139966783348904)
+   >>> print(c_s.value)
+   Hi, there
+   >>> print(s)                # first object is unchanged
    Hello, World
    >>>
 
@@ -310,20 +314,20 @@ property; if you want to access it as NUL terminated string, use the ``value``
 property::
 
    >>> from ctypes import *
-   >>> p = create_string_buffer(3)      # create a 3 byte buffer, initialized to NUL bytes
-   >>> print sizeof(p), repr(p.raw)
-   3 '\x00\x00\x00'
-   >>> p = create_string_buffer("Hello")      # create a buffer containing a NUL terminated string
-   >>> print sizeof(p), repr(p.raw)
-   6 'Hello\x00'
-   >>> print repr(p.value)
-   'Hello'
-   >>> p = create_string_buffer("Hello", 10)  # create a 10 byte buffer
-   >>> print sizeof(p), repr(p.raw)
-   10 'Hello\x00\x00\x00\x00\x00'
-   >>> p.value = "Hi"
-   >>> print sizeof(p), repr(p.raw)
-   10 'Hi\x00lo\x00\x00\x00\x00\x00'
+   >>> p = create_string_buffer(3)            # create a 3 byte buffer, initialized to NUL bytes
+   >>> print(sizeof(p), repr(p.raw))
+   3 b'\x00\x00\x00'
+   >>> p = create_string_buffer(b"Hello")     # create a buffer containing a NUL terminated string
+   >>> print(sizeof(p), repr(p.raw))
+   6 b'Hello\x00'
+   >>> print(repr(p.value))
+   b'Hello'
+   >>> p = create_string_buffer(b"Hello", 10) # create a 10 byte buffer
+   >>> print(sizeof(p), repr(p.raw))
+   10 b'Hello\x00\x00\x00\x00\x00'
+   >>> p.value = b"Hi"
+   >>> print(sizeof(p), repr(p.raw))
+   10 b'Hi\x00lo\x00\x00\x00\x00\x00'
    >>>
 
 The :func:`create_string_buffer` function replaces the :func:`c_buffer` function
@@ -343,26 +347,26 @@ Note that printf prints to the real standard output channel, *not* to
 from within *IDLE* or *PythonWin*::
 
    >>> printf = libc.printf
-   >>> printf("Hello, %s\n", "World!")
+   >>> printf(b"Hello, %s\n", b"World!")
    Hello, World!
    14
-   >>> printf("Hello, %S\n", u"World!")
+   >>> printf(b"Hello, %S\n", "World!")
    Hello, World!
    14
-   >>> printf("%d bottles of beer\n", 42)
+   >>> printf(b"%d bottles of beer\n", 42)
    42 bottles of beer
    19
-   >>> printf("%f bottles of beer\n", 42.5)
+   >>> printf(b"%f bottles of beer\n", 42.5)
    Traceback (most recent call last):
-     File "<stdin>", line 1, in ?
+     File "<stdin>", line 1, in <module>
    ArgumentError: argument 2: exceptions.TypeError: Don't know how to convert parameter 2
    >>>
 
 As has been mentioned before, all Python types except integers, strings, and
-unicode strings have to be wrapped in their corresponding :mod:`ctypes` type, so
+bytes objects have to be wrapped in their corresponding :mod:`ctypes` type, so
 that they can be converted to the required C data type::
 
-   >>> printf("An int %d, a double %f\n", 1234, c_double(3.14))
+   >>> printf(b"An int %d, a double %f\n", 1234, c_double(3.14))
    An int 1234, a double 3.140000
    31
    >>>
@@ -376,21 +380,21 @@ Calling functions with your own custom data types
 You can also customize :mod:`ctypes` argument conversion to allow instances of
 your own classes be used as function arguments.  :mod:`ctypes` looks for an
 :attr:`_as_parameter_` attribute and uses this as the function argument.  Of
-course, it must be one of integer, string, or unicode::
+course, it must be one of integer, string, or bytes::
 
-   >>> class Bottles(object):
+   >>> class Bottles:
    ...     def __init__(self, number):
    ...         self._as_parameter_ = number
    ...
    >>> bottles = Bottles(42)
-   >>> printf("%d bottles of beer\n", bottles)
+   >>> printf(b"%d bottles of beer\n", bottles)
    42 bottles of beer
    19
    >>>
 
 If you don't want to store the instance's data in the :attr:`_as_parameter_`
-instance variable, you could define a :func:`property` which makes the data
-available.
+instance variable, you could define a :class:`property` which makes the
+attribute available on request.
 
 
 .. _ctypes-specifying-required-argument-types:
@@ -407,7 +411,7 @@ different types of parameters depending on the format string, on the other hand
 this is quite handy to experiment with this feature)::
 
    >>> printf.argtypes = [c_char_p, c_char_p, c_int, c_double]
-   >>> printf("String '%s', Int %d, Double %f\n", "Hi", 10, 2.2)
+   >>> printf(b"String '%s', Int %d, Double %f\n", b"Hi", 10, 2.2)
    String 'Hi', Int 10, Double 2.200000
    37
    >>>
@@ -415,11 +419,11 @@ this is quite handy to experiment with this feature)::
 Specifying a format protects against incompatible argument types (just as a
 prototype for a C function), and tries to convert the arguments to valid types::
 
-   >>> printf("%d %d %d", 1, 2, 3)
+   >>> printf(b"%d %d %d", 1, 2, 3)
    Traceback (most recent call last):
-     File "<stdin>", line 1, in ?
+     File "<stdin>", line 1, in <module>
    ArgumentError: argument 2: exceptions.TypeError: wrong type
-   >>> printf("%s %d %f\n", "X", 2, 3)
+   >>> printf(b"%s %d %f\n", b"X", 2, 3)
    X 2 3.000000
    13
    >>>
@@ -431,7 +435,7 @@ the Python object passed to the function call, it should do a typecheck or
 whatever is needed to make sure this object is acceptable, and then return the
 object itself, its :attr:`_as_parameter_` attribute, or whatever you want to
 pass as the C function argument in this case. Again, the result should be an
-integer, string, unicode, a :mod:`ctypes` instance, or an object with an
+integer, string, bytes, a :mod:`ctypes` instance, or an object with an
 :attr:`_as_parameter_` attribute.
 
 
@@ -448,30 +452,30 @@ Here is a more advanced example, it uses the ``strchr`` function, which expects
 a string pointer and a char, and returns a pointer to a string::
 
    >>> strchr = libc.strchr
-   >>> strchr("abcdef", ord("d")) # doctest: +SKIP
+   >>> strchr(b"abcdef", ord("d"))  # doctest: +SKIP
    8059983
-   >>> strchr.restype = c_char_p # c_char_p is a pointer to a string
-   >>> strchr("abcdef", ord("d"))
-   'def'
-   >>> print strchr("abcdef", ord("x"))
+   >>> strchr.restype = c_char_p    # c_char_p is a pointer to a string
+   >>> strchr(b"abcdef", ord("d"))
+   b'def'
+   >>> print(strchr(b"abcdef", ord("x")))
    None
    >>>
 
 If you want to avoid the ``ord("x")`` calls above, you can set the
 :attr:`argtypes` attribute, and the second argument will be converted from a
-single character Python string into a C char::
+single character Python bytes object into a C char::
 
    >>> strchr.restype = c_char_p
    >>> strchr.argtypes = [c_char_p, c_char]
-   >>> strchr("abcdef", "d")
+   >>> strchr(b"abcdef", b"d")
    'def'
-   >>> strchr("abcdef", "def")
+   >>> strchr(b"abcdef", b"def")
    Traceback (most recent call last):
-     File "<stdin>", line 1, in ?
+     File "<stdin>", line 1, in <module>
    ArgumentError: argument 2: exceptions.TypeError: one character string expected
-   >>> print strchr("abcdef", "x")
+   >>> print(strchr(b"abcdef", b"x"))
    None
-   >>> strchr("abcdef", "d")
+   >>> strchr(b"abcdef", b"d")
    'def'
    >>>
 
@@ -481,21 +485,21 @@ callable will be called with the *integer* the C function returns, and the
 result of this call will be used as the result of your function call. This is
 useful to check for error return values and automatically raise an exception::
 
-   >>> GetModuleHandle = windll.kernel32.GetModuleHandleA # doctest: +WINDOWS
+   >>> GetModuleHandle = windll.kernel32.GetModuleHandleA  # doctest: +WINDOWS
    >>> def ValidHandle(value):
    ...     if value == 0:
    ...         raise WinError()
    ...     return value
    ...
    >>>
-   >>> GetModuleHandle.restype = ValidHandle # doctest: +WINDOWS
-   >>> GetModuleHandle(None) # doctest: +WINDOWS
+   >>> GetModuleHandle.restype = ValidHandle  # doctest: +WINDOWS
+   >>> GetModuleHandle(None)  # doctest: +WINDOWS
    486539264
-   >>> GetModuleHandle("something silly") # doctest: +WINDOWS
+   >>> GetModuleHandle("something silly")  # doctest: +WINDOWS
    Traceback (most recent call last):
-     File "<stdin>", line 1, in ?
+     File "<stdin>", line 1, in <module>
      File "<stdin>", line 3, in ValidHandle
-   WindowsError: [Errno 126] The specified module could not be found.
+   OSError: [Errno 126] The specified module could not be found.
    >>>
 
 ``WinError`` is a function which will call Windows ``FormatMessage()`` api to
@@ -516,22 +520,22 @@ Sometimes a C api function expects a *pointer* to a data type as parameter,
 probably to write into the corresponding location, or if the data is too large
 to be passed by value. This is also known as *passing parameters by reference*.
 
-:mod:`ctypes` exports the :func:`byref` function which is used to pass
-parameters by reference.  The same effect can be achieved with the
-:func:`pointer` function, although :func:`pointer` does a lot more work since it
-constructs a real pointer object, so it is faster to use :func:`byref` if you
-don't need the pointer object in Python itself::
+:mod:`ctypes` exports the :func:`byref` function which is used to pass parameters
+by reference.  The same effect can be achieved with the :func:`pointer` function,
+although :func:`pointer` does a lot more work since it constructs a real pointer
+object, so it is faster to use :func:`byref` if you don't need the pointer
+object in Python itself::
 
    >>> i = c_int()
    >>> f = c_float()
-   >>> s = create_string_buffer('\000' * 32)
-   >>> print i.value, f.value, repr(s.value)
-   0 0.0 ''
-   >>> libc.sscanf("1 3.14 Hello", "%d %f %s",
+   >>> s = create_string_buffer(b'\000' * 32)
+   >>> print(i.value, f.value, repr(s.value))
+   0 0.0 b''
+   >>> libc.sscanf(b"1 3.14 Hello", b"%d %f %s",
    ...             byref(i), byref(f), s)
    3
-   >>> print i.value, f.value, repr(s.value)
-   1 3.1400001049 'Hello'
+   >>> print(i.value, f.value, repr(s.value))
+   1 3.1400001049 b'Hello'
    >>>
 
 
@@ -557,15 +561,15 @@ Here is a simple example of a POINT structure, which contains two integers named
    ...                 ("y", c_int)]
    ...
    >>> point = POINT(10, 20)
-   >>> print point.x, point.y
+   >>> print(point.x, point.y)
    10 20
    >>> point = POINT(y=5)
-   >>> print point.x, point.y
+   >>> print(point.x, point.y)
    0 5
    >>> POINT(1, 2, 3)
    Traceback (most recent call last):
-     File "<stdin>", line 1, in ?
-   ValueError: too many initializers
+     File "<stdin>", line 1, in <module>
+   TypeError: too many initializers
    >>>
 
 You can, however, build much more complicated structures.  A structure can
@@ -579,9 +583,9 @@ Here is a RECT structure which contains two POINTs named *upperleft* and
    ...                 ("lowerright", POINT)]
    ...
    >>> rc = RECT(point)
-   >>> print rc.upperleft.x, rc.upperleft.y
+   >>> print(rc.upperleft.x, rc.upperleft.y)
    0 5
-   >>> print rc.lowerright.x, rc.lowerright.y
+   >>> print(rc.lowerright.x, rc.lowerright.y)
    0 0
    >>>
 
@@ -593,9 +597,9 @@ Nested structures can also be initialized in the constructor in several ways::
 Field :term:`descriptor`\s can be retrieved from the *class*, they are useful
 for debugging because they can provide useful information::
 
-   >>> print POINT.x
+   >>> print(POINT.x)
    <Field type=c_long, ofs=0, size=4>
-   >>> print POINT.y
+   >>> print(POINT.y)
    <Field type=c_long, ofs=4, size=4>
    >>>
 
@@ -613,7 +617,7 @@ Structure/union alignment and byte order
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 By default, Structure and Union fields are aligned in the same way the C
-compiler does it. It is possible to override this behavior be specifying a
+compiler does it. It is possible to override this behavior by specifying a
 :attr:`_pack_` class attribute in the subclass definition. This must be set to a
 positive integer and specifies the maximum alignment for the fields. This is
 what ``#pragma pack(n)`` also does in MSVC.
@@ -638,9 +642,9 @@ item in the :attr:`_fields_` tuples::
    ...     _fields_ = [("first_16", c_int, 16),
    ...                 ("second_16", c_int, 16)]
    ...
-   >>> print Int.first_16
+   >>> print(Int.first_16)
    <Field type=c_long, ofs=0:0, bits=16>
-   >>> print Int.second_16
+   >>> print(Int.second_16)
    <Field type=c_long, ofs=0:16, bits=16>
    >>>
 
@@ -657,19 +661,19 @@ positive integer::
 
    TenPointsArrayType = POINT * 10
 
-Here is an example of an somewhat artificial data type, a structure containing 4
+Here is an example of a somewhat artificial data type, a structure containing 4
 POINTs among other stuff::
 
    >>> from ctypes import *
    >>> class POINT(Structure):
-   ...    _fields_ = ("x", c_int), ("y", c_int)
+   ...     _fields_ = ("x", c_int), ("y", c_int)
    ...
    >>> class MyStruct(Structure):
-   ...    _fields_ = [("a", c_int),
-   ...                ("b", c_float),
-   ...                ("point_array", POINT * 4)]
+   ...     _fields_ = [("a", c_int),
+   ...                 ("b", c_float),
+   ...                 ("point_array", POINT * 4)]
    >>>
-   >>> print len(MyStruct().point_array)
+   >>> print(len(MyStruct().point_array))
    4
    >>>
 
@@ -677,7 +681,7 @@ Instances are created in the usual way, by calling the class::
 
    arr = TenPointsArrayType()
    for pt in arr:
-       print pt.x, pt.y
+       print(pt.x, pt.y)
 
 The above code print a series of ``0 0`` lines, because the array contents is
 initialized to zeros.
@@ -687,9 +691,9 @@ Initializers of the correct type can also be specified::
    >>> from ctypes import *
    >>> TenIntegers = c_int * 10
    >>> ii = TenIntegers(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
-   >>> print ii
+   >>> print(ii)
    <c_long_Array_10 object at 0x...>
-   >>> for i in ii: print i,
+   >>> for i in ii: print(i, end=" ")
    ...
    1 2 3 4 5 6 7 8 9 10
    >>>
@@ -708,8 +712,8 @@ Pointer instances are created by calling the :func:`pointer` function on a
    >>> pi = pointer(i)
    >>>
 
-Pointer instances have a :attr:`contents` attribute which returns the object to
-which the pointer points, the ``i`` object above::
+Pointer instances have a :attr:`~_Pointer.contents` attribute which
+returns the object to which the pointer points, the ``i`` object above::
 
    >>> pi.contents
    c_long(42)
@@ -744,10 +748,10 @@ Pointer instances can also be indexed with integers::
 
 Assigning to an integer index changes the pointed to value::
 
-   >>> print i
+   >>> print(i)
    c_long(99)
    >>> pi[0] = 22
-   >>> print i
+   >>> print(i)
    c_long(22)
    >>>
 
@@ -758,16 +762,16 @@ and you *know* that the pointer actually points to an array instead of a single
 item.
 
 Behind the scenes, the :func:`pointer` function does more than simply create
-pointer instances, it has to create pointer *types* first.  This is done with
-the :func:`POINTER` function, which accepts any :mod:`ctypes` type, and returns
-a new type::
+pointer instances, it has to create pointer *types* first. This is done with the
+:func:`POINTER` function, which accepts any :mod:`ctypes` type, and returns a
+new type::
 
    >>> PI = POINTER(c_int)
    >>> PI
    <class 'ctypes.LP_c_long'>
    >>> PI(42)
    Traceback (most recent call last):
-     File "<stdin>", line 1, in ?
+     File "<stdin>", line 1, in <module>
    TypeError: expected c_long instead of int
    >>> PI(c_int(42))
    <ctypes.LP_c_long object at 0x...>
@@ -777,7 +781,7 @@ Calling the pointer type without an argument creates a ``NULL`` pointer.
 ``NULL`` pointers have a ``False`` boolean value::
 
    >>> null_ptr = POINTER(c_int)()
-   >>> print bool(null_ptr)
+   >>> print(bool(null_ptr))
    False
    >>>
 
@@ -816,7 +820,7 @@ pointer types.  So, for ``POINTER(c_int)``, ctypes accepts an array of c_int::
    >>> bar.values = (c_int * 3)(1, 2, 3)
    >>> bar.count = 3
    >>> for i in range(bar.count):
-   ...     print bar.values[i]
+   ...     print(bar.values[i])
    ...
    1
    2
@@ -843,7 +847,7 @@ but not instances of other types::
 
    >>> bar.values = (c_byte * 4)()
    Traceback (most recent call last):
-     File "<stdin>", line 1, in ?
+     File "<stdin>", line 1, in <module>
    TypeError: incompatible types, c_byte_Array_4 instance instead of LP_c_long instance
    >>>
 
@@ -865,7 +869,7 @@ structure::
 
    >>> bar = Bar()
    >>> bar.values = cast((c_byte * 4)(), POINTER(c_int))
-   >>> print bar.values[0]
+   >>> print(bar.values[0])
    0
    >>>
 
@@ -894,7 +898,7 @@ work::
    ...                 ("next", POINTER(cell))]
    ...
    Traceback (most recent call last):
-     File "<stdin>", line 1, in ?
+     File "<stdin>", line 1, in <module>
      File "<stdin>", line 2, in cell
    NameError: name 'cell' is not defined
    >>>
@@ -911,7 +915,7 @@ attribute later, after the class statement::
    ...                  ("next", POINTER(cell))]
    >>>
 
-Lets try it. We create two instances of ``cell``, and let them point to each
+Let's try it. We create two instances of ``cell``, and let them point to each
 other, and finally follow the pointer chain a few times::
 
    >>> c1 = cell()
@@ -922,7 +926,7 @@ other, and finally follow the pointer chain a few times::
    >>> c2.next = pointer(c1)
    >>> p = c1
    >>> for i in range(8):
-   ...     print p.name,
+   ...     print(p.name, end=" ")
    ...     p = p.next[0]
    ...
    foo bar foo bar foo bar foo bar
@@ -934,25 +938,25 @@ other, and finally follow the pointer chain a few times::
 Callback functions
 ^^^^^^^^^^^^^^^^^^
 
-:mod:`ctypes` allows to create C callable function pointers from Python callables.
+:mod:`ctypes` allows creating C callable function pointers from Python callables.
 These are sometimes called *callback functions*.
 
-First, you must create a class for the callback function, the class knows the
+First, you must create a class for the callback function. The class knows the
 calling convention, the return type, and the number and types of arguments this
 function will receive.
 
-The CFUNCTYPE factory function creates types for callback functions using the
-normal cdecl calling convention, and, on Windows, the WINFUNCTYPE factory
-function creates types for callback functions using the stdcall calling
-convention.
+The :func:`CFUNCTYPE` factory function creates types for callback functions
+using the ``cdecl`` calling convention. On Windows, the :func:`WINFUNCTYPE`
+factory function creates types for callback functions using the ``stdcall``
+calling convention.
 
 Both of these factory functions are called with the result type as first
 argument, and the callback functions expected argument types as the remaining
 arguments.
 
-I will present an example here which uses the standard C library's :func:`qsort`
-function, this is used to sort items with the help of a callback function.
-:func:`qsort` will be used to sort an array of integers::
+I will present an example here which uses the standard C library's
+:c:func:`qsort` function, that is used to sort items with the help of a callback
+function.  :c:func:`qsort` will be used to sort an array of integers::
 
    >>> IntArray5 = c_int * 5
    >>> ia = IntArray5(5, 1, 7, 33, 99)
@@ -964,7 +968,7 @@ function, this is used to sort items with the help of a callback function.
 items in the data array, the size of one item, and a pointer to the comparison
 function, the callback. The callback will then be called with two pointers to
 items, and it must return a negative integer if the first item is smaller than
-the second, a zero if they are equal, and a positive integer else.
+the second, a zero if they are equal, and a positive integer otherwise.
 
 So our callback function receives pointers to integers, and must return an
 integer. First we create the ``type`` for the callback function::
@@ -972,63 +976,19 @@ integer. First we create the ``type`` for the callback function::
    >>> CMPFUNC = CFUNCTYPE(c_int, POINTER(c_int), POINTER(c_int))
    >>>
 
-For the first implementation of the callback function, we simply print the
-arguments we get, and return 0 (incremental development ;-)::
+To get started, here is a simple callback that shows the values it gets
+passed::
 
    >>> def py_cmp_func(a, b):
-   ...     print "py_cmp_func", a, b
-   ...     return 0
-   ...
-   >>>
-
-Create the C callable callback::
-
-   >>> cmp_func = CMPFUNC(py_cmp_func)
-   >>>
-
-And we're ready to go::
-
-   >>> qsort(ia, len(ia), sizeof(c_int), cmp_func) # doctest: +WINDOWS
-   py_cmp_func <ctypes.LP_c_long object at 0x00...> <ctypes.LP_c_long object at 0x00...>
-   py_cmp_func <ctypes.LP_c_long object at 0x00...> <ctypes.LP_c_long object at 0x00...>
-   py_cmp_func <ctypes.LP_c_long object at 0x00...> <ctypes.LP_c_long object at 0x00...>
-   py_cmp_func <ctypes.LP_c_long object at 0x00...> <ctypes.LP_c_long object at 0x00...>
-   py_cmp_func <ctypes.LP_c_long object at 0x00...> <ctypes.LP_c_long object at 0x00...>
-   py_cmp_func <ctypes.LP_c_long object at 0x00...> <ctypes.LP_c_long object at 0x00...>
-   py_cmp_func <ctypes.LP_c_long object at 0x00...> <ctypes.LP_c_long object at 0x00...>
-   py_cmp_func <ctypes.LP_c_long object at 0x00...> <ctypes.LP_c_long object at 0x00...>
-   py_cmp_func <ctypes.LP_c_long object at 0x00...> <ctypes.LP_c_long object at 0x00...>
-   py_cmp_func <ctypes.LP_c_long object at 0x00...> <ctypes.LP_c_long object at 0x00...>
-   >>>
-
-We know how to access the contents of a pointer, so lets redefine our callback::
-
-   >>> def py_cmp_func(a, b):
-   ...     print "py_cmp_func", a[0], b[0]
+   ...     print("py_cmp_func", a[0], b[0])
    ...     return 0
    ...
    >>> cmp_func = CMPFUNC(py_cmp_func)
    >>>
 
-Here is what we get on Windows::
+The result::
 
-   >>> qsort(ia, len(ia), sizeof(c_int), cmp_func) # doctest: +WINDOWS
-   py_cmp_func 7 1
-   py_cmp_func 33 1
-   py_cmp_func 99 1
-   py_cmp_func 5 1
-   py_cmp_func 7 5
-   py_cmp_func 33 5
-   py_cmp_func 99 5
-   py_cmp_func 7 99
-   py_cmp_func 33 99
-   py_cmp_func 7 33
-   >>>
-
-It is funny to see that on linux the sort function seems to work much more
-efficiently, it is doing less comparisons::
-
-   >>> qsort(ia, len(ia), sizeof(c_int), cmp_func) # doctest: +LINUX
+   >>> qsort(ia, len(ia), sizeof(c_int), cmp_func)  # doctest: +LINUX
    py_cmp_func 5 1
    py_cmp_func 33 99
    py_cmp_func 7 33
@@ -1036,32 +996,13 @@ efficiently, it is doing less comparisons::
    py_cmp_func 1 7
    >>>
 
-Ah, we're nearly done! The last step is to actually compare the two items and
-return a useful result::
+Now we can actually compare the two items and return a useful result::
 
    >>> def py_cmp_func(a, b):
-   ...     print "py_cmp_func", a[0], b[0]
+   ...     print("py_cmp_func", a[0], b[0])
    ...     return a[0] - b[0]
    ...
    >>>
-
-Final run on Windows::
-
-   >>> qsort(ia, len(ia), sizeof(c_int), CMPFUNC(py_cmp_func)) # doctest: +WINDOWS
-   py_cmp_func 33 7
-   py_cmp_func 99 33
-   py_cmp_func 5 99
-   py_cmp_func 1 99
-   py_cmp_func 33 7
-   py_cmp_func 1 33
-   py_cmp_func 5 33
-   py_cmp_func 5 7
-   py_cmp_func 1 7
-   py_cmp_func 5 1
-   >>>
-
-and on Linux::
-
    >>> qsort(ia, len(ia), sizeof(c_int), CMPFUNC(py_cmp_func)) # doctest: +LINUX
    py_cmp_func 5 1
    py_cmp_func 33 99
@@ -1070,22 +1011,41 @@ and on Linux::
    py_cmp_func 5 7
    >>>
 
-It is quite interesting to see that the Windows :func:`qsort` function needs
-more comparisons than the linux version!
-
 As we can easily check, our array is sorted now::
 
-   >>> for i in ia: print i,
+   >>> for i in ia: print(i, end=" ")
    ...
    1 5 7 33 99
    >>>
 
-**Important note for callback functions:**
+The function factories can be used as decorator factories, so we may as well
+write::
 
-Make sure you keep references to CFUNCTYPE objects as long as they are used from
-C code. :mod:`ctypes` doesn't, and if you don't, they may be garbage collected,
-crashing your program when a callback is made.
+   >>> @CFUNCTYPE(c_int, POINTER(c_int), POINTER(c_int))
+   ... def py_cmp_func(a, b):
+   ...     print("py_cmp_func", a[0], b[0])
+   ...     return a[0] - b[0]
+   ...
+   >>> qsort(ia, len(ia), sizeof(c_int), py_cmp_func)
+   py_cmp_func 5 1
+   py_cmp_func 33 99
+   py_cmp_func 7 33
+   py_cmp_func 1 7
+   py_cmp_func 5 7
+   >>>
 
+.. note::
+
+   Make sure you keep references to :func:`CFUNCTYPE` objects as long as they
+   are used from C code. :mod:`ctypes` doesn't, and if you don't, they may be
+   garbage collected, crashing your program when a callback is made.
+
+   Also, note that if the callback function is called in a thread created
+   outside of Python's control (e.g. by the foreign code that calls the
+   callback), ctypes creates a new dummy Python thread on every invocation. This
+   behavior is correct for most purposes, but it means that values stored with
+   :class:`threading.local` will *not* survive across different callbacks, even when
+   those calls are made from the same C thread.
 
 .. _ctypes-accessing-values-exported-from-dlls:
 
@@ -1093,8 +1053,8 @@ Accessing values exported from dlls
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Some shared libraries not only export functions, they also export variables. An
-example in the Python library itself is the ``Py_OptimizeFlag``, an integer set
-to 0, 1, or 2, depending on the :option:`-O` or :option:`-OO` flag given on
+example in the Python library itself is the :c:data:`Py_OptimizeFlag`, an integer
+set to 0, 1, or 2, depending on the :option:`-O` or :option:`-OO` flag given on
 startup.
 
 :mod:`ctypes` can access values like this with the :meth:`in_dll` class methods of
@@ -1102,7 +1062,7 @@ the type.  *pythonapi* is a predefined symbol giving access to the Python C
 api::
 
    >>> opt_flag = c_int.in_dll(pythonapi, "Py_OptimizeFlag")
-   >>> print opt_flag
+   >>> print(opt_flag)
    c_long(0)
    >>>
 
@@ -1111,13 +1071,14 @@ have printed ``c_long(1)``, or ``c_long(2)`` if :option:`-OO` would have been
 specified.
 
 An extended example which also demonstrates the use of pointers accesses the
-``PyImport_FrozenModules`` pointer exported by Python.
+:c:data:`PyImport_FrozenModules` pointer exported by Python.
 
-Quoting the Python docs: *This pointer is initialized to point to an array of
-"struct _frozen" records, terminated by one whose members are all NULL or zero.
-When a frozen module is imported, it is searched in this table. Third-party code
-could play tricks with this to provide a dynamically created collection of
-frozen modules.*
+Quoting the docs for that value:
+
+   This pointer is initialized to point to an array of :c:type:`struct _frozen`
+   records, terminated by one whose members are all ``NULL`` or zero.  When a frozen
+   module is imported, it is searched in this table.  Third-party code could play
+   tricks with this to provide a dynamically created collection of frozen modules.
 
 So manipulating this pointer could even prove useful. To restrict the example
 size, we show only how this table can be read with :mod:`ctypes`::
@@ -1131,8 +1092,8 @@ size, we show only how this table can be read with :mod:`ctypes`::
    ...
    >>>
 
-We have defined the ``struct _frozen`` data type, so we can get the pointer to
-the table::
+We have defined the :c:type:`struct _frozen` data type, so we can get the pointer
+to the table::
 
    >>> FrozenTable = POINTER(struct_frozen)
    >>> table = FrozenTable.in_dll(pythonapi, "PyImport_FrozenModules")
@@ -1142,22 +1103,23 @@ Since ``table`` is a ``pointer`` to the array of ``struct_frozen`` records, we
 can iterate over it, but we just have to make sure that our loop terminates,
 because pointers have no size. Sooner or later it would probably crash with an
 access violation or whatever, so it's better to break out of the loop when we
-hit the NULL entry::
+hit the ``NULL`` entry::
 
    >>> for item in table:
-   ...    print item.name, item.size
-   ...    if item.name is None:
-   ...        break
+   ...     if item.name is None:
+   ...         break
+   ...     print(item.name.decode("ascii"), item.size)
    ...
-   __hello__ 104
-   __phello__ -104
-   __phello__.spam 104
-   None 0
+   _frozen_importlib 31764
+   _frozen_importlib_external 41499
+   __hello__ 161
+   __phello__ -161
+   __phello__.spam 161
    >>>
 
 The fact that standard Python has a frozen module and a frozen package
-(indicated by the negative size member) is not well known, it is only used for
-testing. Try it out with ``import __hello__`` for example.
+(indicated by the negative ``size`` member) is not well known, it is only used
+for testing. Try it out with ``import __hello__`` for example.
 
 
 .. _ctypes-surprises:
@@ -1165,8 +1127,8 @@ testing. Try it out with ``import __hello__`` for example.
 Surprises
 ^^^^^^^^^
 
-There are some edge cases in :mod:`ctypes` where you might expect something
-other than what actually happens.
+There are some edges in :mod:`ctypes` where you might expect something other
+than what actually happens.
 
 Consider the following example::
 
@@ -1180,11 +1142,11 @@ Consider the following example::
    >>> p1 = POINT(1, 2)
    >>> p2 = POINT(3, 4)
    >>> rc = RECT(p1, p2)
-   >>> print rc.a.x, rc.a.y, rc.b.x, rc.b.y
+   >>> print(rc.a.x, rc.a.y, rc.b.x, rc.b.y)
    1 2 3 4
    >>> # now swap the two points
    >>> rc.a, rc.b = rc.b, rc.a
-   >>> print rc.a.x, rc.a.y, rc.b.x, rc.b.y
+   >>> print(rc.a.x, rc.a.y, rc.b.x, rc.b.y)
    3 4 3 4
    >>>
 
@@ -1206,15 +1168,20 @@ Keep in mind that retrieving sub-objects from Structure, Unions, and Arrays
 doesn't *copy* the sub-object, instead it retrieves a wrapper object accessing
 the root-object's underlying buffer.
 
-Another example that may behave different from what one would expect is this::
+Another example that may behave differently from what one would expect is this::
 
    >>> s = c_char_p()
-   >>> s.value = "abc def ghi"
+   >>> s.value = b"abc def ghi"
    >>> s.value
-   'abc def ghi'
+   b'abc def ghi'
    >>> s.value is s.value
    False
    >>>
+
+.. note::
+
+   Objects instantiated from :class:`c_char_p` can only have their value set to bytes
+   or integers.
 
 Why is it printing ``False``?  ctypes instances are objects containing a memory
 block plus some :term:`descriptor`\s accessing the contents of the memory.
@@ -1237,7 +1204,7 @@ made smaller than the natural memory block specified by the objects type, a
 :exc:`ValueError` is raised if this is tried::
 
    >>> short_array = (c_short * 4)()
-   >>> print sizeof(short_array)
+   >>> print(sizeof(short_array))
    8
    >>> resize(short_array, 4)
    Traceback (most recent call last):
@@ -1282,12 +1249,13 @@ When programming in a compiled language, shared libraries are accessed when
 compiling/linking a program, and when the program is run.
 
 The purpose of the :func:`find_library` function is to locate a library in a way
-similar to what the compiler does (on platforms with several versions of a
-shared library the most recent should be loaded), while the ctypes library
-loaders act like when a program is run, and call the runtime loader directly.
+similar to what the compiler or runtime loader does (on platforms with several
+versions of a shared library the most recent should be loaded), while the ctypes
+library loaders act like when a program is run, and call the runtime loader
+directly.
 
-The :mod:`ctypes.util` module provides a function which can help to determine the
-library to load.
+The :mod:`ctypes.util` module provides a function which can help to determine
+the library to load.
 
 
 .. data:: find_library(name)
@@ -1296,14 +1264,20 @@ library to load.
 
    Try to find a library and return a pathname.  *name* is the library name without
    any prefix like *lib*, suffix like ``.so``, ``.dylib`` or version number (this
-   is the form used for the posix linker option :option:`-l`).  If no library can
+   is the form used for the posix linker option :option:`!-l`).  If no library can
    be found, returns ``None``.
 
 The exact functionality is system dependent.
 
 On Linux, :func:`find_library` tries to run external programs
-(``/sbin/ldconfig``, ``gcc``, and ``objdump``) to find the library file.  It
-returns the filename of the library file.  Here are some examples::
+(``/sbin/ldconfig``, ``gcc``, ``objdump`` and ``ld``) to find the library file.
+It returns the filename of the library file.
+
+.. versionchanged:: 3.6
+   On Linux, the value of the environment variable ``LD_LIBRARY_PATH`` is used
+   when searching for libraries, if a library cannot be found by any other means.
+
+Here are some examples::
 
    >>> from ctypes.util import find_library
    >>> find_library("m")
@@ -1342,28 +1316,46 @@ module instead of using :func:`find_library` to locate the library at runtime.
 Loading shared libraries
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-There are several ways to loaded shared libraries into the Python process.  One
+There are several ways to load shared libraries into the Python process.  One
 way is to instantiate one of the following classes:
 
 
-.. class:: CDLL(name, mode=DEFAULT_MODE, handle=None, use_errno=False, use_last_error=False)
+.. class:: CDLL(name, mode=DEFAULT_MODE, handle=None, use_errno=False, use_last_error=False, winmode=0)
 
    Instances of this class represent loaded shared libraries. Functions in these
    libraries use the standard C calling convention, and are assumed to return
    :c:type:`int`.
 
+   On Windows creating a :class:`CDLL` instance may fail even if the DLL name
+   exists. When a dependent DLL of the loaded DLL is not found, a
+   :exc:`OSError` error is raised with the message *"[WinError 126] The
+   specified module could not be found".* This error message does not contain
+   the name of the missing DLL because the Windows API does not return this
+   information making this error hard to diagnose. To resolve this error and
+   determine which DLL is not found, you need to find the list of dependent
+   DLLs and determine which one is not found using Windows debugging and
+   tracing tools.
 
-.. class:: OleDLL(name, mode=DEFAULT_MODE, handle=None, use_errno=False, use_last_error=False)
+.. seealso::
+
+    `Microsoft DUMPBIN tool <https://docs.microsoft.com/cpp/build/reference/dependents>`_
+    -- A tool to find DLL dependents.
+
+
+.. class:: OleDLL(name, mode=DEFAULT_MODE, handle=None, use_errno=False, use_last_error=False, winmode=0)
 
    Windows only: Instances of this class represent loaded shared libraries,
    functions in these libraries use the ``stdcall`` calling convention, and are
    assumed to return the windows specific :class:`HRESULT` code.  :class:`HRESULT`
    values contain information specifying whether the function call failed or
    succeeded, together with additional error code.  If the return value signals a
-   failure, an :class:`WindowsError` is automatically raised.
+   failure, an :class:`OSError` is automatically raised.
+
+   .. versionchanged:: 3.3
+      :exc:`WindowsError` used to be raised.
 
 
-.. class:: WinDLL(name, mode=DEFAULT_MODE, handle=None, use_errno=False, use_last_error=False)
+.. class:: WinDLL(name, mode=DEFAULT_MODE, handle=None, use_errno=False, use_last_error=False, winmode=0)
 
    Windows only: Instances of this class represent loaded shared libraries,
    functions in these libraries use the ``stdcall`` calling convention, and are
@@ -1394,11 +1386,12 @@ function is used to load the library into the process, and to get a handle to
 it.
 
 The *mode* parameter can be used to specify how the library is loaded.  For
-details, consult the :manpage:`dlopen(3)` manpage, on Windows, *mode* is
-ignored.
+details, consult the :manpage:`dlopen(3)` manpage.  On Windows, *mode* is
+ignored.  On posix systems, RTLD_NOW is always added, and is not
+configurable.
 
-The *use_errno* parameter, when set to True, enables a ctypes mechanism that
-allows to access the system :data:`errno` error number in a safe way.
+The *use_errno* parameter, when set to true, enables a ctypes mechanism that
+allows accessing the system :data:`errno` error number in a safe way.
 :mod:`ctypes` maintains a thread-local copy of the systems :data:`errno`
 variable; if you call foreign functions created with ``use_errno=True`` then the
 :data:`errno` value before the function call is swapped with the ctypes private
@@ -1408,14 +1401,22 @@ The function :func:`ctypes.get_errno` returns the value of the ctypes private
 copy, and the function :func:`ctypes.set_errno` changes the ctypes private copy
 to a new value and returns the former value.
 
-The *use_last_error* parameter, when set to True, enables the same mechanism for
+The *use_last_error* parameter, when set to true, enables the same mechanism for
 the Windows error code which is managed by the :func:`GetLastError` and
 :func:`SetLastError` Windows API functions; :func:`ctypes.get_last_error` and
 :func:`ctypes.set_last_error` are used to request and change the ctypes private
 copy of the windows error code.
 
-.. versionadded:: 2.6
-   The *use_last_error* and *use_errno* optional parameters were added.
+The *winmode* parameter is used on Windows to specify how the library is loaded
+(since *mode* is ignored). It takes any value that is valid for the Win32 API
+``LoadLibraryEx`` flags parameter. When omitted, the default is to use the flags
+that result in the most secure DLL load to avoiding issues such as DLL
+hijacking. Passing the full path to the DLL is the safest way to ensure the
+correct library and dependencies are loaded.
+
+.. versionchanged:: 3.8
+   Added *winmode* parameter.
+
 
 .. data:: RTLD_GLOBAL
    :noindex:
@@ -1437,11 +1438,18 @@ copy of the windows error code.
    The default mode which is used to load shared libraries.  On OSX 10.3, this is
    *RTLD_GLOBAL*, otherwise it is the same as *RTLD_LOCAL*.
 
-Instances of these classes have no public methods, however :meth:`__getattr__`
-and :meth:`__getitem__` have special behavior: functions exported by the shared
-library can be accessed as attributes of by index.  Please note that both
-:meth:`__getattr__` and :meth:`__getitem__` cache their result, so calling them
-repeatedly returns the same object each time.
+Instances of these classes have no public methods.  Functions exported by the
+shared library can be accessed as attributes or by index.  Please note that
+accessing the function through an attribute caches the result and therefore
+accessing it repeatedly returns the same object each time.  On the other hand,
+accessing it through an index returns a new object each time::
+
+   >>> from ctypes import CDLL
+   >>> libc = CDLL("libc.so.6")  # On Linux
+   >>> libc.time == libc.time
+   True
+   >>> libc['time'] == libc['time']
+   False
 
 The following public attributes are available, their name starts with an
 underscore to not clash with exported function names:
@@ -1467,18 +1475,17 @@ loader instance.
    Class which loads shared libraries.  *dlltype* should be one of the
    :class:`CDLL`, :class:`PyDLL`, :class:`WinDLL`, or :class:`OleDLL` types.
 
-   :meth:`__getattr__` has special behavior: It allows to load a shared library by
+   :meth:`__getattr__` has special behavior: It allows loading a shared library by
    accessing it as attribute of a library loader instance.  The result is cached,
    so repeated attribute accesses return the same library each time.
-
 
    .. method:: LoadLibrary(name)
 
       Load a shared library into the process and return it.  This method always
       returns a new instance of the library.
 
-These prefabricated library loaders are available:
 
+These prefabricated library loaders are available:
 
 .. data:: cdll
    :noindex:
@@ -1503,9 +1510,9 @@ These prefabricated library loaders are available:
 
    Creates :class:`PyDLL` instances.
 
+
 For accessing the C Python api directly, a ready-to-use Python shared library
 object is available:
-
 
 .. data:: pythonapi
    :noindex:
@@ -1515,6 +1522,23 @@ object is available:
    :c:type:`int`, which is of course not always the truth, so you have to assign
    the correct :attr:`restype` attribute to use these functions.
 
+.. audit-event:: ctypes.dlopen name ctypes.LibraryLoader
+
+   Loading a library through any of these objects raises an
+   :ref:`auditing event <auditing>` ``ctypes.dlopen`` with string argument
+   ``name``, the name used to load the library.
+
+.. audit-event:: ctypes.dlsym library,name ctypes.LibraryLoader
+
+   Accessing a function on a loaded library raises an auditing event
+   ``ctypes.dlsym`` with arguments ``library`` (the library object) and ``name``
+   (the symbol's name as a string or integer).
+
+.. audit-event:: ctypes.dlsym/handle handle,name ctypes.LibraryLoader
+
+   In cases when only the library handle is available rather than the object,
+   accessing a function raises an auditing event ``ctypes.dlsym/handle`` with
+   arguments ``handle`` (the raw library handle) and ``name``.
 
 .. _ctypes-foreign-functions:
 
@@ -1538,7 +1562,6 @@ They are instances of a private class:
    This behavior can be customized by assigning to special attributes of the
    foreign function object.
 
-
    .. attribute:: restype
 
       Assign a ctypes type to specify the result type of the foreign function.
@@ -1546,11 +1569,10 @@ They are instances of a private class:
 
       It is possible to assign a callable Python object that is not a ctypes
       type, in this case the function is assumed to return a C :c:type:`int`, and
-      the callable will be called with this integer, allowing to do further
+      the callable will be called with this integer, allowing further
       processing or error checking.  Using this is deprecated, for more flexible
       post processing or error checking use a ctypes data type as
       :attr:`restype` and assign a callable to the :attr:`errcheck` attribute.
-
 
    .. attribute:: argtypes
 
@@ -1562,16 +1584,15 @@ They are instances of a private class:
 
       When a foreign function is called, each actual argument is passed to the
       :meth:`from_param` class method of the items in the :attr:`argtypes`
-      tuple, this method allows to adapt the actual argument to an object that
+      tuple, this method allows adapting the actual argument to an object that
       the foreign function accepts.  For example, a :class:`c_char_p` item in
-      the :attr:`argtypes` tuple will convert a unicode string passed as
-      argument into an byte string using ctypes conversion rules.
+      the :attr:`argtypes` tuple will convert a string passed as argument into
+      a bytes object using ctypes conversion rules.
 
       New: It is now possible to put items in argtypes which are not ctypes
       types, but each item must have a :meth:`from_param` method which returns a
       value usable as argument (integer, string, ctypes instance).  This allows
-      to define adapters that can adapt custom objects as function parameters.
-
+      defining adapters that can adapt custom objects as function parameters.
 
    .. attribute:: errcheck
 
@@ -1580,16 +1601,17 @@ They are instances of a private class:
 
       .. function:: callable(result, func, arguments)
          :noindex:
+         :module:
 
          *result* is what the foreign function returns, as specified by the
          :attr:`restype` attribute.
 
-         *func* is the foreign function object itself, this allows to reuse the
+         *func* is the foreign function object itself, this allows reusing the
          same callable object to check or post process the results of several
          functions.
 
          *arguments* is a tuple containing the parameters originally passed to
-         the function call, this allows to specialize the behavior on the
+         the function call, this allows specializing the behavior on the
          arguments used.
 
       The object that this function returns will be returned from the
@@ -1597,11 +1619,24 @@ They are instances of a private class:
       and raise an exception if the foreign function call failed.
 
 
-.. exception:: ArgumentError()
+.. exception:: ArgumentError
 
    This exception is raised when a foreign function call cannot convert one of the
    passed arguments.
 
+
+.. audit-event:: ctypes.seh_exception code foreign-functions
+
+   On Windows, when a foreign function call raises a system exception (for
+   example, due to an access violation), it will be captured and replaced with
+   a suitable Python exception. Further, an auditing event
+   ``ctypes.seh_exception`` with argument ``code`` will be raised, allowing an
+   audit hook to replace the exception with its own.
+
+.. audit-event:: ctypes.call_function func_pointer,arguments foreign-functions
+
+   Some ways to invoke foreign function calls may raise an auditing event
+   ``ctypes.call_function`` with arguments ``function pointer`` and ``arguments``.
 
 .. _ctypes-function-prototypes:
 
@@ -1612,20 +1647,19 @@ Foreign functions can also be created by instantiating function prototypes.
 Function prototypes are similar to function prototypes in C; they describe a
 function (return type, argument types, calling convention) without defining an
 implementation.  The factory functions must be called with the desired result
-type and the argument types of the function.
+type and the argument types of the function, and can be used as decorator
+factories, and as such, be applied to functions through the ``@wrapper`` syntax.
+See :ref:`ctypes-callback-functions` for examples.
 
 
 .. function:: CFUNCTYPE(restype, *argtypes, use_errno=False, use_last_error=False)
 
    The returned function prototype creates functions that use the standard C
    calling convention.  The function will release the GIL during the call.  If
-   *use_errno* is set to True, the ctypes private copy of the system
+   *use_errno* is set to true, the ctypes private copy of the system
    :data:`errno` variable is exchanged with the real :data:`errno` value before
    and after the call; *use_last_error* does the same for the Windows error
    code.
-
-   .. versionchanged:: 2.6
-      The optional *use_errno* and *use_last_error* parameters were added.
 
 
 .. function:: WINFUNCTYPE(restype, *argtypes, use_errno=False, use_last_error=False)
@@ -1664,24 +1698,24 @@ different ways, depending on the type and number of the parameters in the call:
       :noindex:
       :module:
 
-      Returns a foreign function exported by a shared library. *func_spec* must be a
-      2-tuple ``(name_or_ordinal, library)``. The first item is the name of the
-      exported function as string, or the ordinal of the exported function as small
-      integer.  The second item is the shared library instance.
+      Returns a foreign function exported by a shared library. *func_spec* must
+      be a 2-tuple ``(name_or_ordinal, library)``. The first item is the name of
+      the exported function as string, or the ordinal of the exported function
+      as small integer.  The second item is the shared library instance.
 
 
    .. function:: prototype(vtbl_index, name[, paramflags[, iid]])
       :noindex:
       :module:
 
-      Returns a foreign function that will call a COM method. *vtbl_index* is the
-      index into the virtual function table, a small non-negative integer. *name* is
-      name of the COM method. *iid* is an optional pointer to the interface identifier
-      which is used in extended error reporting.
+      Returns a foreign function that will call a COM method. *vtbl_index* is
+      the index into the virtual function table, a small non-negative
+      integer. *name* is name of the COM method. *iid* is an optional pointer to
+      the interface identifier which is used in extended error reporting.
 
-      COM methods use a special calling convention: They require a pointer to the COM
-      interface as first argument, in addition to those parameters that are specified
-      in the :attr:`argtypes` tuple.
+      COM methods use a special calling convention: They require a pointer to
+      the COM interface as first argument, in addition to those parameters that
+      are specified in the :attr:`argtypes` tuple.
 
    The optional *paramflags* parameter creates foreign function wrappers with much
    more functionality than the features described above.
@@ -1708,32 +1742,30 @@ different ways, depending on the type and number of the parameters in the call:
 
    The optional third item is the default value for this parameter.
 
-This example demonstrates how to wrap the Windows ``MessageBoxA`` function so
+This example demonstrates how to wrap the Windows ``MessageBoxW`` function so
 that it supports default parameters and named arguments. The C declaration from
 the windows header file is this::
 
    WINUSERAPI int WINAPI
-   MessageBoxA(
-       HWND hWnd ,
-       LPCSTR lpText,
-       LPCSTR lpCaption,
+   MessageBoxW(
+       HWND hWnd,
+       LPCWSTR lpText,
+       LPCWSTR lpCaption,
        UINT uType);
 
 Here is the wrapping with :mod:`ctypes`::
 
    >>> from ctypes import c_int, WINFUNCTYPE, windll
-   >>> from ctypes.wintypes import HWND, LPCSTR, UINT
-   >>> prototype = WINFUNCTYPE(c_int, HWND, LPCSTR, LPCSTR, UINT)
-   >>> paramflags = (1, "hwnd", 0), (1, "text", "Hi"), (1, "caption", None), (1, "flags", 0)
-   >>> MessageBox = prototype(("MessageBoxA", windll.user32), paramflags)
-   >>>
+   >>> from ctypes.wintypes import HWND, LPCWSTR, UINT
+   >>> prototype = WINFUNCTYPE(c_int, HWND, LPCWSTR, LPCWSTR, UINT)
+   >>> paramflags = (1, "hwnd", 0), (1, "text", "Hi"), (1, "caption", "Hello from ctypes"), (1, "flags", 0)
+   >>> MessageBox = prototype(("MessageBoxW", windll.user32), paramflags)
 
-The MessageBox foreign function can now be called in these ways::
+The ``MessageBox`` foreign function can now be called in these ways::
 
    >>> MessageBox()
    >>> MessageBox(text="Spam, spam, spam")
    >>> MessageBox(flags=2, text="foo bar")
-   >>>
 
 A second example demonstrates output parameters.  The win32 ``GetWindowRect``
 function retrieves the dimensions of a specified window by copying them into
@@ -1792,11 +1824,12 @@ instead, the normal processing will no longer take place::
 Utility functions
 ^^^^^^^^^^^^^^^^^
 
-
 .. function:: addressof(obj)
 
    Returns the address of the memory buffer as integer.  *obj* must be an
    instance of a ctypes type.
+
+   .. audit-event:: ctypes.addressof obj ctypes.addressof
 
 
 .. function:: alignment(obj_or_type)
@@ -1815,67 +1848,61 @@ Utility functions
 
       (((char *)&obj) + offset)
 
-   The returned object can only be used as a foreign function call
-   parameter.  It behaves similar to ``pointer(obj)``, but the
-   construction is a lot faster.
-
-   .. versionadded:: 2.6
-      The *offset* optional argument was added.
+   The returned object can only be used as a foreign function call parameter.
+   It behaves similar to ``pointer(obj)``, but the construction is a lot faster.
 
 
 .. function:: cast(obj, type)
 
-   This function is similar to the cast operator in C.  It returns a new
-   instance of *type* which points to the same memory block as *obj*.  *type*
-   must be a pointer type, and *obj* must be an object that can be interpreted
-   as a pointer.
+   This function is similar to the cast operator in C. It returns a new instance
+   of *type* which points to the same memory block as *obj*.  *type* must be a
+   pointer type, and *obj* must be an object that can be interpreted as a
+   pointer.
 
 
-.. function:: create_string_buffer(init_or_size[, size])
+.. function:: create_string_buffer(init_or_size, size=None)
 
    This function creates a mutable character buffer. The returned object is a
    ctypes array of :class:`c_char`.
 
    *init_or_size* must be an integer which specifies the size of the array, or a
-   string which will be used to initialize the array items.
+   bytes object which will be used to initialize the array items.
 
-   If a string is specified as first argument, the buffer is made one item larger
-   than the length of the string so that the last element in the array is a NUL
+   If a bytes object is specified as first argument, the buffer is made one item
+   larger than its length so that the last element in the array is a NUL
    termination character. An integer can be passed as second argument which allows
-   to specify the size of the array if the length of the string should not be used.
+   specifying the size of the array if the length of the bytes should not be used.
 
-   If the first parameter is a unicode string, it is converted into an 8-bit string
-   according to ctypes conversion rules.
+   .. audit-event:: ctypes.create_string_buffer init,size ctypes.create_string_buffer
 
 
-.. function:: create_unicode_buffer(init_or_size[, size])
+.. function:: create_unicode_buffer(init_or_size, size=None)
 
    This function creates a mutable unicode character buffer. The returned object is
    a ctypes array of :class:`c_wchar`.
 
    *init_or_size* must be an integer which specifies the size of the array, or a
-   unicode string which will be used to initialize the array items.
+   string which will be used to initialize the array items.
 
-   If a unicode string is specified as first argument, the buffer is made one item
+   If a string is specified as first argument, the buffer is made one item
    larger than the length of the string so that the last element in the array is a
    NUL termination character. An integer can be passed as second argument which
-   allows to specify the size of the array if the length of the string should not
+   allows specifying the size of the array if the length of the string should not
    be used.
 
-   If the first parameter is a 8-bit string, it is converted into an unicode string
-   according to ctypes conversion rules.
+   .. audit-event:: ctypes.create_unicode_buffer init,size ctypes.create_unicode_buffer
 
 
 .. function:: DllCanUnloadNow()
 
-   Windows only: This function is a hook which allows to implement in-process
+   Windows only: This function is a hook which allows implementing in-process
    COM servers with ctypes.  It is called from the DllCanUnloadNow function that
    the _ctypes extension dll exports.
 
 
 .. function:: DllGetClassObject()
 
-   Windows only: This function is a hook which allows to implement in-process
+   Windows only: This function is a hook which allows implementing in-process
    COM servers with ctypes.  It is called from the DllGetClassObject function
    that the ``_ctypes`` extension dll exports.
 
@@ -1885,28 +1912,22 @@ Utility functions
 
    Try to find a library and return a pathname.  *name* is the library name
    without any prefix like ``lib``, suffix like ``.so``, ``.dylib`` or version
-   number (this is the form used for the posix linker option :option:`-l`).  If
+   number (this is the form used for the posix linker option :option:`!-l`).  If
    no library can be found, returns ``None``.
 
    The exact functionality is system dependent.
-
-   .. versionchanged:: 2.6
-      Windows only: ``find_library("m")`` or ``find_library("c")`` return the
-      result of a call to ``find_msvcrt()``.
 
 
 .. function:: find_msvcrt()
    :module: ctypes.util
 
-   Windows only: return the filename of the VC runtype library used by Python,
+   Windows only: return the filename of the VC runtime library used by Python,
    and by the extension modules.  If the name of the library cannot be
    determined, ``None`` is returned.
 
    If you need to free memory, for example, allocated by an extension module
    with a call to the ``free(void *)``, it is important that you use the
    function in the same library that allocated the memory.
-
-   .. versionadded:: 2.6
 
 
 .. function:: FormatError([code])
@@ -1927,14 +1948,14 @@ Utility functions
    Returns the current value of the ctypes-private copy of the system
    :data:`errno` variable in the calling thread.
 
-   .. versionadded:: 2.6
+   .. audit-event:: ctypes.get_errno "" ctypes.get_errno
 
 .. function:: get_last_error()
 
    Windows only: returns the current value of the ctypes-private copy of the system
    :data:`LastError` variable in the calling thread.
 
-   .. versionadded:: 2.6
+   .. audit-event:: ctypes.get_last_error "" ctypes.get_last_error
 
 .. function:: memmove(dst, src, count)
 
@@ -1953,7 +1974,7 @@ Utility functions
 .. function:: POINTER(type)
 
    This factory function creates and returns a new ctypes pointer type. Pointer
-   types are cached an reused internally, so calling this function repeatedly is
+   types are cached and reused internally, so calling this function repeatedly is
    cheap. *type* must be a ctypes type.
 
 
@@ -1974,25 +1995,12 @@ Utility functions
    but it is possible to enlarge the buffer.
 
 
-.. function:: set_conversion_mode(encoding, errors)
-
-   This function sets the rules that ctypes objects use when converting between
-   8-bit strings and unicode strings.  *encoding* must be a string specifying an
-   encoding, like ``'utf-8'`` or ``'mbcs'``, *errors* must be a string
-   specifying the error handling on encoding/decoding errors.  Examples of
-   possible values are ``"strict"``, ``"replace"``, or ``"ignore"``.
-
-   :func:`set_conversion_mode` returns a 2-tuple containing the previous
-   conversion rules.  On windows, the initial conversion rules are ``('mbcs',
-   'ignore')``, on other systems ``('ascii', 'strict')``.
-
-
 .. function:: set_errno(value)
 
    Set the current value of the ctypes-private copy of the system :data:`errno`
    variable in the calling thread to *value* and return the previous value.
 
-   .. versionadded:: 2.6
+   .. audit-event:: ctypes.set_errno errno ctypes.set_errno
 
 
 .. function:: set_last_error(value)
@@ -2001,7 +2009,7 @@ Utility functions
    :data:`LastError` variable in the calling thread to *value* and return the
    previous value.
 
-   .. versionadded:: 2.6
+   .. audit-event:: ctypes.set_last_error error ctypes.set_last_error
 
 
 .. function:: sizeof(obj_or_type)
@@ -2010,28 +2018,35 @@ Utility functions
    Does the same as the C ``sizeof`` operator.
 
 
-.. function:: string_at(address[, size])
+.. function:: string_at(address, size=-1)
 
-   This function returns the string starting at memory address *address*. If size
-   is specified, it is used as size, otherwise the string is assumed to be
-   zero-terminated.
+   This function returns the C string starting at memory address *address* as a bytes
+   object. If size is specified, it is used as size, otherwise the string is assumed
+   to be zero-terminated.
+
+   .. audit-event:: ctypes.string_at address,size ctypes.string_at
 
 
 .. function:: WinError(code=None, descr=None)
 
-   Windows only: this function is probably the worst-named thing in ctypes.  It
-   creates an instance of WindowsError.  If *code* is not specified,
-   ``GetLastError`` is called to determine the error code.  If ``descr`` is not
+   Windows only: this function is probably the worst-named thing in ctypes. It
+   creates an instance of OSError.  If *code* is not specified,
+   ``GetLastError`` is called to determine the error code. If *descr* is not
    specified, :func:`FormatError` is called to get a textual description of the
    error.
 
+   .. versionchanged:: 3.3
+      An instance of :exc:`WindowsError` used to be created.
 
-.. function:: wstring_at(address[, size])
+
+.. function:: wstring_at(address, size=-1)
 
    This function returns the wide character string starting at memory address
-   *address* as unicode string.  If *size* is specified, it is used as the
-   number of characters of the string, otherwise the string is assumed to be
+   *address* as a string.  If *size* is specified, it is used as the number of
+   characters of the string, otherwise the string is assumed to be
    zero-terminated.
+
+   .. audit-event:: ctypes.wstring_at address,size ctypes.wstring_at
 
 
 .. _ctypes-data-types:
@@ -2045,13 +2060,12 @@ Data types
    This non-public class is the common base class of all ctypes data types.
    Among other things, all ctypes type instances contain a memory block that
    hold C compatible data; the address of the memory block is returned by the
-   :func:`addressof` helper function.  Another instance variable is exposed as
+   :func:`addressof` helper function. Another instance variable is exposed as
    :attr:`_objects`; this contains other Python objects that need to be kept
    alive in case the memory block contains pointers.
 
    Common methods of ctypes data types, these are all class methods (to be
    exact, they are methods of the :term:`metaclass`):
-
 
    .. method:: _CData.from_buffer(source[, offset])
 
@@ -2061,8 +2075,7 @@ Data types
       source buffer in bytes; the default is zero.  If the source buffer is not
       large enough a :exc:`ValueError` is raised.
 
-      .. versionadded:: 2.6
-
+      .. audit-event:: ctypes.cdata/buffer pointer,size,offset ctypes._CData.from_buffer
 
    .. method:: _CData.from_buffer_copy(source[, offset])
 
@@ -2072,14 +2085,18 @@ Data types
       is zero.  If the source buffer is not large enough a :exc:`ValueError` is
       raised.
 
-      .. versionadded:: 2.6
-
+      .. audit-event:: ctypes.cdata/buffer pointer,size,offset ctypes._CData.from_buffer_copy
 
    .. method:: from_address(address)
 
       This method returns a ctypes type instance using the memory specified by
       *address* which must be an integer.
 
+      .. audit-event:: ctypes.cdata address ctypes._CData.from_address
+
+         This method, and others that indirectly call this method, raises an
+         :ref:`auditing event <auditing>` ``ctypes.cdata`` with argument
+         ``address``.
 
    .. method:: from_param(obj)
 
@@ -2092,13 +2109,11 @@ Data types
       that normally returns *obj* if that is an instance of the type.  Some
       types accept other objects as well.
 
-
    .. method:: in_dll(library, name)
 
       This method returns a ctypes type instance exported by a shared
       library. *name* is the name of the symbol that exports the data, *library*
       is the loaded shared library.
-
 
    Common instance variables of ctypes data types:
 
@@ -2109,12 +2124,10 @@ Data types
       :attr:`_b_base_` read-only member is the root ctypes object that owns the
       memory block.
 
-
    .. attribute:: _b_needsfree_
 
       This read-only variable is true when the ctypes data instance has
       allocated the memory block itself, false otherwise.
-
 
    .. attribute:: _objects
 
@@ -2129,17 +2142,13 @@ Data types
 Fundamental data types
 ^^^^^^^^^^^^^^^^^^^^^^
 
-
 .. class:: _SimpleCData
 
    This non-public class is the base class of all fundamental ctypes data
    types. It is mentioned here because it contains the common attributes of the
    fundamental ctypes data types.  :class:`_SimpleCData` is a subclass of
-   :class:`_CData`, so it inherits their methods and attributes.
-
-   .. versionchanged:: 2.6
-      ctypes data types that are not and do not contain pointers can now be
-      pickled.
+   :class:`_CData`, so it inherits their methods and attributes. ctypes data
+   types that are not and do not contain pointers can now be pickled.
 
    Instances have a single attribute:
 
@@ -2147,8 +2156,8 @@ Fundamental data types
 
       This attribute contains the actual value of the instance. For integer and
       pointer types, it is an integer, for character types, it is a single
-      character string, for character pointer types it is a Python string or
-      unicode string.
+      character bytes object or string, for character pointer types it is a
+      Python bytes object or string.
 
       When the ``value`` attribute is retrieved from a ctypes instance, usually
       a new object is returned each time.  :mod:`ctypes` does *not* implement
@@ -2159,8 +2168,10 @@ Fundamental data types
 Fundamental data types, when returned as foreign function call results, or, for
 example, by retrieving structure field members or array items, are transparently
 converted to native Python types.  In other words, if a foreign function has a
-:attr:`restype` of :class:`c_char_p`, you will always receive a Python string,
-*not* a :class:`c_char_p` instance.
+:attr:`restype` of :class:`c_char_p`, you will always receive a Python bytes
+object, *not* a :class:`c_char_p` instance.
+
+.. XXX above is false, it actually returns a Unicode string
 
 Subclasses of fundamental data types do *not* inherit this behavior. So, if a
 foreign functions :attr:`restype` is a subclass of :class:`c_void_p`, you will
@@ -2188,7 +2199,7 @@ These are the fundamental ctypes data types:
    Represents the C :c:type:`char *` datatype when it points to a zero-terminated
    string.  For a general character pointer that may also point to binary data,
    ``POINTER(c_char)`` must be used.  The constructor accepts an integer
-   address, or a string.
+   address, or a bytes object.
 
 
 .. class:: c_double
@@ -2202,8 +2213,6 @@ These are the fundamental ctypes data types:
    Represents the C :c:type:`long double` datatype.  The constructor accepts an
    optional float initializer.  On platforms where ``sizeof(long double) ==
    sizeof(double)`` it is an alias to :class:`c_double`.
-
-   .. versionadded:: 2.6
 
 .. class:: c_float
 
@@ -2269,7 +2278,7 @@ These are the fundamental ctypes data types:
 
    Represents the C :c:type:`ssize_t` datatype.
 
-   .. versionadded:: 2.7
+   .. versionadded:: 3.2
 
 
 .. class:: c_ubyte
@@ -2351,10 +2360,8 @@ These are the fundamental ctypes data types:
 .. class:: c_bool
 
    Represent the C :c:type:`bool` datatype (more accurately, :c:type:`_Bool` from
-   C99).  Its value can be True or False, and the constructor accepts any object
+   C99).  Its value can be ``True`` or ``False``, and the constructor accepts any object
    that has a truth value.
-
-   .. versionadded:: 2.6
 
 
 .. class:: HRESULT
@@ -2421,7 +2428,7 @@ other data types containing pointer type fields.
       checked, only one field can be accessed when names are repeated.
 
       It is possible to define the :attr:`_fields_` class variable *after* the
-      class statement that defines the Structure subclass, this allows to create
+      class statement that defines the Structure subclass, this allows creating
       data types that directly or indirectly reference themselves::
 
          class List(Structure):
@@ -2431,23 +2438,18 @@ other data types containing pointer type fields.
                          ]
 
       The :attr:`_fields_` class variable must, however, be defined before the
-      type is first used (an instance is created, ``sizeof()`` is called on it,
+      type is first used (an instance is created, :func:`sizeof` is called on it,
       and so on).  Later assignments to the :attr:`_fields_` class variable will
       raise an AttributeError.
 
-      Structure and union subclass constructors accept both positional and named
-      arguments.  Positional arguments are used to initialize the fields in the
-      same order as they appear in the :attr:`_fields_` definition, named
-      arguments are used to initialize the fields with the corresponding name.
-
-      It is possible to defined sub-subclasses of structure types, they inherit
+      It is possible to define sub-subclasses of structure types, they inherit
       the fields of the base class plus the :attr:`_fields_` defined in the
       sub-subclass, if any.
 
 
    .. attribute:: _pack_
 
-      An optional small integer that allows to override the alignment of
+      An optional small integer that allows overriding the alignment of
       structure fields in the instance.  :attr:`_pack_` must already be defined
       when :attr:`_fields_` is assigned, otherwise it will have no effect.
 
@@ -2459,8 +2461,8 @@ other data types containing pointer type fields.
       assigned, otherwise it will have no effect.
 
       The fields listed in this variable must be structure or union type fields.
-      :mod:`ctypes` will create descriptors in the structure type that allows to
-      access the nested fields directly, without the need to create the
+      :mod:`ctypes` will create descriptors in the structure type that allows
+      accessing the nested fields directly, without the need to create the
       structure or union field.
 
       Here is an example type (Windows)::
@@ -2488,7 +2490,7 @@ other data types containing pointer type fields.
          td.lptdesc = POINTER(some_type)
          td.u.lptdesc = POINTER(some_type)
 
-   It is possible to defined sub-subclasses of structures, they inherit the
+   It is possible to define sub-subclasses of structures, they inherit the
    fields of the base class.  If the subclass definition has a separate
    :attr:`_fields_` variable, the fields specified in this are appended to the
    fields of the base class.
@@ -2506,6 +2508,55 @@ other data types containing pointer type fields.
 Arrays and pointers
 ^^^^^^^^^^^^^^^^^^^
 
-Not yet written - please see the sections :ref:`ctypes-pointers` and section
-:ref:`ctypes-arrays` in the tutorial.
+.. class:: Array(*args)
 
+   Abstract base class for arrays.
+
+   The recommended way to create concrete array types is by multiplying any
+   :mod:`ctypes` data type with a positive integer.  Alternatively, you can subclass
+   this type and define :attr:`_length_` and :attr:`_type_` class variables.
+   Array elements can be read and written using standard
+   subscript and slice accesses; for slice reads, the resulting object is
+   *not* itself an :class:`Array`.
+
+
+   .. attribute:: _length_
+
+        A positive integer specifying the number of elements in the array.
+        Out-of-range subscripts result in an :exc:`IndexError`. Will be
+        returned by :func:`len`.
+
+
+   .. attribute:: _type_
+
+        Specifies the type of each element in the array.
+
+
+   Array subclass constructors accept positional arguments, used to
+   initialize the elements in order.
+
+
+.. class:: _Pointer
+
+   Private, abstract base class for pointers.
+
+   Concrete pointer types are created by calling :func:`POINTER` with the
+   type that will be pointed to; this is done automatically by
+   :func:`pointer`.
+
+   If a pointer points to an array, its elements can be read and
+   written using standard subscript and slice accesses.  Pointer objects
+   have no size, so :func:`len` will raise :exc:`TypeError`.  Negative
+   subscripts will read from the memory *before* the pointer (as in C), and
+   out-of-range subscripts will probably crash with an access violation (if
+   you're lucky).
+
+
+   .. attribute:: _type_
+
+        Specifies the type pointed to.
+
+   .. attribute:: contents
+
+        Returns the object to which to pointer points.  Assigning to this
+        attribute changes the pointer to point to the assigned object.

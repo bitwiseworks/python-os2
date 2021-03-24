@@ -3,13 +3,10 @@
 Implements the Distutils 'bdist' command (create a built [binary]
 distribution)."""
 
-__revision__ = "$Id$"
-
 import os
-
-from distutils.util import get_platform
 from distutils.core import Command
-from distutils.errors import DistutilsPlatformError, DistutilsOptionError
+from distutils.errors import *
+from distutils.util import get_platform
 
 
 def show_formats():
@@ -61,17 +58,17 @@ class bdist(Command):
     # This won't do in reality: will need to distinguish RPM-ish Linux,
     # Debian-ish Linux, Solaris, FreeBSD, ..., Windows, Mac OS.
     default_format = {'posix': 'gztar',
-                      'nt': 'zip',
-                      'os2': 'zip'}
+                      'nt': 'zip'}
 
     # Establish the preferred order (for the --help-formats option).
-    format_commands = ['rpm', 'gztar', 'bztar', 'ztar', 'tar',
+    format_commands = ['rpm', 'gztar', 'bztar', 'xztar', 'ztar', 'tar',
                        'wininst', 'zip', 'msi']
 
     # And the real information.
     format_command = {'rpm':   ('bdist_rpm',  "RPM distribution"),
                       'gztar': ('bdist_dumb', "gzip'ed tar file"),
                       'bztar': ('bdist_dumb', "bzip2'ed tar file"),
+                      'xztar': ('bdist_dumb', "xz'ed tar file"),
                       'ztar':  ('bdist_dumb', "compressed tar file"),
                       'tar':   ('bdist_dumb', "tar file"),
                       'wininst': ('bdist_wininst',
@@ -111,9 +108,9 @@ class bdist(Command):
             try:
                 self.formats = [self.default_format[os.name]]
             except KeyError:
-                raise DistutilsPlatformError, \
-                      "don't know how to create built distributions " + \
-                      "on platform %s" % os.name
+                raise DistutilsPlatformError(
+                      "don't know how to create built distributions "
+                      "on platform %s" % os.name)
 
         if self.dist_dir is None:
             self.dist_dir = "dist"
@@ -125,7 +122,7 @@ class bdist(Command):
             try:
                 commands.append(self.format_command[format][0])
             except KeyError:
-                raise DistutilsOptionError, "invalid format '%s'" % format
+                raise DistutilsOptionError("invalid format '%s'" % format)
 
         # Reinitialize and run each command.
         for i in range(len(self.formats)):

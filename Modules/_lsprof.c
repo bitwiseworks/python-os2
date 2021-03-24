@@ -1,72 +1,5 @@
 #include "Python.h"
-#include "compile.h"
-#include "frameobject.h"
-#include "structseq.h"
 #include "rotatingtree.h"
-
-#if !defined(HAVE_LONG_LONG)
-#error "This module requires long longs!"
-#endif
-
-/*** Selection of a high-precision timer ***/
-
-#ifdef MS_WINDOWS
-
-#include <windows.h>
-
-static PY_LONG_LONG
-hpTimer(void)
-{
-    LARGE_INTEGER li;
-    QueryPerformanceCounter(&li);
-    return li.QuadPart;
-}
-
-static double
-hpTimerUnit(void)
-{
-    LARGE_INTEGER li;
-    if (QueryPerformanceFrequency(&li))
-        return 1.0 / li.QuadPart;
-    else
-        return 0.000001;  /* unlikely */
-}
-
-#else  /* !MS_WINDOWS */
-
-#ifndef HAVE_GETTIMEOFDAY
-#error "This module requires gettimeofday() on non-Windows platforms!"
-#endif
-
-#if (defined(PYOS_OS2) && defined(PYCC_GCC))
-#include <sys/time.h>
-#else
-#include <sys/resource.h>
-#include <sys/times.h>
-#endif
-
-static PY_LONG_LONG
-hpTimer(void)
-{
-    struct timeval tv;
-    PY_LONG_LONG ret;
-#ifdef GETTIMEOFDAY_NO_TZ
-    gettimeofday(&tv);
-#else
-    gettimeofday(&tv, (struct timezone *)NULL);
-#endif
-    ret = tv.tv_sec;
-    ret = ret * 1000000 + tv.tv_usec;
-    return ret;
-}
-
-static double
-hpTimerUnit(void)
-{
-    return 0.000001;
-}
-
-#endif  /* MS_WINDOWS */
 
 /************************************************************/
 /* Written by Brett Rosen and Ted Czotter */
@@ -76,8 +9,8 @@ struct _ProfilerEntry;
 /* represents a function called from another function */
 typedef struct _ProfilerSubEntry {
     rotating_node_t header;
-    PY_LONG_LONG tt;
-    PY_LONG_LONG it;
+    _PyTime_t tt;
+    _PyTime_t it;
     long callcount;
     long recursivecallcount;
     long recursionLevel;
@@ -87,8 +20,8 @@ typedef struct _ProfilerSubEntry {
 typedef struct _ProfilerEntry {
     rotating_node_t header;
     PyObject *userObj; /* PyCodeObject, or a descriptive str for builtins */
-    PY_LONG_LONG tt; /* total time in this entry */
-    PY_LONG_LONG it; /* inline time in this entry (not in subcalls) */
+    _PyTime_t tt; /* total time in this entry */
+    _PyTime_t it; /* inline time in this entry (not in subcalls) */
     long callcount; /* how many times this was called */
     long recursivecallcount; /* how many times called recursively */
     long recursionLevel;
@@ -96,8 +29,8 @@ typedef struct _ProfilerEntry {
 } ProfilerEntry;
 
 typedef struct _ProfilerContext {
-    PY_LONG_LONG t0;
-    PY_LONG_LONG subt;
+    _PyTime_t t0;
+    _PyTime_t subt;
     struct _ProfilerContext *previous;
     ProfilerEntry *ctxEntry;
 } ProfilerContext;
@@ -117,48 +50,53 @@ typedef struct {
 #define POF_BUILTINS    0x004
 #define POF_NOMEMORY    0x100
 
-staticforward PyTypeObject PyProfiler_Type;
+static PyTypeObject PyProfiler_Type;
 
 #define PyProfiler_Check(op) PyObject_TypeCheck(op, &PyProfiler_Type)
-#define PyProfiler_CheckExact(op) (Py_TYPE(op) == &PyProfiler_Type)
+#define PyProfiler_CheckExact(op) Py_IS_TYPE(op, &PyProfiler_Type)
 
 /*** External Timers ***/
 
-#define DOUBLE_TIMER_PRECISION   4294967296.0
-static PyObject *empty_tuple;
-
-static PY_LONG_LONG CallExternalTimer(ProfilerObject *pObj)
+static _PyTime_t CallExternalTimer(ProfilerObject *pObj)
 {
-    PY_LONG_LONG result;
-    PyObject *o = PyObject_Call(pObj->externalTimer, empty_tuple, NULL);
+    PyObject *o = _PyObject_CallNoArg(pObj->externalTimer);
     if (o == NULL) {
         PyErr_WriteUnraisable(pObj->externalTimer);
         return 0;
     }
+
+    _PyTime_t result;
+    int err;
     if (pObj->externalTimerUnit > 0.0) {
         /* interpret the result as an integer that will be scaled
            in profiler_getstats() */
-        result = PyLong_AsLongLong(o);
+        err = _PyTime_FromNanosecondsObject(&result, o);
     }
     else {
         /* interpret the result as a double measured in seconds.
-           As the profiler works with PY_LONG_LONG internally
+           As the profiler works with _PyTime_t internally
            we convert it to a large integer */
-        double val = PyFloat_AsDouble(o);
-        /* error handling delayed to the code below */
-        result = (PY_LONG_LONG) (val * DOUBLE_TIMER_PRECISION);
+        err = _PyTime_FromSecondsObject(&result, o, _PyTime_ROUND_FLOOR);
     }
     Py_DECREF(o);
-    if (PyErr_Occurred()) {
+    if (err < 0) {
         PyErr_WriteUnraisable(pObj->externalTimer);
         return 0;
     }
     return result;
 }
 
-#define CALL_TIMER(pObj)        ((pObj)->externalTimer ?                \
-                                        CallExternalTimer(pObj) :       \
-                                        hpTimer())
+static inline _PyTime_t
+call_timer(ProfilerObject *pObj)
+{
+    if (pObj->externalTimer != NULL) {
+        return CallExternalTimer(pObj);
+    }
+    else {
+        return _PyTime_GetPerfCounter();
+    }
+}
+
 
 /*** ProfilerObject ***/
 
@@ -178,34 +116,38 @@ normalizeUserObj(PyObject *obj)
     if (fn->m_self == NULL) {
         /* built-in function: look up the module name */
         PyObject *mod = fn->m_module;
-        char *modname;
-        if (mod && PyString_Check(mod)) {
-            modname = PyString_AS_STRING(mod);
-        }
-        else if (mod && PyModule_Check(mod)) {
-            modname = PyModule_GetName(mod);
-            if (modname == NULL) {
-                PyErr_Clear();
-                modname = "__builtin__";
+        PyObject *modname = NULL;
+        if (mod != NULL) {
+            if (PyUnicode_Check(mod)) {
+                modname = mod;
+                Py_INCREF(modname);
+            }
+            else if (PyModule_Check(mod)) {
+                modname = PyModule_GetNameObject(mod);
+                if (modname == NULL)
+                    PyErr_Clear();
             }
         }
-        else {
-            modname = "__builtin__";
+        if (modname != NULL) {
+            if (!_PyUnicode_EqualToASCIIString(modname, "builtins")) {
+                PyObject *result;
+                result = PyUnicode_FromFormat("<%U.%s>", modname,
+                                              fn->m_ml->ml_name);
+                Py_DECREF(modname);
+                return result;
+            }
+            Py_DECREF(modname);
         }
-        if (strcmp(modname, "__builtin__") != 0)
-            return PyString_FromFormat("<%s.%s>",
-                                       modname,
-                                       fn->m_ml->ml_name);
-        else
-            return PyString_FromFormat("<%s>",
-                                       fn->m_ml->ml_name);
+        return PyUnicode_FromFormat("<%s>", fn->m_ml->ml_name);
     }
     else {
         /* built-in method: try to return
             repr(getattr(type(__self__), __name__))
         */
         PyObject *self = fn->m_self;
-        PyObject *name = PyString_FromString(fn->m_ml->ml_name);
+        PyObject *name = PyUnicode_FromString(fn->m_ml->ml_name);
+        PyObject *modname = fn->m_module;
+
         if (name != NULL) {
             PyObject *mo = _PyType_Lookup(Py_TYPE(self), name);
             Py_XINCREF(mo);
@@ -217,9 +159,14 @@ normalizeUserObj(PyObject *obj)
                     return res;
             }
         }
+        /* Otherwise, use __module__ */
         PyErr_Clear();
-        return PyString_FromFormat("<built-in method %s>",
-                                   fn->m_ml->ml_name);
+        if (modname != NULL && PyUnicode_Check(modname))
+            return PyUnicode_FromFormat("<built-in method %S.%s>",
+                                        modname,  fn->m_ml->ml_name);
+        else
+            return PyUnicode_FromFormat("<built-in method %s>",
+                                        fn->m_ml->ml_name);
     }
 }
 
@@ -227,7 +174,7 @@ static ProfilerEntry*
 newProfilerEntry(ProfilerObject *pObj, void *key, PyObject *userObj)
 {
     ProfilerEntry *self;
-    self = (ProfilerEntry*) malloc(sizeof(ProfilerEntry));
+    self = (ProfilerEntry*) PyMem_Malloc(sizeof(ProfilerEntry));
     if (self == NULL) {
         pObj->flags |= POF_NOMEMORY;
         return NULL;
@@ -235,7 +182,7 @@ newProfilerEntry(ProfilerObject *pObj, void *key, PyObject *userObj)
     userObj = normalizeUserObj(userObj);
     if (userObj == NULL) {
         PyErr_Clear();
-        free(self);
+        PyMem_Free(self);
         pObj->flags |= POF_NOMEMORY;
         return NULL;
     }
@@ -268,7 +215,7 @@ static ProfilerSubEntry *
 newSubEntry(ProfilerObject *pObj,  ProfilerEntry *caller, ProfilerEntry* entry)
 {
     ProfilerSubEntry *self;
-    self = (ProfilerSubEntry*) malloc(sizeof(ProfilerSubEntry));
+    self = (ProfilerSubEntry*) PyMem_Malloc(sizeof(ProfilerSubEntry));
     if (self == NULL) {
         pObj->flags |= POF_NOMEMORY;
         return NULL;
@@ -286,7 +233,7 @@ newSubEntry(ProfilerObject *pObj,  ProfilerEntry *caller, ProfilerEntry* entry)
 static int freeSubEntry(rotating_node_t *header, void *arg)
 {
     ProfilerSubEntry *subentry = (ProfilerSubEntry*) header;
-    free(subentry);
+    PyMem_Free(subentry);
     return 0;
 }
 
@@ -295,7 +242,7 @@ static int freeEntry(rotating_node_t *header, void *arg)
     ProfilerEntry *entry = (ProfilerEntry*) header;
     RotatingTree_Enum(entry->calls, freeSubEntry, NULL);
     Py_DECREF(entry->userObj);
-    free(entry);
+    PyMem_Free(entry);
     return 0;
 }
 
@@ -305,13 +252,13 @@ static void clearEntries(ProfilerObject *pObj)
     pObj->profilerEntries = EMPTY_ROTATING_TREE;
     /* release the memory hold by the ProfilerContexts */
     if (pObj->currentProfilerContext) {
-        free(pObj->currentProfilerContext);
+        PyMem_Free(pObj->currentProfilerContext);
         pObj->currentProfilerContext = NULL;
     }
     while (pObj->freelistProfilerContext) {
         ProfilerContext *c = pObj->freelistProfilerContext;
         pObj->freelistProfilerContext = c->previous;
-        free(c);
+        PyMem_Free(c);
     }
     pObj->freelistProfilerContext = NULL;
 }
@@ -333,14 +280,14 @@ initContext(ProfilerObject *pObj, ProfilerContext *self, ProfilerEntry *entry)
         if (subentry)
             ++subentry->recursionLevel;
     }
-    self->t0 = CALL_TIMER(pObj);
+    self->t0 = call_timer(pObj);
 }
 
 static void
 Stop(ProfilerObject *pObj, ProfilerContext *self, ProfilerEntry *entry)
 {
-    PY_LONG_LONG tt = CALL_TIMER(pObj) - self->t0;
-    PY_LONG_LONG it = tt - self->subt;
+    _PyTime_t tt = call_timer(pObj) - self->t0;
+    _PyTime_t it = tt - self->subt;
     if (self->previous)
         self->previous->subt += tt;
     pObj->currentProfilerContext = self->previous;
@@ -397,7 +344,7 @@ ptrace_enter_call(PyObject *self, void *key, PyObject *userObj)
     else {
         /* free list exhausted, allocate a new one */
         pContext = (ProfilerContext*)
-            malloc(sizeof(ProfilerContext));
+            PyMem_Malloc(sizeof(ProfilerContext));
         if (pContext == NULL) {
             pObj->flags |= POF_NOMEMORY;
             goto restorePyerr;
@@ -440,22 +387,28 @@ profiler_callback(PyObject *self, PyFrameObject *frame, int what,
 
     /* the 'frame' of a called function is about to start its execution */
     case PyTrace_CALL:
-        ptrace_enter_call(self, (void *)frame->f_code,
-                                (PyObject *)frame->f_code);
+    {
+        PyCodeObject *code = PyFrame_GetCode(frame);
+        ptrace_enter_call(self, (void *)code, (PyObject *)code);
+        Py_DECREF(code);
         break;
+    }
 
     /* the 'frame' of a called function is about to finish
        (either normally or with an exception) */
     case PyTrace_RETURN:
-        ptrace_leave_call(self, (void *)frame->f_code);
+    {
+        PyCodeObject *code = PyFrame_GetCode(frame);
+        ptrace_leave_call(self, (void *)code);
+        Py_DECREF(code);
         break;
+    }
 
     /* case PyTrace_EXCEPTION:
         If the exception results in the function exiting, a
         PyTrace_RETURN event will be generated, so we don't need to
         handle it. */
 
-#ifdef PyTrace_C_CALL   /* not defined in Python <= 2.3 */
     /* the Python function 'frame' is issuing a call to the built-in
        function 'arg' */
     case PyTrace_C_CALL:
@@ -477,7 +430,6 @@ profiler_callback(PyObject *self, PyFrameObject *frame, int what,
                               ((PyCFunctionObject *)arg)->m_ml);
         }
         break;
-#endif
 
     default:
         break;
@@ -632,14 +584,17 @@ static PyObject*
 profiler_getstats(ProfilerObject *pObj, PyObject* noarg)
 {
     statscollector_t collect;
-    if (pending_exception(pObj))
+    if (pending_exception(pObj)) {
         return NULL;
-    if (!pObj->externalTimer)
-        collect.factor = hpTimerUnit();
-    else if (pObj->externalTimerUnit > 0.0)
+    }
+    if (!pObj->externalTimer || pObj->externalTimerUnit == 0.0) {
+        _PyTime_t onesec = _PyTime_FromSeconds(1);
+        collect.factor = (double)1 / onesec;
+    }
+    else {
         collect.factor = pObj->externalTimerUnit;
-    else
-        collect.factor = 1.0 / DOUBLE_TIMER_PRECISION;
+    }
+
     collect.list = PyList_New(0);
     if (collect.list == NULL)
         return NULL;
@@ -667,13 +622,7 @@ setBuiltins(ProfilerObject *pObj, int nvalue)
     if (nvalue == 0)
         pObj->flags &= ~POF_BUILTINS;
     else if (nvalue > 0) {
-#ifndef PyTrace_C_CALL
-        PyErr_SetString(PyExc_ValueError,
-                        "builtins=True requires Python >= 2.4");
-        return -1;
-#else
         pObj->flags |=  POF_BUILTINS;
-#endif
     }
     return 0;
 }
@@ -697,12 +646,17 @@ profiler_enable(ProfilerObject *self, PyObject *args, PyObject *kwds)
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|ii:enable",
                                      kwlist, &subcalls, &builtins))
         return NULL;
-    if (setSubcalls(self, subcalls) < 0 || setBuiltins(self, builtins) < 0)
+    if (setSubcalls(self, subcalls) < 0 || setBuiltins(self, builtins) < 0) {
         return NULL;
-    PyEval_SetProfile(profiler_callback, (PyObject*)self);
+    }
+
+    PyThreadState *tstate = PyThreadState_GET();
+    if (_PyEval_SetProfile(tstate, profiler_callback, (PyObject*)self) < 0) {
+        return NULL;
+    }
+
     self->flags |= POF_ENABLED;
-    Py_INCREF(Py_None);
-    return Py_None;
+    Py_RETURN_NONE;
 }
 
 static void
@@ -716,7 +670,7 @@ flush_unmatched(ProfilerObject *pObj)
         else
             pObj->currentProfilerContext = pContext->previous;
         if (pContext)
-            free(pContext);
+            PyMem_Free(pContext);
     }
 
 }
@@ -730,13 +684,17 @@ Stop collecting profiling information.\n\
 static PyObject*
 profiler_disable(ProfilerObject *self, PyObject* noarg)
 {
-    self->flags &= ~POF_ENABLED;
-    PyEval_SetProfile(NULL, NULL);
-    flush_unmatched(self);
-    if (pending_exception(self))
+    PyThreadState *tstate = PyThreadState_GET();
+    if (_PyEval_SetProfile(tstate, NULL, NULL) < 0) {
         return NULL;
-    Py_INCREF(Py_None);
-    return Py_None;
+    }
+    self->flags &= ~POF_ENABLED;
+
+    flush_unmatched(self);
+    if (pending_exception(self)) {
+        return NULL;
+    }
+    Py_RETURN_NONE;
 }
 
 PyDoc_STRVAR(clear_doc, "\
@@ -749,15 +707,19 @@ static PyObject*
 profiler_clear(ProfilerObject *pObj, PyObject* noarg)
 {
     clearEntries(pObj);
-    Py_INCREF(Py_None);
-    return Py_None;
+    Py_RETURN_NONE;
 }
 
 static void
 profiler_dealloc(ProfilerObject *op)
 {
-    if (op->flags & POF_ENABLED)
-        PyEval_SetProfile(NULL, NULL);
+    if (op->flags & POF_ENABLED) {
+        PyThreadState *tstate = PyThreadState_GET();
+        if (_PyEval_SetProfile(tstate, NULL, NULL) < 0) {
+            PyErr_WriteUnraisable((PyObject *)op);
+        }
+    }
+
     flush_unmatched(op);
     clearEntries(op);
     Py_XDECREF(op->externalTimer);
@@ -767,15 +729,10 @@ profiler_dealloc(ProfilerObject *op)
 static int
 profiler_init(ProfilerObject *pObj, PyObject *args, PyObject *kw)
 {
-    PyObject *o;
     PyObject *timer = NULL;
     double timeunit = 0.0;
     int subcalls = 1;
-#ifdef PyTrace_C_CALL
     int builtins = 1;
-#else
-    int builtins = 0;
-#endif
     static char *kwlist[] = {"timer", "timeunit",
                                    "subcalls", "builtins", 0};
 
@@ -786,18 +743,16 @@ profiler_init(ProfilerObject *pObj, PyObject *args, PyObject *kw)
 
     if (setSubcalls(pObj, subcalls) < 0 || setBuiltins(pObj, builtins) < 0)
         return -1;
-    o = pObj->externalTimer;
-    pObj->externalTimer = timer;
-    Py_XINCREF(timer);
-    Py_XDECREF(o);
     pObj->externalTimerUnit = timeunit;
+    Py_XINCREF(timer);
+    Py_XSETREF(pObj->externalTimer, timer);
     return 0;
 }
 
 static PyMethodDef profiler_methods[] = {
     {"getstats",    (PyCFunction)profiler_getstats,
                     METH_NOARGS,                        getstats_doc},
-    {"enable",          (PyCFunction)profiler_enable,
+    {"enable",          (PyCFunction)(void(*)(void))profiler_enable,
                     METH_VARARGS | METH_KEYWORDS,       enable_doc},
     {"disable",         (PyCFunction)profiler_disable,
                     METH_NOARGS,                        disable_doc},
@@ -807,26 +762,25 @@ static PyMethodDef profiler_methods[] = {
 };
 
 PyDoc_STRVAR(profiler_doc, "\
-Profiler(custom_timer=None, time_unit=None, subcalls=True, builtins=True)\n\
+Profiler(timer=None, timeunit=None, subcalls=True, builtins=True)\n\
 \n\
     Builds a profiler object using the specified timer function.\n\
     The default timer is a fast built-in one based on real time.\n\
-    For custom timer functions returning integers, time_unit can\n\
+    For custom timer functions returning integers, timeunit can\n\
     be a float specifying a scale (i.e. how long each integer unit\n\
     is, in seconds).\n\
 ");
 
-statichere PyTypeObject PyProfiler_Type = {
-    PyObject_HEAD_INIT(NULL)
-    0,                                      /* ob_size */
+static PyTypeObject PyProfiler_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
     "_lsprof.Profiler",                     /* tp_name */
     sizeof(ProfilerObject),                 /* tp_basicsize */
     0,                                      /* tp_itemsize */
     (destructor)profiler_dealloc,           /* tp_dealloc */
-    0,                                      /* tp_print */
+    0,                                      /* tp_vectorcall_offset */
     0,                                      /* tp_getattr */
     0,                                      /* tp_setattr */
-    0,                                      /* tp_compare */
+    0,                                      /* tp_as_async */
     0,                                      /* tp_repr */
     0,                                      /* tp_as_number */
     0,                                      /* tp_as_sequence */
@@ -863,23 +817,38 @@ static PyMethodDef moduleMethods[] = {
     {NULL, NULL}
 };
 
+
+static struct PyModuleDef _lsprofmodule = {
+    PyModuleDef_HEAD_INIT,
+    "_lsprof",
+    "Fast profiler",
+    -1,
+    moduleMethods,
+    NULL,
+    NULL,
+    NULL,
+    NULL
+};
+
 PyMODINIT_FUNC
-init_lsprof(void)
+PyInit__lsprof(void)
 {
     PyObject *module, *d;
-    module = Py_InitModule3("_lsprof", moduleMethods, "Fast profiler");
+    module = PyModule_Create(&_lsprofmodule);
     if (module == NULL)
-        return;
+        return NULL;
     d = PyModule_GetDict(module);
     if (PyType_Ready(&PyProfiler_Type) < 0)
-        return;
+        return NULL;
     PyDict_SetItemString(d, "Profiler", (PyObject *)&PyProfiler_Type);
 
     if (!initialized) {
-        PyStructSequence_InitType(&StatsEntryType,
-                                  &profiler_entry_desc);
-        PyStructSequence_InitType(&StatsSubEntryType,
-                                  &profiler_subentry_desc);
+        if (PyStructSequence_InitType2(&StatsEntryType,
+                                       &profiler_entry_desc) < 0)
+            return NULL;
+        if (PyStructSequence_InitType2(&StatsSubEntryType,
+                                       &profiler_subentry_desc) < 0)
+            return NULL;
     }
     Py_INCREF((PyObject*) &StatsEntryType);
     Py_INCREF((PyObject*) &StatsSubEntryType);
@@ -887,6 +856,6 @@ init_lsprof(void)
                        (PyObject*) &StatsEntryType);
     PyModule_AddObject(module, "profiler_subentry",
                        (PyObject*) &StatsSubEntryType);
-    empty_tuple = PyTuple_New(0);
     initialized = 1;
+    return module;
 }

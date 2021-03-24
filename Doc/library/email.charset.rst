@@ -4,6 +4,14 @@
 .. module:: email.charset
    :synopsis: Character Sets
 
+**Source code:** :source:`Lib/email/charset.py`
+
+--------------
+
+This module is part of the legacy (``Compat32``) email API.  In the new
+API only the aliases table is used.
+
+The remaining text in this section is the original documentation of the module.
 
 This module provides a class :class:`Charset` for representing character sets
 and character set conversions in email messages, as well as a character set
@@ -13,10 +21,8 @@ Instances of :class:`Charset` are used in several other modules within the
 
 Import this class from the :mod:`email.charset` module.
 
-.. versionadded:: 2.2.2
 
-
-.. class:: Charset([input_charset])
+.. class:: Charset(input_charset=DEFAULT_CHARSET)
 
    Map character sets to their email properties.
 
@@ -41,7 +47,6 @@ Import this class from the :mod:`email.charset` module.
    character set to the ``iso-2022-jp`` character set.
 
    :class:`Charset` instances have the following data attributes:
-
 
    .. attribute:: input_charset
 
@@ -68,10 +73,10 @@ Import this class from the :mod:`email.charset` module.
 
    .. attribute:: output_charset
 
-      Some character sets must be converted before they can be used in email headers
-      or bodies.  If the *input_charset* is one of them, this attribute will
-      contain the name of the character set output will be converted to.  Otherwise, it will
-      be ``None``.
+      Some character sets must be converted before they can be used in email
+      headers or bodies.  If the *input_charset* is one of them, this attribute
+      will contain the name of the character set output will be converted to.
+      Otherwise, it will be ``None``.
 
 
    .. attribute:: input_codec
@@ -87,8 +92,8 @@ Import this class from the :mod:`email.charset` module.
       *output_charset*.  If no conversion codec is necessary, this attribute
       will have the same value as the *input_codec*.
 
-   :class:`Charset` instances also have the following methods:
 
+   :class:`Charset` instances also have the following methods:
 
    .. method:: get_body_encoding()
 
@@ -105,42 +110,6 @@ Import this class from the :mod:`email.charset` module.
       returns the string ``7bit`` otherwise.
 
 
-   .. method:: convert(s)
-
-      Convert the string *s* from the *input_codec* to the *output_codec*.
-
-
-   .. method:: to_splittable(s)
-
-      Convert a possibly multibyte string to a safely splittable format. *s* is
-      the string to split.
-
-      Uses the *input_codec* to try and convert the string to Unicode, so it can
-      be safely split on character boundaries (even for multibyte characters).
-
-      Returns the string as-is if it isn't known how to convert *s* to Unicode
-      with the *input_charset*.
-
-      Characters that could not be converted to Unicode will be replaced with
-      the Unicode replacement character ``'U+FFFD'``.
-
-
-   .. method:: from_splittable(ustr[, to_output])
-
-      Convert a splittable string back into an encoded string.  *ustr* is a
-      Unicode string to "unsplit".
-
-      This method uses the proper codec to try and convert the string from
-      Unicode back into an encoded format.  Return the string as-is if it is not
-      Unicode, or if it could not be converted from Unicode.
-
-      Characters that could not be converted from Unicode will be replaced with
-      an appropriate character (usually ``'?'``).
-
-      If *to_output* is ``True`` (the default), uses *output_codec* to convert
-      to an encoded format.  If *to_output* is ``False``, it uses *input_codec*.
-
-
    .. method:: get_output_charset()
 
       Return the output character set.
@@ -149,35 +118,27 @@ Import this class from the :mod:`email.charset` module.
       it is *input_charset*.
 
 
-   .. method:: encoded_header_len()
+   .. method:: header_encode(string)
 
-      Return the length of the encoded header string, properly calculating for
-      quoted-printable or base64 encoding.
-
-
-   .. method:: header_encode(s[, convert])
-
-      Header-encode the string *s*.
-
-      If *convert* is ``True``, the string will be converted from the input
-      charset to the output charset automatically.  This is not useful for
-      multibyte character sets, which have line length issues (multibyte
-      characters must be split on a character, not a byte boundary); use the
-      higher-level :class:`~email.header.Header` class to deal with these issues
-      (see :mod:`email.header`).  *convert* defaults to ``False``.
+      Header-encode the string *string*.
 
       The type of encoding (base64 or quoted-printable) will be based on the
       *header_encoding* attribute.
 
 
-   .. method:: body_encode(s[, convert])
+   .. method:: header_encode_lines(string, maxlengths)
 
-      Body-encode the string *s*.
+      Header-encode a *string* by converting it first to bytes.
 
-      If *convert* is ``True`` (the default), the string will be converted from
-      the input charset to output charset automatically. Unlike
-      :meth:`header_encode`, there are no issues with byte boundaries and
-      multibyte charsets in email bodies, so this is usually pretty safe.
+      This is similar to :meth:`header_encode` except that the string is fit
+      into maximum line lengths as given by the argument *maxlengths*, which
+      must be an iterator: each element returned from this iterator will provide
+      the next maximum line length.
+
+
+   .. method:: body_encode(string)
+
+      Body-encode the string *string*.
 
       The type of encoding (base64 or quoted-printable) will be based on the
       *body_encoding* attribute.
@@ -207,7 +168,7 @@ The :mod:`email.charset` module also provides the following functions for adding
 new entries to the global character set, alias, and codec registries:
 
 
-.. function:: add_charset(charset[, header_enc[, body_enc[, output_charset]]])
+.. function:: add_charset(charset, header_enc=None, body_enc=None, output_charset=None)
 
    Add character properties to the global registry.
 
@@ -248,6 +209,6 @@ new entries to the global character set, alias, and codec registries:
    Add a codec that map characters in the given character set to and from Unicode.
 
    *charset* is the canonical name of a character set. *codecname* is the name of a
-   Python codec, as appropriate for the second argument to the :func:`unicode`
-   built-in, or to the :meth:`~unicode.encode` method of a Unicode string.
+   Python codec, as appropriate for the second argument to the :class:`str`'s
+   :meth:`~str.encode` method.
 

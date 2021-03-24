@@ -1,24 +1,45 @@
 #include "Python.h"
 
 #include "code.h"
-#include "compile.h"
 #include "Python-ast.h"
 #include "symtable.h"
 
+#include "clinic/symtablemodule.c.h"
+/*[clinic input]
+module _symtable
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=f4685845a7100605]*/
+
+
+/*[clinic input]
+_symtable.symtable
+
+    source:    object
+    filename:  object(converter='PyUnicode_FSDecoder')
+    startstr:  str
+    /
+
+Return symbol and scope dictionaries used internally by compiler.
+[clinic start generated code]*/
+
 static PyObject *
-symtable_symtable(PyObject *self, PyObject *args)
+_symtable_symtable_impl(PyObject *module, PyObject *source,
+                        PyObject *filename, const char *startstr)
+/*[clinic end generated code: output=59eb0d5fc7285ac4 input=9dd8a50c0c36a4d7]*/
 {
     struct symtable *st;
     PyObject *t;
-
-    char *str;
-    char *filename;
-    char *startstr;
     int start;
+    PyCompilerFlags cf = _PyCompilerFlags_INIT;
+    PyObject *source_copy = NULL;
 
-    if (!PyArg_ParseTuple(args, "sss:symtable", &str, &filename,
-                          &startstr))
+    cf.cf_flags = PyCF_SOURCE_IS_UTF8;
+
+    const char *str = _Py_SourceAsString(source, "symtable", "string or bytes", &cf, &source_copy);
+    if (str == NULL) {
         return NULL;
+    }
+
     if (strcmp(startstr, "exec") == 0)
         start = Py_file_input;
     else if (strcmp(startstr, "eval") == 0)
@@ -28,11 +49,16 @@ symtable_symtable(PyObject *self, PyObject *args)
     else {
         PyErr_SetString(PyExc_ValueError,
            "symtable() arg 3 must be 'exec' or 'eval' or 'single'");
+        Py_DECREF(filename);
+        Py_XDECREF(source_copy);
         return NULL;
     }
-    st = Py_SymtableString(str, filename, start);
-    if (st == NULL)
+    st = _Py_SymtableStringObjectFlags(str, filename, start, &cf);
+    Py_DECREF(filename);
+    Py_XDECREF(source_copy);
+    if (st == NULL) {
         return NULL;
+    }
     t = (PyObject *)st->st_top;
     Py_INCREF(t);
     PyMem_Free((void *)st->st_future);
@@ -41,46 +67,60 @@ symtable_symtable(PyObject *self, PyObject *args)
 }
 
 static PyMethodDef symtable_methods[] = {
-    {"symtable",        symtable_symtable,      METH_VARARGS,
-     PyDoc_STR("Return symbol and scope dictionaries"
-               " used internally by compiler.")},
+    _SYMTABLE_SYMTABLE_METHODDEF
     {NULL,              NULL}           /* sentinel */
 };
 
+static struct PyModuleDef symtablemodule = {
+    PyModuleDef_HEAD_INIT,
+    "_symtable",
+    NULL,
+    -1,
+    symtable_methods,
+    NULL,
+    NULL,
+    NULL,
+    NULL
+};
+
 PyMODINIT_FUNC
-init_symtable(void)
+PyInit__symtable(void)
 {
     PyObject *m;
 
     if (PyType_Ready(&PySTEntry_Type) < 0)
-        return;
+        return NULL;
 
-    m = Py_InitModule("_symtable", symtable_methods);
+    m = PyModule_Create(&symtablemodule);
     if (m == NULL)
-        return;
-    PyModule_AddIntConstant(m, "USE", USE);
-    PyModule_AddIntConstant(m, "DEF_GLOBAL", DEF_GLOBAL);
-    PyModule_AddIntConstant(m, "DEF_LOCAL", DEF_LOCAL);
-    PyModule_AddIntConstant(m, "DEF_PARAM", DEF_PARAM);
-    PyModule_AddIntConstant(m, "DEF_FREE", DEF_FREE);
-    PyModule_AddIntConstant(m, "DEF_FREE_CLASS", DEF_FREE_CLASS);
-    PyModule_AddIntConstant(m, "DEF_IMPORT", DEF_IMPORT);
-    PyModule_AddIntConstant(m, "DEF_BOUND", DEF_BOUND);
+        return NULL;
+    PyModule_AddIntMacro(m, USE);
+    PyModule_AddIntMacro(m, DEF_GLOBAL);
+    PyModule_AddIntMacro(m, DEF_NONLOCAL);
+    PyModule_AddIntMacro(m, DEF_LOCAL);
+    PyModule_AddIntMacro(m, DEF_PARAM);
+    PyModule_AddIntMacro(m, DEF_FREE);
+    PyModule_AddIntMacro(m, DEF_FREE_CLASS);
+    PyModule_AddIntMacro(m, DEF_IMPORT);
+    PyModule_AddIntMacro(m, DEF_BOUND);
+    PyModule_AddIntMacro(m, DEF_ANNOT);
 
     PyModule_AddIntConstant(m, "TYPE_FUNCTION", FunctionBlock);
     PyModule_AddIntConstant(m, "TYPE_CLASS", ClassBlock);
     PyModule_AddIntConstant(m, "TYPE_MODULE", ModuleBlock);
 
-    PyModule_AddIntConstant(m, "OPT_IMPORT_STAR", OPT_IMPORT_STAR);
-    PyModule_AddIntConstant(m, "OPT_EXEC", OPT_EXEC);
-    PyModule_AddIntConstant(m, "OPT_BARE_EXEC", OPT_BARE_EXEC);
+    PyModule_AddIntMacro(m, LOCAL);
+    PyModule_AddIntMacro(m, GLOBAL_EXPLICIT);
+    PyModule_AddIntMacro(m, GLOBAL_IMPLICIT);
+    PyModule_AddIntMacro(m, FREE);
+    PyModule_AddIntMacro(m, CELL);
 
-    PyModule_AddIntConstant(m, "LOCAL", LOCAL);
-    PyModule_AddIntConstant(m, "GLOBAL_EXPLICIT", GLOBAL_EXPLICIT);
-    PyModule_AddIntConstant(m, "GLOBAL_IMPLICIT", GLOBAL_IMPLICIT);
-    PyModule_AddIntConstant(m, "FREE", FREE);
-    PyModule_AddIntConstant(m, "CELL", CELL);
+    PyModule_AddIntConstant(m, "SCOPE_OFF", SCOPE_OFFSET);
+    PyModule_AddIntMacro(m, SCOPE_MASK);
 
-    PyModule_AddIntConstant(m, "SCOPE_OFF", SCOPE_OFF);
-    PyModule_AddIntConstant(m, "SCOPE_MASK", SCOPE_MASK);
+    if (PyErr_Occurred()) {
+        Py_DECREF(m);
+        m = 0;
+    }
+    return m;
 }

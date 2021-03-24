@@ -1,40 +1,41 @@
-from test import test_support
+from test import support
 import random
-import sys
 import unittest
+from functools import cmp_to_key
 
-verbose = test_support.verbose
+verbose = support.verbose
 nerrors = 0
+
 
 def check(tag, expected, raw, compare=None):
     global nerrors
 
     if verbose:
-        print "    checking", tag
+        print("    checking", tag)
 
     orig = raw[:]   # save input in case of error
     if compare:
-        raw.sort(compare)
+        raw.sort(key=cmp_to_key(compare))
     else:
         raw.sort()
 
     if len(expected) != len(raw):
-        print "error in", tag
-        print "length mismatch;", len(expected), len(raw)
-        print expected
-        print orig
-        print raw
+        print("error in", tag)
+        print("length mismatch;", len(expected), len(raw))
+        print(expected)
+        print(orig)
+        print(raw)
         nerrors += 1
         return
 
     for i, good in enumerate(expected):
         maybe = raw[i]
         if good is not maybe:
-            print "error in", tag
-            print "out of order at index", i, good, maybe
-            print expected
-            print orig
-            print raw
+            print("error in", tag)
+            print("out of order at index", i, good, maybe)
+            print(expected)
+            print(orig)
+            print(raw)
             nerrors += 1
             return
 
@@ -56,7 +57,7 @@ class TestBase(unittest.TestCase):
             def __lt__(self, other):
                 if Complains.maybe_complain and random.random() < 0.001:
                     if verbose:
-                        print "        complaining at", self, other
+                        print("        complaining at", self, other)
                     raise RuntimeError
                 return self.i < other.i
 
@@ -68,17 +69,16 @@ class TestBase(unittest.TestCase):
                 self.key = key
                 self.index = i
 
-            def __cmp__(self, other):
-                return cmp(self.key, other.key)
-            __hash__ = None # Silence Py3k warning
+            def __lt__(self, other):
+                return self.key < other.key
 
             def __repr__(self):
                 return "Stable(%d, %d)" % (self.key, self.index)
 
         for n in sizes:
-            x = range(n)
+            x = list(range(n))
             if verbose:
-                print "Testing size", n
+                print("Testing size", n)
 
             s = x[:]
             check("identity", x, s)
@@ -94,14 +94,20 @@ class TestBase(unittest.TestCase):
             y = x[:]
             y.reverse()
             s = x[:]
-            check("reversed via function", y, s, lambda a, b: cmp(b, a))
+            check("reversed via function", y, s, lambda a, b: (b>a)-(b<a))
 
             if verbose:
-                print "    Checking against an insane comparison function."
-                print "        If the implementation isn't careful, this may segfault."
+                print("    Checking against an insane comparison function.")
+                print("        If the implementation isn't careful, this may segfault.")
             s = x[:]
-            s.sort(lambda a, b:  int(random.random() * 3) - 1)
+            s.sort(key=cmp_to_key(lambda a, b:  int(random.random() * 3) - 1))
             check("an insane function left some permutation", x, s)
+
+            if len(x) >= 2:
+                def bad_key(x):
+                    raise RuntimeError
+                s = x[:]
+                self.assertRaises(RuntimeError, s.sort, key=bad_key)
 
             x = [Complains(i) for i in x]
             s = x[:]
@@ -116,7 +122,7 @@ class TestBase(unittest.TestCase):
                 Complains.maybe_complain = False
                 check("exception during sort left some permutation", x, s)
 
-            s = [Stable(random.randrange(10), i) for i in xrange(n)]
+            s = [Stable(random.randrange(10), i) for i in range(n)]
             augmented = [(e, e.index) for e in s]
             augmented.sort()    # forced stable because ties broken by index
             x = [e for e, i in augmented] # a stable sort of s
@@ -142,14 +148,6 @@ class TestBugs(unittest.TestCase):
         L = [C() for i in range(50)]
         self.assertRaises(ValueError, L.sort)
 
-    def test_cmpNone(self):
-        # Testing None as a comparison function.
-
-        L = range(50)
-        random.shuffle(L)
-        L.sort(None)
-        self.assertEqual(L, range(50))
-
     def test_undetected_mutation(self):
         # Python 2.4a1 did not always detect mutation
         memorywaster = []
@@ -157,14 +155,14 @@ class TestBugs(unittest.TestCase):
             def mutating_cmp(x, y):
                 L.append(3)
                 L.pop()
-                return cmp(x, y)
+                return (x > y) - (x < y)
             L = [1,2]
-            self.assertRaises(ValueError, L.sort, mutating_cmp)
+            self.assertRaises(ValueError, L.sort, key=cmp_to_key(mutating_cmp))
             def mutating_cmp(x, y):
                 L.append(3)
                 del L[:]
-                return cmp(x, y)
-            self.assertRaises(ValueError, L.sort, mutating_cmp)
+                return (x > y) - (x < y)
+            self.assertRaises(ValueError, L.sort, key=cmp_to_key(mutating_cmp))
             memorywaster = [memorywaster]
 
 #==============================================================================
@@ -176,42 +174,31 @@ class TestDecorateSortUndecorate(unittest.TestCase):
         copy = data[:]
         random.shuffle(data)
         data.sort(key=str.lower)
-        copy.sort(cmp=lambda x,y: cmp(x.lower(), y.lower()))
+        def my_cmp(x, y):
+            xlower, ylower = x.lower(), y.lower()
+            return (xlower > ylower) - (xlower < ylower)
+        copy.sort(key=cmp_to_key(my_cmp))
 
     def test_baddecorator(self):
         data = 'The quick Brown fox Jumped over The lazy Dog'.split()
-        self.assertRaises(TypeError, data.sort, None, lambda x,y: 0)
+        self.assertRaises(TypeError, data.sort, key=lambda x,y: 0)
 
     def test_stability(self):
-        data = [(random.randrange(100), i) for i in xrange(200)]
+        data = [(random.randrange(100), i) for i in range(200)]
         copy = data[:]
-        data.sort(key=lambda x: x[0])   # sort on the random first field
+        data.sort(key=lambda t: t[0])   # sort on the random first field
         copy.sort()                     # sort using both fields
         self.assertEqual(data, copy)    # should get the same result
 
-    def test_cmp_and_key_combination(self):
-        # Verify that the wrapper has been removed
-        def compare(x, y):
-            self.assertEqual(type(x), str)
-            self.assertEqual(type(x), str)
-            return cmp(x, y)
-        data = 'The quick Brown fox Jumped over The lazy Dog'.split()
-        data.sort(cmp=compare, key=str.lower)
-
-    def test_badcmp_with_key(self):
-        # Verify that the wrapper has been removed
-        data = 'The quick Brown fox Jumped over The lazy Dog'.split()
-        self.assertRaises(TypeError, data.sort, "bad", str.lower)
-
     def test_key_with_exception(self):
         # Verify that the wrapper has been removed
-        data = range(-2,2)
+        data = list(range(-2, 2))
         dup = data[:]
-        self.assertRaises(ZeroDivisionError, data.sort, None, lambda x: 1 // x)
+        self.assertRaises(ZeroDivisionError, data.sort, key=lambda x: 1/x)
         self.assertEqual(data, dup)
 
     def test_key_with_mutation(self):
-        data = range(10)
+        data = list(range(10))
         def k(x):
             del data[:]
             data[:] = range(20)
@@ -219,17 +206,19 @@ class TestDecorateSortUndecorate(unittest.TestCase):
         self.assertRaises(ValueError, data.sort, key=k)
 
     def test_key_with_mutating_del(self):
-        data = range(10)
+        data = list(range(10))
         class SortKiller(object):
             def __init__(self, x):
                 pass
             def __del__(self):
                 del data[:]
                 data[:] = range(20)
+            def __lt__(self, other):
+                return id(self) < id(other)
         self.assertRaises(ValueError, data.sort, key=SortKiller)
 
     def test_key_with_mutating_del_and_exception(self):
-        data = range(10)
+        data = list(range(10))
         ## dup = data[:]
         class SortKiller(object):
             def __init__(self, x):
@@ -237,7 +226,7 @@ class TestDecorateSortUndecorate(unittest.TestCase):
                     raise RuntimeError
             def __del__(self):
                 del data[:]
-                data[:] = range(20)
+                data[:] = list(range(20))
         self.assertRaises(RuntimeError, data.sort, key=SortKiller)
         ## major honking subtlety: we *can't* do:
         ##
@@ -249,44 +238,147 @@ class TestDecorateSortUndecorate(unittest.TestCase):
         ## date (this cost some brain cells to figure out...).
 
     def test_reverse(self):
-        data = range(100)
+        data = list(range(100))
         random.shuffle(data)
         data.sort(reverse=True)
-        self.assertEqual(data, range(99,-1,-1))
-        self.assertRaises(TypeError, data.sort, "wrong type")
+        self.assertEqual(data, list(range(99,-1,-1)))
 
     def test_reverse_stability(self):
-        data = [(random.randrange(100), i) for i in xrange(200)]
+        data = [(random.randrange(100), i) for i in range(200)]
         copy1 = data[:]
         copy2 = data[:]
-        data.sort(cmp=lambda x,y: cmp(x[0],y[0]), reverse=True)
-        copy1.sort(cmp=lambda x,y: cmp(y[0],x[0]))
+        def my_cmp(x, y):
+            x0, y0 = x[0], y[0]
+            return (x0 > y0) - (x0 < y0)
+        def my_cmp_reversed(x, y):
+            x0, y0 = x[0], y[0]
+            return (y0 > x0) - (y0 < x0)
+        data.sort(key=cmp_to_key(my_cmp), reverse=True)
+        copy1.sort(key=cmp_to_key(my_cmp_reversed))
         self.assertEqual(data, copy1)
         copy2.sort(key=lambda x: x[0], reverse=True)
         self.assertEqual(data, copy2)
 
 #==============================================================================
+def check_against_PyObject_RichCompareBool(self, L):
+    ## The idea here is to exploit the fact that unsafe_tuple_compare uses
+    ## PyObject_RichCompareBool for the second elements of tuples. So we have,
+    ## for (most) L, sorted(L) == [y[1] for y in sorted([(0,x) for x in L])]
+    ## This will work as long as __eq__ => not __lt__ for all the objects in L,
+    ## which holds for all the types used below.
+    ##
+    ## Testing this way ensures that the optimized implementation remains consistent
+    ## with the naive implementation, even if changes are made to any of the
+    ## richcompares.
+    ##
+    ## This function tests sorting for three lists (it randomly shuffles each one):
+    ##                        1. L
+    ##                        2. [(x,) for x in L]
+    ##                        3. [((x,),) for x in L]
 
-def test_main(verbose=None):
-    test_classes = (
-        TestBase,
-        TestDecorateSortUndecorate,
-        TestBugs,
-    )
+    random.seed(0)
+    random.shuffle(L)
+    L_1 = L[:]
+    L_2 = [(x,) for x in L]
+    L_3 = [((x,),) for x in L]
+    for L in [L_1, L_2, L_3]:
+        optimized = sorted(L)
+        reference = [y[1] for y in sorted([(0,x) for x in L])]
+        for (opt, ref) in zip(optimized, reference):
+            self.assertIs(opt, ref)
+            #note: not assertEqual! We want to ensure *identical* behavior.
 
-    with test_support.check_py3k_warnings(
-            ("the cmp argument is not supported", DeprecationWarning)):
-        test_support.run_unittest(*test_classes)
+class TestOptimizedCompares(unittest.TestCase):
+    def test_safe_object_compare(self):
+        heterogeneous_lists = [[0, 'foo'],
+                               [0.0, 'foo'],
+                               [('foo',), 'foo']]
+        for L in heterogeneous_lists:
+            self.assertRaises(TypeError, L.sort)
+            self.assertRaises(TypeError, [(x,) for x in L].sort)
+            self.assertRaises(TypeError, [((x,),) for x in L].sort)
 
-        # verify reference counting
-        if verbose and hasattr(sys, "gettotalrefcount"):
-            import gc
-            counts = [None] * 5
-            for i in xrange(len(counts)):
-                test_support.run_unittest(*test_classes)
-                gc.collect()
-                counts[i] = sys.gettotalrefcount()
-            print counts
+        float_int_lists = [[1,1.1],
+                           [1<<70,1.1],
+                           [1.1,1],
+                           [1.1,1<<70]]
+        for L in float_int_lists:
+            check_against_PyObject_RichCompareBool(self, L)
+
+    def test_unsafe_object_compare(self):
+
+        # This test is by ppperry. It ensures that unsafe_object_compare is
+        # verifying ms->key_richcompare == tp->richcompare before comparing.
+
+        class WackyComparator(int):
+            def __lt__(self, other):
+                elem.__class__ = WackyList2
+                return int.__lt__(self, other)
+
+        class WackyList1(list):
+            pass
+
+        class WackyList2(list):
+            def __lt__(self, other):
+                raise ValueError
+
+        L = [WackyList1([WackyComparator(i), i]) for i in range(10)]
+        elem = L[-1]
+        with self.assertRaises(ValueError):
+            L.sort()
+
+        L = [WackyList1([WackyComparator(i), i]) for i in range(10)]
+        elem = L[-1]
+        with self.assertRaises(ValueError):
+            [(x,) for x in L].sort()
+
+        # The following test is also by ppperry. It ensures that
+        # unsafe_object_compare handles Py_NotImplemented appropriately.
+        class PointlessComparator:
+            def __lt__(self, other):
+                return NotImplemented
+        L = [PointlessComparator(), PointlessComparator()]
+        self.assertRaises(TypeError, L.sort)
+        self.assertRaises(TypeError, [(x,) for x in L].sort)
+
+        # The following tests go through various types that would trigger
+        # ms->key_compare = unsafe_object_compare
+        lists = [list(range(100)) + [(1<<70)],
+                 [str(x) for x in range(100)] + ['\uffff'],
+                 [bytes(x) for x in range(100)],
+                 [cmp_to_key(lambda x,y: x<y)(x) for x in range(100)]]
+        for L in lists:
+            check_against_PyObject_RichCompareBool(self, L)
+
+    def test_unsafe_latin_compare(self):
+        check_against_PyObject_RichCompareBool(self, [str(x) for
+                                                      x in range(100)])
+
+    def test_unsafe_long_compare(self):
+        check_against_PyObject_RichCompareBool(self, [x for
+                                                      x in range(100)])
+
+    def test_unsafe_float_compare(self):
+        check_against_PyObject_RichCompareBool(self, [float(x) for
+                                                      x in range(100)])
+
+    def test_unsafe_tuple_compare(self):
+        # This test was suggested by Tim Peters. It verifies that the tuple
+        # comparison respects the current tuple compare semantics, which do not
+        # guarantee that x < x <=> (x,) < (x,)
+        #
+        # Note that we don't have to put anything in tuples here, because
+        # the check function does a tuple test automatically.
+
+        check_against_PyObject_RichCompareBool(self, [float('nan')]*100)
+        check_against_PyObject_RichCompareBool(self, [float('nan') for
+                                                      _ in range(100)])
+
+    def test_not_all_tuples(self):
+        self.assertRaises(TypeError, [(1.0, 1.0), (False, "A"), 6].sort)
+        self.assertRaises(TypeError, [('a', 1), (1, 'a')].sort)
+        self.assertRaises(TypeError, [(1, 'a'), ('a', 1)].sort)
+#==============================================================================
 
 if __name__ == "__main__":
-    test_main(verbose=True)
+    unittest.main()

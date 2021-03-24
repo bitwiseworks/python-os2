@@ -15,16 +15,12 @@ BUILDPYTHON=    $(builddir)/python$(BUILDEXE)
 PYTHONFRAMEWORK=@PYTHONFRAMEWORK@
 
 # Deployment target selected during configure, to be checked
-# by distutils  
+# by distutils
 MACOSX_DEPLOYMENT_TARGET=@CONFIGURE_MACOSX_DEPLOYMENT_TARGET@
 @EXPORT_MACOSX_DEPLOYMENT_TARGET@export MACOSX_DEPLOYMENT_TARGET
 
-BUNDLEBULDER=$(srcdir)/../../Lib/plat-mac/bundlebuilder.py
-
 PYTHONAPPSDIR=@FRAMEWORKINSTALLAPPSPREFIX@/$(PYTHONFRAMEWORK) $(VERSION)
 OBJECTS=FileSettings.o MyAppDelegate.o MyDocument.o PreferencesWindowController.o doscript.o main.o
-
-all: Python\ Launcher.app
 
 install: Python\ Launcher.app
 	test -d "$(DESTDIR)$(PYTHONAPPSDIR)" || mkdir -p "$(DESTDIR)$(PYTHONAPPSDIR)"
@@ -35,6 +31,7 @@ install: Python\ Launcher.app
 clean:
 	rm -f *.o "Python Launcher"
 	rm -rf "Python Launcher.app"
+	rm -f Info.plist
 
 Python\ Launcher.app:  Info.plist \
 		Python\ Launcher $(srcdir)/../Icons/PythonLauncher.icns \
@@ -42,20 +39,17 @@ Python\ Launcher.app:  Info.plist \
 		$(srcdir)/../Icons/PythonCompiled.icns \
 		$(srcdir)/factorySettings.plist
 	rm -fr "Python Launcher.app"
-	$(RUNSHARED) $(BUILDPYTHON) $(BUNDLEBULDER) \
-		--builddir=. \
-		--name="Python Launcher" \
-		--executable="Python Launcher" \
-		--iconfile=$(srcdir)/../Icons/PythonLauncher.icns \
-		--bundle-id=org.python.PythonLauncher \
-		--resource=$(srcdir)/../Icons/PythonSource.icns \
-		--resource=$(srcdir)/../Icons/PythonCompiled.icns \
-		--resource=$(srcdir)/English.lproj \
-		--resource=$(srcdir)/factorySettings.plist \
-		--plist Info.plist \
-		build
-	find "Python Launcher.app" -name '.svn' -print0 | xargs -0 rm -r
-		
+	mkdir "Python Launcher.app"
+	mkdir "Python Launcher.app/Contents"
+	mkdir "Python Launcher.app/Contents/MacOS"
+	mkdir "Python Launcher.app/Contents/Resources"
+	cp "Python Launcher" "Python Launcher.app/Contents/MacOS"
+	cp Info.plist  "Python Launcher.app/Contents"
+	cp $(srcdir)/../Icons/PythonLauncher.icns  "Python Launcher.app/Contents/Resources"
+	cp $(srcdir)/../Icons/PythonSource.icns  "Python Launcher.app/Contents/Resources"
+	cp $(srcdir)/../Icons/PythonCompiled.icns  "Python Launcher.app/Contents/Resources"
+	cp $(srcdir)/factorySettings.plist  "Python Launcher.app/Contents/Resources"
+	cp -R $(srcdir)/English.lproj "Python Launcher.app/Contents/Resources"
 
 FileSettings.o: $(srcdir)/FileSettings.m
 	$(CC) $(CFLAGS) -o $@ -c $(srcdir)/FileSettings.m
@@ -79,4 +73,4 @@ Python\ Launcher: $(OBJECTS)
 	$(CC) $(LDFLAGS) -o "Python Launcher" $(OBJECTS) -framework AppKit -framework Carbon
 
 Info.plist: $(srcdir)/Info.plist.in
-	sed 's/%VERSION%/'"`$(RUNSHARED) $(BUILDPYTHON) -c 'import platform; print platform.python_version()'`"'/g' < $(srcdir)/Info.plist.in > Info.plist
+	sed 's/%VERSION%/'"`$(RUNSHARED) $(BUILDPYTHON) -c 'import platform; print(platform.python_version())'`"'/g' < $(srcdir)/Info.plist.in > Info.plist

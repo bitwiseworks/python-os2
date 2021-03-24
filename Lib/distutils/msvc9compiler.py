@@ -12,30 +12,28 @@ for older versions of VS in distutils.msvccompiler.
 #   finding DevStudio (through the registry)
 # ported to VS2005 and VS 2008 by Christian Heimes
 
-__revision__ = "$Id$"
-
 import os
 import subprocess
 import sys
 import re
 
-from distutils.errors import (DistutilsExecError, DistutilsPlatformError,
-                              CompileError, LibError, LinkError)
+from distutils.errors import DistutilsExecError, DistutilsPlatformError, \
+                             CompileError, LibError, LinkError
 from distutils.ccompiler import CCompiler, gen_lib_options
 from distutils import log
 from distutils.util import get_platform
 
-import _winreg
+import winreg
 
-RegOpenKeyEx = _winreg.OpenKeyEx
-RegEnumKey = _winreg.EnumKey
-RegEnumValue = _winreg.EnumValue
-RegError = _winreg.error
+RegOpenKeyEx = winreg.OpenKeyEx
+RegEnumKey = winreg.EnumKey
+RegEnumValue = winreg.EnumValue
+RegError = winreg.error
 
-HKEYS = (_winreg.HKEY_USERS,
-         _winreg.HKEY_CURRENT_USER,
-         _winreg.HKEY_LOCAL_MACHINE,
-         _winreg.HKEY_CLASSES_ROOT)
+HKEYS = (winreg.HKEY_USERS,
+         winreg.HKEY_CURRENT_USER,
+         winreg.HKEY_LOCAL_MACHINE,
+         winreg.HKEY_CLASSES_ROOT)
 
 NATIVE_WIN64 = (sys.platform == 'win32' and sys.maxsize > 2**32)
 if NATIVE_WIN64:
@@ -43,22 +41,19 @@ if NATIVE_WIN64:
     # the corresponding registry branch, if we're running a
     # 64-bit Python on Win64
     VS_BASE = r"Software\Wow6432Node\Microsoft\VisualStudio\%0.1f"
-    VSEXPRESS_BASE = r"Software\Wow6432Node\Microsoft\VCExpress\%0.1f"
     WINSDK_BASE = r"Software\Wow6432Node\Microsoft\Microsoft SDKs\Windows"
     NET_BASE = r"Software\Wow6432Node\Microsoft\.NETFramework"
 else:
     VS_BASE = r"Software\Microsoft\VisualStudio\%0.1f"
-    VSEXPRESS_BASE = r"Software\Microsoft\VCExpress\%0.1f"
     WINSDK_BASE = r"Software\Microsoft\Microsoft SDKs\Windows"
     NET_BASE = r"Software\Microsoft\.NETFramework"
 
 # A map keyed by get_platform() return values to values accepted by
 # 'vcvarsall.bat'.  Note a cross-compile may combine these (eg, 'x86_amd64' is
-# the param to cross-compile on x86 targetting amd64.)
+# the param to cross-compile on x86 targeting amd64.)
 PLAT_TO_VCVARS = {
     'win32' : 'x86',
     'win-amd64' : 'amd64',
-    'win-ia64' : 'ia64',
 }
 
 class Reg:
@@ -182,6 +177,9 @@ def get_build_version():
     i = i + len(prefix)
     s, rest = sys.version[i:].split(" ", 1)
     majorVersion = int(s[:-2]) - 6
+    if majorVersion >= 13:
+        # v13 was skipped and should be v14
+        majorVersion += 1
     minorVersion = int(s[2:3]) / 10.0
     # I don't think paths are affected by minor version in version 6
     if majorVersion == 6:
@@ -227,17 +225,8 @@ def find_vcvarsall(version):
         productdir = Reg.get_value(r"%s\Setup\VC" % vsbase,
                                    "productdir")
     except KeyError:
+        log.debug("Unable to find productdir in registry")
         productdir = None
-
-    # trying Express edition
-    if productdir is None:
-        vsbase = VSEXPRESS_BASE % version
-        try:
-            productdir = Reg.get_value(r"%s\Setup\VC" % vsbase,
-                                       "productdir")
-        except KeyError:
-            productdir = None
-            log.debug("Unable to find productdir in registry")
 
     if not productdir or not os.path.isdir(productdir):
         toolskey = "VS%0.f0COMNTOOLS" % version
@@ -264,7 +253,7 @@ def query_vcvarsall(version, arch="x86"):
     """Launch vcvarsall.bat and read the settings from its environment
     """
     vcvarsall = find_vcvarsall(version)
-    interesting = set(("include", "lib", "libpath", "path"))
+    interesting = {"include", "lib", "libpath", "path"}
     result = {}
 
     if vcvarsall is None:
@@ -353,7 +342,7 @@ class MSVCCompiler(CCompiler) :
         if plat_name is None:
             plat_name = get_platform()
         # sanity check for platforms to prevent obscure errors later.
-        ok_plats = 'win32', 'win-amd64', 'win-ia64'
+        ok_plats = 'win32', 'win-amd64'
         if plat_name not in ok_plats:
             raise DistutilsPlatformError("--plat-name must be one of %s" %
                                          (ok_plats,))
@@ -371,7 +360,6 @@ class MSVCCompiler(CCompiler) :
             # to cross compile, you use 'x86_amd64'.
             # On AMD64, 'vcvars32.bat amd64' is a native build env; to cross
             # compile use 'x86' (ie, it runs the x86 compiler directly)
-            # No idea how itanium handles this, if at all.
             if plat_name == get_platform() or plat_name == 'win32':
                 # native build or cross-compile to win32
                 plat_spec = PLAT_TO_VCVARS[plat_name]
@@ -382,10 +370,9 @@ class MSVCCompiler(CCompiler) :
 
             vc_env = query_vcvarsall(VERSION, plat_spec)
 
-            # take care to only use strings in the environment.
-            self.__paths = vc_env['path'].encode('mbcs').split(os.pathsep)
-            os.environ['lib'] = vc_env['lib'].encode('mbcs')
-            os.environ['include'] = vc_env['include'].encode('mbcs')
+            self.__paths = vc_env['path'].split(os.pathsep)
+            os.environ['lib'] = vc_env['lib']
+            os.environ['include'] = vc_env['include']
 
             if len(self.__paths) == 0:
                 raise DistutilsPlatformError("Python was built with %s, "
@@ -426,7 +413,7 @@ class MSVCCompiler(CCompiler) :
         self.ldflags_shared = ['/DLL', '/nologo', '/INCREMENTAL:NO']
         if self.__version >= 7:
             self.ldflags_shared_debug = [
-                '/DLL', '/nologo', '/INCREMENTAL:no', '/DEBUG', '/pdb:None'
+                '/DLL', '/nologo', '/INCREMENTAL:no', '/DEBUG'
                 ]
         self.ldflags_static = [ '/nologo']
 
@@ -504,7 +491,7 @@ class MSVCCompiler(CCompiler) :
                 try:
                     self.spawn([self.rc] + pp_opts +
                                [output_opt] + [input_opt])
-                except DistutilsExecError, msg:
+                except DistutilsExecError as msg:
                     raise CompileError(msg)
                 continue
             elif ext in self._mc_extensions:
@@ -531,7 +518,7 @@ class MSVCCompiler(CCompiler) :
                     self.spawn([self.rc] +
                                ["/fo" + obj] + [rc_file])
 
-                except DistutilsExecError, msg:
+                except DistutilsExecError as msg:
                     raise CompileError(msg)
                 continue
             else:
@@ -544,7 +531,7 @@ class MSVCCompiler(CCompiler) :
                 self.spawn([self.cc] + compile_opts + pp_opts +
                            [input_opt, output_opt] +
                            extra_postargs)
-            except DistutilsExecError, msg:
+            except DistutilsExecError as msg:
                 raise CompileError(msg)
 
         return objects
@@ -569,7 +556,7 @@ class MSVCCompiler(CCompiler) :
                 pass # XXX what goes here?
             try:
                 self.spawn([self.lib] + lib_args)
-            except DistutilsExecError, msg:
+            except DistutilsExecError as msg:
                 raise LibError(msg)
         else:
             log.debug("skipping %s (up-to-date)", output_filename)
@@ -650,7 +637,7 @@ class MSVCCompiler(CCompiler) :
             self.mkpath(os.path.dirname(output_filename))
             try:
                 self.spawn([self.linker] + ld_args)
-            except DistutilsExecError, msg:
+            except DistutilsExecError as msg:
                 raise LinkError(msg)
 
             # embed the manifest
@@ -665,7 +652,7 @@ class MSVCCompiler(CCompiler) :
                 try:
                     self.spawn(['mt.exe', '-nologo', '-manifest',
                                 mffilename, out_arg])
-                except DistutilsExecError, msg:
+                except DistutilsExecError as msg:
                     raise LinkError(msg)
         else:
             log.debug("skipping %s (up-to-date)", output_filename)
@@ -726,7 +713,7 @@ class MSVCCompiler(CCompiler) :
                 r"""VC\d{2}\.CRT("|').*?(/>|</assemblyIdentity>)""",
                 re.DOTALL)
             manifest_buf = re.sub(pattern, "", manifest_buf)
-            pattern = "<dependentAssembly>\s*</dependentAssembly>"
+            pattern = r"<dependentAssembly>\s*</dependentAssembly>"
             manifest_buf = re.sub(pattern, "", manifest_buf)
             # Now see if any other assemblies are referenced - if not, we
             # don't want a manifest embedded.
@@ -742,7 +729,7 @@ class MSVCCompiler(CCompiler) :
                 return manifest_file
             finally:
                 manifest_f.close()
-        except IOError:
+        except OSError:
             pass
 
     # -- Miscellaneous methods -----------------------------------------

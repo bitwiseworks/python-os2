@@ -1,9 +1,9 @@
 """Interface to the compiler's internal symbol tables"""
 
 import _symtable
-from _symtable import (USE, DEF_GLOBAL, DEF_LOCAL, DEF_PARAM,
-     DEF_IMPORT, DEF_BOUND, OPT_IMPORT_STAR, OPT_EXEC, OPT_BARE_EXEC,
-     SCOPE_OFF, SCOPE_MASK, FREE, GLOBAL_IMPLICIT, GLOBAL_EXPLICIT, CELL, LOCAL)
+from _symtable import (USE, DEF_GLOBAL, DEF_NONLOCAL, DEF_LOCAL, DEF_PARAM,
+     DEF_IMPORT, DEF_BOUND, DEF_ANNOT, SCOPE_OFF, SCOPE_MASK, FREE,
+     LOCAL, GLOBAL_IMPLICIT, GLOBAL_EXPLICIT, CELL)
 
 import weakref
 
@@ -34,7 +34,7 @@ class SymbolTableFactory:
 _newSymbolTable = SymbolTableFactory()
 
 
-class SymbolTable(object):
+class SymbolTable:
 
     def __init__(self, raw_table, filename):
         self._table = raw_table
@@ -47,7 +47,7 @@ class SymbolTable(object):
         else:
             kind = "%s " % self.__class__.__name__
 
-        if self._table.name == "global":
+        if self._table.name == "top":
             return "<{0}SymbolTable for module {1}>".format(kind, self._filename)
         else:
             return "<{0}SymbolTable for {1} in {2}>".format(kind,
@@ -74,22 +74,13 @@ class SymbolTable(object):
         return self._table.lineno
 
     def is_optimized(self):
-        return bool(self._table.type == _symtable.TYPE_FUNCTION
-                    and not self._table.optimized)
+        return bool(self._table.type == _symtable.TYPE_FUNCTION)
 
     def is_nested(self):
         return bool(self._table.nested)
 
     def has_children(self):
         return bool(self._table.children)
-
-    def has_exec(self):
-        """Return true if the scope uses exec"""
-        return bool(self._table.optimized & (OPT_EXEC | OPT_BARE_EXEC))
-
-    def has_import_star(self):
-        """Return true if the scope uses import *"""
-        return bool(self._table.optimized & OPT_IMPORT_STAR)
 
     def get_identifiers(self):
         return self._table.symbols.keys()
@@ -99,7 +90,9 @@ class SymbolTable(object):
         if sym is None:
             flags = self._table.symbols[name]
             namespaces = self.__check_children(name)
-            sym = self._symbols[name] = Symbol(name, flags, namespaces)
+            module_scope = (self._table.name == "top")
+            sym = self._symbols[name] = Symbol(name, flags, namespaces,
+                                               module_scope=module_scope)
         return sym
 
     def get_symbols(self):
@@ -122,10 +115,11 @@ class Function(SymbolTable):
     __locals = None
     __frees = None
     __globals = None
+    __nonlocals = None
 
     def __idents_matching(self, test_func):
-        return tuple([ident for ident in self.get_identifiers()
-                      if test_func(self._table.symbols[ident])])
+        return tuple(ident for ident in self.get_identifiers()
+                     if test_func(self._table.symbols[ident]))
 
     def get_parameters(self):
         if self.__params is None:
@@ -145,6 +139,11 @@ class Function(SymbolTable):
             test = lambda x:((x >> SCOPE_OFF) & SCOPE_MASK) in glob
             self.__globals = self.__idents_matching(test)
         return self.__globals
+
+    def get_nonlocals(self):
+        if self.__nonlocals is None:
+            self.__nonlocals = self.__idents_matching(lambda x:x & DEF_NONLOCAL)
+        return self.__nonlocals
 
     def get_frees(self):
         if self.__frees is None:
@@ -166,13 +165,14 @@ class Class(SymbolTable):
         return self.__methods
 
 
-class Symbol(object):
+class Symbol:
 
-    def __init__(self, name, flags, namespaces=None):
+    def __init__(self, name, flags, namespaces=None, *, module_scope=False):
         self.__name = name
         self.__flags = flags
         self.__scope = (flags >> SCOPE_OFF) & SCOPE_MASK # like PyST_GetScope()
         self.__namespaces = namespaces or ()
+        self.__module_scope = module_scope
 
     def __repr__(self):
         return "<symbol {0!r}>".format(self.__name)
@@ -187,13 +187,25 @@ class Symbol(object):
         return bool(self.__flags & DEF_PARAM)
 
     def is_global(self):
-        return bool(self.__scope in (GLOBAL_IMPLICIT, GLOBAL_EXPLICIT))
+        """Return *True* if the sysmbol is global.
+        """
+        return bool(self.__scope in (GLOBAL_IMPLICIT, GLOBAL_EXPLICIT)
+                    or (self.__module_scope and self.__flags & DEF_BOUND))
+
+    def is_nonlocal(self):
+        return bool(self.__flags & DEF_NONLOCAL)
 
     def is_declared_global(self):
         return bool(self.__scope == GLOBAL_EXPLICIT)
 
     def is_local(self):
-        return bool(self.__flags & DEF_BOUND)
+        """Return *True* if the symbol is local.
+        """
+        return bool(self.__scope in (LOCAL, CELL)
+                    or (self.__module_scope and self.__flags & DEF_BOUND))
+
+    def is_annotated(self):
+        return bool(self.__flags & DEF_ANNOT)
 
     def is_free(self):
         return bool(self.__scope == FREE)
@@ -227,13 +239,14 @@ class Symbol(object):
         Raises ValueError if the name is bound to multiple namespaces.
         """
         if len(self.__namespaces) != 1:
-            raise ValueError, "name is bound to multiple namespaces"
+            raise ValueError("name is bound to multiple namespaces")
         return self.__namespaces[0]
 
 if __name__ == "__main__":
     import os, sys
-    src = open(sys.argv[0]).read()
+    with open(sys.argv[0]) as f:
+        src = f.read()
     mod = symtable(src, os.path.split(sys.argv[0])[1], "exec")
     for ident in mod.get_identifiers():
         info = mod.lookup(ident)
-        print info, info.is_local(), info.is_namespace()
+        print(info, info.is_local(), info.is_namespace())

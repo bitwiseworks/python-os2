@@ -1,11 +1,15 @@
-
 :mod:`codeop` --- Compile Python code
 =====================================
 
 .. module:: codeop
    :synopsis: Compile (possibly incomplete) Python code.
+
 .. sectionauthor:: Moshe Zadka <moshez@zadka.site.co.il>
 .. sectionauthor:: Michael Hudson <mwh@python.net>
+
+**Source code:** :source:`Lib/codeop.py`
+
+--------------
 
 The :mod:`codeop` module provides utilities upon which the Python
 read-eval-print loop can be emulated, as is done in the :mod:`code` module.  As
@@ -26,7 +30,7 @@ of doing them both.
 
 To do just the former:
 
-.. function:: compile_command(source[, filename[, symbol]])
+.. function:: compile_command(source, filename="<input>", symbol="single")
 
    Tries to compile *source*, which should be a string of Python code and return a
    code object if *source* is valid Python code. In that case, the filename
@@ -39,8 +43,9 @@ To do just the former:
    :exc:`OverflowError` or :exc:`ValueError` if there is an invalid literal.
 
    The *symbol* argument determines whether *source* is compiled as a statement
-   (``'single'``, the default) or as an :term:`expression` (``'eval'``).  Any
-   other value will cause :exc:`ValueError` to  be raised.
+   (``'single'``, the default), as a sequence of statements (``'exec'``) or
+   as an :term:`expression` (``'eval'``).  Any other value will
+   cause :exc:`ValueError` to  be raised.
 
    .. note::
 
@@ -66,28 +71,3 @@ To do just the former:
    :func:`compile_command`; the difference is that if the instance compiles program
    text containing a ``__future__`` statement, the instance 'remembers' and
    compiles all subsequent program texts with the statement in force.
-
-A note on version compatibility: the :class:`Compile` and
-:class:`CommandCompiler` are new in Python 2.2.  If you want to enable the
-future-tracking features of 2.2 but also retain compatibility with 2.1 and
-earlier versions of Python you can either write ::
-
-   try:
-       from codeop import CommandCompiler
-       compile_command = CommandCompiler()
-       del CommandCompiler
-   except ImportError:
-       from codeop import compile_command
-
-which is a low-impact change, but introduces possibly unwanted global state into
-your program, or you can write::
-
-   try:
-       from codeop import CommandCompiler
-   except ImportError:
-       def CommandCompiler():
-           from codeop import compile_command
-           return compile_command
-
-and then call ``CommandCompiler`` every time you need a fresh compiler object.
-

@@ -1,4 +1,3 @@
-
 :mod:`ossaudiodev` --- Access to OSS-compatible audio devices
 =============================================================
 
@@ -6,8 +5,7 @@
    :platform: Linux, FreeBSD
    :synopsis: Access to OSS-compatible audio devices.
 
-
-.. versionadded:: 2.3
+--------------
 
 This module allows you to access the OSS (Open Sound System) audio interface.
 OSS is available for a wide range of open-source and commercial Unices, and is
@@ -16,7 +14,7 @@ the standard audio interface for Linux and recent versions of FreeBSD.
 .. Things will get more complicated for future Linux versions, since
    ALSA is in the standard kernel as of 2.5.x.  Presumably if you
    use ALSA, you'll have to make sure its OSS compatibility layer
-   is active to use ossaudiodev, but you're gonna need it for the vast
+   is active to use ossaudiodev, but you're going to need it for the vast
    majority of Linux audio apps anyway.
 
    Sounds like things are also complicated for other BSDs.  In response
@@ -41,6 +39,10 @@ the standard audio interface for Linux and recent versions of FreeBSD.
    This probably all warrants a footnote or two, but I don't understand
    things well enough right now to write it!   --GPW
 
+.. versionchanged:: 3.3
+   Operations in this module now raise :exc:`OSError` where :exc:`IOError`
+   was raised.
+
 
 .. seealso::
 
@@ -48,7 +50,7 @@ the standard audio interface for Linux and recent versions of FreeBSD.
       the official documentation for the OSS C API
 
    The module defines a large number of constants supplied by the OSS device
-   driver; see ``<sys/soundcard.h>`` on either Linux or FreeBSD for a listing .
+   driver; see ``<sys/soundcard.h>`` on either Linux or FreeBSD for a listing.
 
 :mod:`ossaudiodev` defines the following variables and functions:
 
@@ -59,7 +61,7 @@ the standard audio interface for Linux and recent versions of FreeBSD.
    what went wrong.
 
    (If :mod:`ossaudiodev` receives an error from a system call such as
-   :c:func:`open`, :c:func:`write`, or :c:func:`ioctl`, it raises :exc:`IOError`.
+   :c:func:`open`, :c:func:`write`, or :c:func:`ioctl`, it raises :exc:`OSError`.
    Errors detected directly by :mod:`ossaudiodev` result in :exc:`OSSAudioError`.)
 
    (For backwards compatibility, the exception class is also available as
@@ -147,27 +149,40 @@ and (read-only) attributes:
 
 .. method:: oss_audio_device.write(data)
 
-   Write the Python string *data* to the audio device and return the number of
-   bytes written.  If the audio device is in blocking mode (the default), the
-   entire string is always written (again, this is different from usual Unix device
-   semantics).  If the device is in non-blocking mode, some data may not be written
-   ---see :meth:`writeall`.
+   Write a :term:`bytes-like object` *data* to the audio device and return the
+   number of bytes written.  If the audio device is in blocking mode (the
+   default), the entire data is always written (again, this is different from
+   usual Unix device semantics).  If the device is in non-blocking mode, some
+   data may not be written---see :meth:`writeall`.
+
+   .. versionchanged:: 3.5
+      Writable :term:`bytes-like object` is now accepted.
 
 
 .. method:: oss_audio_device.writeall(data)
 
-   Write the entire Python string *data* to the audio device: waits until the audio
-   device is able to accept data, writes as much data as it will accept, and
-   repeats until *data* has been completely written. If the device is in blocking
-   mode (the default), this has the same effect as :meth:`write`; :meth:`writeall`
-   is only useful in non-blocking mode.  Has no return value, since the amount of
-   data written is always equal to the amount of data supplied.
+   Write a :term:`bytes-like object` *data* to the audio device: waits until
+   the audio device is able to accept data, writes as much data as it will
+   accept, and repeats until *data* has been completely written. If the device
+   is in blocking mode (the default), this has the same effect as
+   :meth:`write`; :meth:`writeall` is only useful in non-blocking mode.  Has
+   no return value, since the amount of data written is always equal to the
+   amount of data supplied.
+
+   .. versionchanged:: 3.5
+      Writable :term:`bytes-like object` is now accepted.
+
+
+.. versionchanged:: 3.2
+   Audio device objects also support the context management protocol, i.e. they can
+   be used in a :keyword:`with` statement.
+
 
 The following methods each map to exactly one :c:func:`ioctl` system call.  The
 correspondence is obvious: for example, :meth:`setfmt` corresponds to the
 ``SNDCTL_DSP_SETFMT`` ioctl, and :meth:`sync` to ``SNDCTL_DSP_SYNC`` (this can
 be useful when consulting the OSS documentation).  If the underlying
-:c:func:`ioctl` fails, they all raise :exc:`IOError`.
+:c:func:`ioctl` fails, they all raise :exc:`OSError`.
 
 
 .. method:: oss_audio_device.nonblock()
@@ -343,12 +358,16 @@ The mixer object provides two file-like methods:
 .. method:: oss_mixer_device.close()
 
    This method closes the open mixer device file.  Any further attempts to use the
-   mixer after this file is closed will raise an :exc:`IOError`.
+   mixer after this file is closed will raise an :exc:`OSError`.
 
 
 .. method:: oss_mixer_device.fileno()
 
    Returns the file handle number of the open mixer device file.
+
+.. versionchanged:: 3.2
+   Mixer objects also support the context management protocol.
+
 
 The remaining methods are specific to audio mixing:
 
@@ -397,8 +416,8 @@ The remaining methods are specific to audio mixing:
    (silent) to 100 (full volume).  If the control is monophonic, a 2-tuple is still
    returned, but both volumes are the same.
 
-   Raises :exc:`OSSAudioError` if an invalid control was is specified, or
-   :exc:`IOError` if an unsupported control is specified.
+   Raises :exc:`OSSAudioError` if an invalid control is specified, or
+   :exc:`OSError` if an unsupported control is specified.
 
 
 .. method:: oss_mixer_device.set(control, (left, right))
@@ -422,9 +441,8 @@ The remaining methods are specific to audio mixing:
 .. method:: oss_mixer_device.set_recsrc(bitmask)
 
    Call this function to specify a recording source.  Returns a bitmask indicating
-   the new recording source (or sources) if successful; raises :exc:`IOError` if an
+   the new recording source (or sources) if successful; raises :exc:`OSError` if an
    invalid source was specified.  To set the current recording source to the
    microphone input::
 
       mixer.setrecsrc (1 << ossaudiodev.SOUND_MIXER_MIC)
-

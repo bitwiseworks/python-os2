@@ -35,16 +35,16 @@ class FixExitfunc(fixer_base.BaseFix):
         self.sys_import = None
 
     def transform(self, node, results):
-        # First, find a the sys import. We'll just hope it's global scope.
+        # First, find the sys import. We'll just hope it's global scope.
         if "sys_import" in results:
             if self.sys_import is None:
                 self.sys_import = results["sys_import"]
             return
 
         func = results["func"].clone()
-        func.prefix = u""
+        func.prefix = ""
         register = pytree.Node(syms.power,
-                               Attr(Name(u"atexit"), Name(u"register"))
+                               Attr(Name("atexit"), Name("register"))
                                )
         call = Call(register, [func], node.prefix)
         node.replace(call)
@@ -59,13 +59,13 @@ class FixExitfunc(fixer_base.BaseFix):
         names = self.sys_import.children[1]
         if names.type == syms.dotted_as_names:
             names.append_child(Comma())
-            names.append_child(Name(u"atexit", u" "))
+            names.append_child(Name("atexit", " "))
         else:
             containing_stmt = self.sys_import.parent
             position = containing_stmt.children.index(self.sys_import)
             stmt_container = containing_stmt.parent
             new_import = pytree.Node(syms.import_name,
-                              [Name(u"import"), Name(u"atexit", u" ")]
+                              [Name("import"), Name("atexit", " ")]
                               )
             new = pytree.Node(syms.simple_stmt, [new_import])
             containing_stmt.insert_child(position + 1, Newline())

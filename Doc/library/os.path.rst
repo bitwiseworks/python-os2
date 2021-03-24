@@ -4,22 +4,40 @@
 .. module:: os.path
    :synopsis: Operations on pathnames.
 
+**Source code:** :source:`Lib/posixpath.py` (for POSIX) and
+:source:`Lib/ntpath.py` (for Windows NT).
+
 .. index:: single: path; operations
+
+--------------
 
 This module implements some useful functions on pathnames. To read or
 write files see :func:`open`, and for accessing the filesystem see the
-:mod:`os` module.
-
-.. note::
-
-   On Windows, many of these functions do not properly support UNC pathnames.
-   :func:`splitunc` and :func:`ismount` do handle them correctly.
-
+:mod:`os` module. The path parameters can be passed as either strings,
+or bytes. Applications are encouraged to represent file names as
+(Unicode) character strings. Unfortunately, some file names may not be
+representable as strings on Unix, so applications that need to support
+arbitrary file names on Unix should use bytes objects to represent
+path names. Vice versa, using bytes objects cannot represent all file
+names on Windows (in the standard ``mbcs`` encoding), hence Windows
+applications should use string objects to access all files.
 
 Unlike a unix shell, Python does not do any *automatic* path expansions.
 Functions such as :func:`expanduser` and :func:`expandvars` can be invoked
 explicitly when an application desires shell-like path expansion.  (See also
 the :mod:`glob` module.)
+
+
+.. seealso::
+   The :mod:`pathlib` module offers high-level path objects.
+
+
+.. note::
+
+   All of these functions accept either only bytes or only string objects as
+   their parameters.  The result is an object of the same type, if a path or
+   file name is returned.
+
 
 .. note::
 
@@ -33,8 +51,14 @@ the :mod:`glob` module.)
 
    * :mod:`posixpath` for UNIX-style paths
    * :mod:`ntpath` for Windows paths
-   * :mod:`macpath` for old-style MacOS paths
-   * :mod:`os2emxpath` for OS/2 EMX paths
+
+
+.. versionchanged:: 3.8
+
+   :func:`exists`, :func:`lexists`, :func:`isdir`, :func:`isfile`,
+   :func:`islink`, and :func:`ismount` now return ``False`` instead of
+   raising an exception for paths that contain characters or bytes
+   unrepresentable at the OS level.
 
 
 .. function:: abspath(path)
@@ -43,7 +67,8 @@ the :mod:`glob` module.)
    platforms, this is equivalent to calling the function :func:`normpath` as
    follows: ``normpath(join(os.getcwd(), path))``.
 
-   .. versionadded:: 1.5.2
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
 
 
 .. function:: basename(path)
@@ -55,12 +80,48 @@ the :mod:`glob` module.)
    ``'/foo/bar/'`` returns ``'bar'``, the :func:`basename` function returns an
    empty string (``''``).
 
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
+
+
+.. function:: commonpath(paths)
+
+   Return the longest common sub-path of each pathname in the sequence
+   *paths*.  Raise :exc:`ValueError` if *paths* contain both absolute
+   and relative pathnames, the *paths* are on the different drives or
+   if *paths* is empty.  Unlike :func:`commonprefix`, this returns a
+   valid path.
+
+   .. availability:: Unix, Windows.
+
+   .. versionadded:: 3.5
+
+   .. versionchanged:: 3.6
+      Accepts a sequence of :term:`path-like objects <path-like object>`.
+
 
 .. function:: commonprefix(list)
 
-   Return the longest path prefix (taken character-by-character) that is a prefix
-   of all paths in  *list*.  If *list* is empty, return the empty string (``''``).
-   Note that this may return invalid paths because it works a character at a time.
+   Return the longest path prefix (taken character-by-character) that is a
+   prefix of all paths in  *list*.  If *list* is empty, return the empty string
+   (``''``).
+
+   .. note::
+
+      This function may return invalid paths because it works a
+      character at a time.  To obtain a valid path, see
+      :func:`commonpath`.
+
+      ::
+
+        >>> os.path.commonprefix(['/usr/lib', '/usr/local/lib'])
+        '/usr/l'
+
+        >>> os.path.commonpath(['/usr/lib', '/usr/local/lib'])
+        '/usr'
+
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
 
 
 .. function:: dirname(path)
@@ -68,13 +129,24 @@ the :mod:`glob` module.)
    Return the directory name of pathname *path*.  This is the first element of
    the pair returned by passing *path* to the function :func:`split`.
 
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
+
 
 .. function:: exists(path)
 
-   Return ``True`` if *path* refers to an existing path.  Returns ``False`` for
-   broken symbolic links. On some platforms, this function may return ``False`` if
-   permission is not granted to execute :func:`os.stat` on the requested file, even
+   Return ``True`` if *path* refers to an existing path or an open
+   file descriptor.  Returns ``False`` for broken symbolic links.  On
+   some platforms, this function may return ``False`` if permission is
+   not granted to execute :func:`os.stat` on the requested file, even
    if the *path* physically exists.
+
+   .. versionchanged:: 3.3
+      *path* can now be an integer: ``True`` is returned if it is an
+       open file descriptor, ``False`` otherwise.
+
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
 
 
 .. function:: lexists(path)
@@ -83,8 +155,11 @@ the :mod:`glob` module.)
    broken symbolic links.   Equivalent to :func:`exists` on platforms lacking
    :func:`os.lstat`.
 
-   .. versionadded:: 2.4
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
 
+
+.. index:: single: ~ (tilde); home directory expansion
 
 .. function:: expanduser(path)
 
@@ -98,14 +173,23 @@ the :mod:`glob` module.)
    password directory through the built-in module :mod:`pwd`. An initial ``~user``
    is looked up directly in the password directory.
 
-   On Windows, :envvar:`HOME` and :envvar:`USERPROFILE` will be used if set,
-   otherwise a combination of :envvar:`HOMEPATH` and :envvar:`HOMEDRIVE` will be
-   used.  An initial ``~user`` is handled by stripping the last directory component
-   from the created user path derived above.
+   On Windows, :envvar:`USERPROFILE` will be used if set, otherwise a combination
+   of :envvar:`HOMEPATH` and :envvar:`HOMEDRIVE` will be used.  An initial
+   ``~user`` is handled by stripping the last directory component from the created
+   user path derived above.
 
    If the expansion fails or if the path does not begin with a tilde, the path is
    returned unchanged.
 
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
+
+   .. versionchanged:: 3.8
+      No longer uses :envvar:`HOME` on Windows.
+
+.. index::
+   single: $ (dollar); environment variables expansion
+   single: % (percent); environment variables expansion (Windows)
 
 .. function:: expandvars(path)
 
@@ -117,31 +201,25 @@ the :mod:`glob` module.)
    On Windows, ``%name%`` expansions are supported in addition to ``$name`` and
    ``${name}``.
 
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
+
 
 .. function:: getatime(path)
 
-   Return the time of last access of *path*.  The return value is a number giving
+   Return the time of last access of *path*.  The return value is a floating point number giving
    the number of seconds since the epoch (see the  :mod:`time` module).  Raise
-   :exc:`os.error` if the file does not exist or is inaccessible.
-
-   .. versionadded:: 1.5.2
-
-   .. versionchanged:: 2.3
-      If :func:`os.stat_float_times` returns True, the result is a floating point
-      number.
+   :exc:`OSError` if the file does not exist or is inaccessible.
 
 
 .. function:: getmtime(path)
 
-   Return the time of last modification of *path*.  The return value is a number
+   Return the time of last modification of *path*.  The return value is a floating point number
    giving the number of seconds since the epoch (see the  :mod:`time` module).
-   Raise :exc:`os.error` if the file does not exist or is inaccessible.
+   Raise :exc:`OSError` if the file does not exist or is inaccessible.
 
-   .. versionadded:: 1.5.2
-
-   .. versionchanged:: 2.3
-      If :func:`os.stat_float_times` returns True, the result is a floating point
-      number.
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
 
 
 .. function:: getctime(path)
@@ -149,18 +227,20 @@ the :mod:`glob` module.)
    Return the system's ctime which, on some systems (like Unix) is the time of the
    last metadata change, and, on others (like Windows), is the creation time for *path*.
    The return value is a number giving the number of seconds since the epoch (see
-   the  :mod:`time` module).  Raise :exc:`os.error` if the file does not exist or
+   the  :mod:`time` module).  Raise :exc:`OSError` if the file does not exist or
    is inaccessible.
 
-   .. versionadded:: 2.3
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
 
 
 .. function:: getsize(path)
 
-   Return the size, in bytes, of *path*.  Raise :exc:`os.error` if the file does
+   Return the size, in bytes, of *path*.  Raise :exc:`OSError` if the file does
    not exist or is inaccessible.
 
-   .. versionadded:: 1.5.2
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
 
 
 .. function:: isabs(path)
@@ -169,52 +249,88 @@ the :mod:`glob` module.)
    begins with a slash, on Windows that it begins with a (back)slash after chopping
    off a potential drive letter.
 
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
+
 
 .. function:: isfile(path)
 
-   Return ``True`` if *path* is an existing regular file.  This follows symbolic
-   links, so both :func:`islink` and :func:`isfile` can be true for the same path.
+   Return ``True`` if *path* is an :func:`existing <exists>` regular file.
+   This follows symbolic links, so both :func:`islink` and :func:`isfile` can
+   be true for the same path.
+
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
 
 
 .. function:: isdir(path)
 
-   Return ``True`` if *path* is an existing directory.  This follows symbolic
-   links, so both :func:`islink` and :func:`isdir` can be true for the same path.
+   Return ``True`` if *path* is an :func:`existing <exists>` directory.  This
+   follows symbolic links, so both :func:`islink` and :func:`isdir` can be true
+   for the same path.
+
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
 
 
 .. function:: islink(path)
 
-   Return ``True`` if *path* refers to a directory entry that is a symbolic link.
-   Always ``False`` if symbolic links are not supported.
+   Return ``True`` if *path* refers to an :func:`existing <exists>` directory
+   entry that is a symbolic link.  Always ``False`` if symbolic links are not
+   supported by the Python runtime.
+
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
 
 
 .. function:: ismount(path)
 
-   Return ``True`` if pathname *path* is a :dfn:`mount point`: a point in a file
-   system where a different file system has been mounted.  The function checks
-   whether *path*'s parent, :file:`path/..`, is on a different device than *path*,
-   or whether :file:`path/..` and *path* point to the same i-node on the same
-   device --- this should detect mount points for all Unix and POSIX variants.
+   Return ``True`` if pathname *path* is a :dfn:`mount point`: a point in a
+   file system where a different file system has been mounted.  On POSIX, the
+   function checks whether *path*'s parent, :file:`{path}/..`, is on a different
+   device than *path*, or whether :file:`{path}/..` and *path* point to the same
+   i-node on the same device --- this should detect mount points for all Unix
+   and POSIX variants.  It is not able to reliably detect bind mounts on the
+   same filesystem.  On Windows, a drive letter root and a share UNC are
+   always mount points, and for any other path ``GetVolumePathName`` is called
+   to see if it is different from the input path.
+
+   .. versionadded:: 3.4
+      Support for detecting non-root mount points on Windows.
+
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
 
 
-.. function:: join(path1[, path2[, ...]])
+.. function:: join(path, *paths)
 
-   Join one or more path components intelligently.  If any component is an absolute
-   path, all previous components (on Windows, including the previous drive letter,
-   if there was one) are thrown away, and joining continues.  The return value is
-   the concatenation of *path1*, and optionally *path2*, etc., with exactly one
-   directory separator (``os.sep``) following each non-empty part except the last.
-   (This means that an empty last part will result in a path that ends with a
-   separator.)  Note that on Windows, since there is a current directory for
-   each drive, ``os.path.join("c:", "foo")`` represents a path relative to the
-   current directory on drive :file:`C:` (:file:`c:foo`), not :file:`c:\\foo`.
+   Join one or more path components intelligently.  The return value is the
+   concatenation of *path* and any members of *\*paths* with exactly one
+   directory separator (``os.sep``) following each non-empty part except the
+   last, meaning that the result will only end in a separator if the last
+   part is empty.  If a component is an absolute path, all previous
+   components are thrown away and joining continues from the absolute path
+   component.
+
+   On Windows, the drive letter is not reset when an absolute path component
+   (e.g., ``r'\foo'``) is encountered.  If a component contains a drive
+   letter, all previous components are thrown away and the drive letter is
+   reset.  Note that since there is a current directory for each drive,
+   ``os.path.join("c:", "foo")`` represents a path relative to the current
+   directory on drive :file:`C:` (:file:`c:foo`), not :file:`c:\\foo`.
+
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object` for *path* and *paths*.
 
 
 .. function:: normcase(path)
 
-   Normalize the case of a pathname.  On Unix and Mac OS X, this returns the
-   path unchanged; on case-insensitive filesystems, it converts the path to
-   lowercase.  On Windows, it also converts forward slashes to backward slashes.
+   Normalize the case of a pathname.  On Windows, convert all characters in the
+   pathname to lowercase, and also convert forward slashes to backward slashes.
+   On other operating systems, return the path unchanged.
+
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
 
 
 .. function:: normpath(path)
@@ -225,16 +341,28 @@ the :mod:`glob` module.)
    that contains symbolic links.  On Windows, it converts forward slashes to
    backward slashes. To normalize case, use :func:`normcase`.
 
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
+
 
 .. function:: realpath(path)
 
    Return the canonical path of the specified filename, eliminating any symbolic
-   links encountered in the path (if they are supported by the operating system).
+   links encountered in the path (if they are supported by the operating
+   system).
 
-   .. versionadded:: 2.2
+   .. note::
+      When symbolic link cycles occur, the returned path will be one member of
+      the cycle, but no guarantee is made about which member that will be.
+
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
+
+   .. versionchanged:: 3.8
+      Symbolic links and junctions are now resolved on Windows.
 
 
-.. function:: relpath(path[, start])
+.. function:: relpath(path, start=os.curdir)
 
    Return a relative filepath to *path* either from the current directory or
    from an optional *start* directory.  This is a path computation:  the
@@ -243,25 +371,41 @@ the :mod:`glob` module.)
 
    *start* defaults to :attr:`os.curdir`.
 
-   Availability:  Windows, Unix.
+   .. availability:: Unix, Windows.
 
-   .. versionadded:: 2.6
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
 
 
 .. function:: samefile(path1, path2)
 
-   Return ``True`` if both pathname arguments refer to the same file or directory
-   (as indicated by device number and i-node number). Raise an exception if a
-   :func:`os.stat` call on either pathname fails.
+   Return ``True`` if both pathname arguments refer to the same file or directory.
+   This is determined by the device number and i-node number and raises an
+   exception if an :func:`os.stat` call on either pathname fails.
 
-   Availability: Unix.
+   .. availability:: Unix, Windows.
+
+   .. versionchanged:: 3.2
+      Added Windows support.
+
+   .. versionchanged:: 3.4
+      Windows now uses the same implementation as all other platforms.
+
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
 
 
 .. function:: sameopenfile(fp1, fp2)
 
    Return ``True`` if the file descriptors *fp1* and *fp2* refer to the same file.
 
-   Availability: Unix.
+   .. availability:: Unix, Windows.
+
+   .. versionchanged:: 3.2
+      Added Windows support.
+
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
 
 
 .. function:: samestat(stat1, stat2)
@@ -271,7 +415,13 @@ the :mod:`glob` module.)
    :func:`os.lstat`, or :func:`os.stat`.  This function implements the
    underlying comparison used by :func:`samefile` and :func:`sameopenfile`.
 
-   Availability: Unix.
+   .. availability:: Unix, Windows.
+
+   .. versionchanged:: 3.4
+      Added Windows support.
+
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
 
 
 .. function:: split(path)
@@ -286,15 +436,29 @@ the :mod:`glob` module.)
    (but the strings may differ).  Also see the functions :func:`dirname` and
    :func:`basename`.
 
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
+
 
 .. function:: splitdrive(path)
 
    Split the pathname *path* into a pair ``(drive, tail)`` where *drive* is either
-   a drive specification or the empty string.  On systems which do not use drive
+   a mount point or the empty string.  On systems which do not use drive
    specifications, *drive* will always be the empty string.  In all cases, ``drive
    + tail`` will be the same as *path*.
 
-   .. versionadded:: 1.3
+   On Windows, splits a pathname into drive/UNC sharepoint and relative path.
+
+   If the path contains a drive letter, drive will contain everything
+   up to and including the colon.
+   e.g. ``splitdrive("c:/dir")`` returns ``("c:", "/dir")``
+
+   If the path contains a UNC path, drive will contain the host name
+   and share, up to but not including the fourth separator.
+   e.g. ``splitdrive("//host/computer/dir")`` returns ``("//host/computer", "/dir")``
+
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
 
 
 .. function:: splitext(path)
@@ -304,49 +468,11 @@ the :mod:`glob` module.)
    period. Leading periods on the basename are  ignored; ``splitext('.cshrc')``
    returns  ``('.cshrc', '')``.
 
-   .. versionchanged:: 2.6
-      Earlier versions could produce an empty root when the only period was the
-      first character.
-
-
-.. function:: splitunc(path)
-
-   Split the pathname *path* into a pair ``(unc, rest)`` so that *unc* is the UNC
-   mount point (such as ``r'\\host\mount'``), if present, and *rest* the rest of
-   the path (such as  ``r'\path\file.ext'``).  For paths containing drive letters,
-   *unc* will always be the empty string.
-
-   Availability:  Windows.
-
-
-.. function:: walk(path, visit, arg)
-
-   Calls the function *visit* with arguments ``(arg, dirname, names)`` for each
-   directory in the directory tree rooted at *path* (including *path* itself, if it
-   is a directory).  The argument *dirname* specifies the visited directory, the
-   argument *names* lists the files in the directory (gotten from
-   ``os.listdir(dirname)``). The *visit* function may modify *names* to influence
-   the set of directories visited below *dirname*, e.g. to avoid visiting certain
-   parts of the tree.  (The object referred to by *names* must be modified in
-   place, using :keyword:`del` or slice assignment.)
-
-   .. note::
-
-      Symbolic links to directories are not treated as subdirectories, and that
-      :func:`walk` therefore will not visit them. To visit linked directories you must
-      identify them with ``os.path.islink(file)`` and ``os.path.isdir(file)``, and
-      invoke :func:`walk` as necessary.
-
-   .. note::
-
-      This function is deprecated and has been removed in Python 3 in favor of
-      :func:`os.walk`.
+   .. versionchanged:: 3.6
+      Accepts a :term:`path-like object`.
 
 
 .. data:: supports_unicode_filenames
 
-   True if arbitrary Unicode strings can be used as file names (within limitations
+   ``True`` if arbitrary Unicode strings can be used as file names (within limitations
    imposed by the file system).
-
-   .. versionadded:: 2.3
-

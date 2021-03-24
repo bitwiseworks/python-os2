@@ -1,7 +1,7 @@
 # Python test set -- part 2, opcodes
 
-from test.test_support import run_unittest, check_py3k_warnings
 import unittest
+from test import ann_module, support
 
 class OpcodeTest(unittest.TestCase):
 
@@ -9,7 +9,7 @@ class OpcodeTest(unittest.TestCase):
         n = 0
         for i in range(10):
             n = n+i
-            try: 1 // 0
+            try: 1/0
             except NameError: pass
             except ZeroDivisionError: pass
             except TypeError: pass
@@ -21,11 +21,40 @@ class OpcodeTest(unittest.TestCase):
         if n != 90:
             self.fail('try inside for')
 
+    def test_setup_annotations_line(self):
+        # check that SETUP_ANNOTATIONS does not create spurious line numbers
+        try:
+            with open(ann_module.__file__) as f:
+                txt = f.read()
+            co = compile(txt, ann_module.__file__, 'exec')
+            self.assertEqual(co.co_firstlineno, 3)
+        except OSError:
+            pass
+
+    def test_no_annotations_if_not_needed(self):
+        class C: pass
+        with self.assertRaises(AttributeError):
+            C.__annotations__
+
+    def test_use_existing_annotations(self):
+        ns = {'__annotations__': {1: 2}}
+        exec('x: int', ns)
+        self.assertEqual(ns['__annotations__'], {'x': int, 1: 2})
+
+    def test_do_not_recreate_annotations(self):
+        # Don't rely on the existence of the '__annotations__' global.
+        with support.swap_item(globals(), '__annotations__', {}):
+            del globals()['__annotations__']
+            class C:
+                del __annotations__
+                with self.assertRaises(NameError):
+                    x: int
+
     def test_raise_class_exceptions(self):
 
-        class AClass: pass
+        class AClass(Exception): pass
         class BClass(AClass): pass
-        class CClass: pass
+        class CClass(Exception): pass
         class DClass(AClass):
             def __init__(self, ignore):
                 pass
@@ -46,24 +75,20 @@ class OpcodeTest(unittest.TestCase):
         a = AClass()
         b = BClass()
 
-        try: raise AClass, b
-        except BClass, v:
-            self.assertEqual(v, b)
-        else: self.fail("no exception")
-
-        try: raise b
-        except AClass, v:
+        try:
+            raise b
+        except AClass as v:
             self.assertEqual(v, b)
         else:
             self.fail("no exception")
 
         # not enough arguments
-        try:  raise BClass, a
-        except TypeError: pass
-        else: self.fail("no exception")
+        ##try:  raise BClass, a
+        ##except TypeError: pass
+        ##else: self.fail("no exception")
 
-        try:  raise DClass, a
-        except DClass, v:
+        try:  raise DClass(a)
+        except DClass as v:
             self.assertIsInstance(v, DClass)
         else:
             self.fail("no exception")
@@ -109,13 +134,5 @@ class OpcodeTest(unittest.TestCase):
         self.assertEqual(MyString() % 3, 42)
 
 
-def test_main():
-    with check_py3k_warnings(("exceptions must derive from BaseException",
-                              DeprecationWarning),
-                             ("catching classes that don't inherit "
-                              "from BaseException is not allowed",
-                              DeprecationWarning)):
-        run_unittest(OpcodeTest)
-
 if __name__ == '__main__':
-    test_main()
+    unittest.main()

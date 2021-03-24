@@ -17,10 +17,10 @@ class FixInput(fixer_base.BaseFix):
               """
 
     def transform(self, node, results):
-        # If we're already wrapped in a eval() call, we're done.
+        # If we're already wrapped in an eval() call, we're done.
         if context.match(node.parent.parent):
             return
 
         new = node.clone()
-        new.prefix = u""
-        return Call(Name(u"eval"), [new], prefix=node.prefix)
+        new.prefix = ""
+        return Call(Name("eval"), [new], prefix=node.prefix)

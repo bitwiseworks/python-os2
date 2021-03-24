@@ -1,151 +1,153 @@
 /* Module configuration */
 
 /* This file contains the table of built-in modules.
-   See init_builtin() in import.c. */
+    See create_builtin() in import.c. */
 
 #include "Python.h"
 
-extern void initarray(void);
-#ifndef MS_WINI64
-extern void initaudioop(void);
-#endif
-extern void initbinascii(void);
-extern void initcmath(void);
-extern void initerrno(void);
-extern void initfuture_builtins(void);
-extern void initgc(void);
-#ifndef MS_WINI64
-extern void initimageop(void);
-#endif
-extern void initmath(void);
-extern void init_md5(void);
-extern void initnt(void);
-extern void initoperator(void);
-extern void initsignal(void);
-extern void init_sha(void);
-extern void init_sha256(void);
-extern void init_sha512(void);
-extern void initstrop(void);
-extern void inittime(void);
-extern void initthread(void);
-extern void initcStringIO(void);
-extern void initcPickle(void);
+extern PyObject* PyInit__abc(void);
+extern PyObject* PyInit_array(void);
+extern PyObject* PyInit_audioop(void);
+extern PyObject* PyInit_binascii(void);
+extern PyObject* PyInit_cmath(void);
+extern PyObject* PyInit_errno(void);
+extern PyObject* PyInit_faulthandler(void);
+extern PyObject* PyInit__tracemalloc(void);
+extern PyObject* PyInit_gc(void);
+extern PyObject* PyInit_math(void);
+extern PyObject* PyInit__md5(void);
+extern PyObject* PyInit_nt(void);
+extern PyObject* PyInit__operator(void);
+extern PyObject* PyInit__signal(void);
+extern PyObject* PyInit__sha1(void);
+extern PyObject* PyInit__sha256(void);
+extern PyObject* PyInit__sha512(void);
+extern PyObject* PyInit__sha3(void);
+extern PyObject* PyInit__statistics(void);
+extern PyObject* PyInit__blake2(void);
+extern PyObject* PyInit_time(void);
+extern PyObject* PyInit__thread(void);
 #ifdef WIN32
-extern void initmsvcrt(void);
-extern void init_locale(void);
+extern PyObject* PyInit_msvcrt(void);
+extern PyObject* PyInit__locale(void);
 #endif
-extern void init_codecs(void);
-extern void init_weakref(void);
-extern void init_hotshot(void);
-extern void initxxsubtype(void);
-extern void initzipimport(void);
-extern void init_random(void);
-extern void inititertools(void);
-extern void init_collections(void);
-extern void init_heapq(void);
-extern void init_bisect(void);
-extern void init_symtable(void);
-extern void initmmap(void);
-extern void init_csv(void);
-extern void init_sre(void);
-extern void initparser(void);
-extern void init_winreg(void);
-extern void init_struct(void);
-extern void initdatetime(void);
-extern void init_functools(void);
-extern void init_json(void);
-extern void initzlib(void);
+extern PyObject* PyInit__codecs(void);
+extern PyObject* PyInit__weakref(void);
+/* XXX: These two should really be extracted to standalone extensions. */
+extern PyObject* PyInit_xxsubtype(void);
+extern PyObject* PyInit__xxsubinterpreters(void);
+extern PyObject* PyInit__random(void);
+extern PyObject* PyInit_itertools(void);
+extern PyObject* PyInit__collections(void);
+extern PyObject* PyInit__heapq(void);
+extern PyObject* PyInit__bisect(void);
+extern PyObject* PyInit__symtable(void);
+extern PyObject* PyInit_mmap(void);
+extern PyObject* PyInit__csv(void);
+extern PyObject* PyInit__sre(void);
+extern PyObject* PyInit_parser(void);
+extern PyObject* PyInit_winreg(void);
+extern PyObject* PyInit__struct(void);
+extern PyObject* PyInit__datetime(void);
+extern PyObject* PyInit__functools(void);
+extern PyObject* PyInit__json(void);
+#ifdef _Py_HAVE_ZLIB
+extern PyObject* PyInit_zlib(void);
+#endif
 
-extern void init_multibytecodec(void);
-extern void init_codecs_cn(void);
-extern void init_codecs_hk(void);
-extern void init_codecs_iso2022(void);
-extern void init_codecs_jp(void);
-extern void init_codecs_kr(void);
-extern void init_codecs_tw(void);
-extern void init_subprocess(void);
-extern void init_lsprof(void);
-extern void init_ast(void);
-extern void init_io(void);
-extern void _PyWarnings_Init(void);
+extern PyObject* PyInit__multibytecodec(void);
+extern PyObject* PyInit__codecs_cn(void);
+extern PyObject* PyInit__codecs_hk(void);
+extern PyObject* PyInit__codecs_iso2022(void);
+extern PyObject* PyInit__codecs_jp(void);
+extern PyObject* PyInit__codecs_kr(void);
+extern PyObject* PyInit__codecs_tw(void);
+extern PyObject* PyInit__winapi(void);
+extern PyObject* PyInit__lsprof(void);
+extern PyObject* PyInit__ast(void);
+extern PyObject* PyInit__io(void);
+extern PyObject* PyInit__pickle(void);
+extern PyObject* PyInit_atexit(void);
+extern PyObject* _PyWarnings_Init(void);
+extern PyObject* PyInit__string(void);
+extern PyObject* PyInit__stat(void);
+extern PyObject* PyInit__opcode(void);
+
+extern PyObject* PyInit__contextvars(void);
+
+extern PyObject* PyInit__peg_parser(void);
 
 /* tools/freeze/makeconfig.py marker for additional "extern" */
 /* -- ADDMODULE MARKER 1 -- */
 
-extern void PyMarshal_Init(void);
-extern void initimp(void);
+extern PyObject* PyMarshal_Init(void);
+extern PyObject* PyInit__imp(void);
 
 struct _inittab _PyImport_Inittab[] = {
 
-    {"array", initarray},
-    {"_ast", init_ast},
-#ifdef MS_WINDOWS
-#ifndef MS_WINI64
-    {"audioop", initaudioop},
-#endif
-#endif
-    {"binascii", initbinascii},
-    {"cmath", initcmath},
-    {"errno", initerrno},
-    {"future_builtins", initfuture_builtins},
-    {"gc", initgc},
-#ifndef MS_WINI64
-    {"imageop", initimageop},
-#endif
-    {"math", initmath},
-    {"_md5", init_md5},
-    {"nt", initnt}, /* Use the NT os functions, not posix */
-    {"operator", initoperator},
-    {"signal", initsignal},
-    {"_sha", init_sha},
-    {"_sha256", init_sha256},
-    {"_sha512", init_sha512},
-    {"strop", initstrop},
-    {"time", inittime},
-#ifdef WITH_THREAD
-    {"thread", initthread},
-#endif
-    {"cStringIO", initcStringIO},
-    {"cPickle", initcPickle},
+    {"_abc", PyInit__abc},
+    {"array", PyInit_array},
+    {"_ast", PyInit__ast},
+    {"audioop", PyInit_audioop},
+    {"binascii", PyInit_binascii},
+    {"cmath", PyInit_cmath},
+    {"errno", PyInit_errno},
+    {"faulthandler", PyInit_faulthandler},
+    {"gc", PyInit_gc},
+    {"math", PyInit_math},
+    {"nt", PyInit_nt}, /* Use the NT os functions, not posix */
+    {"_operator", PyInit__operator},
+    {"_signal", PyInit__signal},
+    {"_md5", PyInit__md5},
+    {"_sha1", PyInit__sha1},
+    {"_sha256", PyInit__sha256},
+    {"_sha512", PyInit__sha512},
+    {"_sha3", PyInit__sha3},
+    {"_blake2", PyInit__blake2},
+    {"time", PyInit_time},
+    {"_thread", PyInit__thread},
+    {"_statistics", PyInit__statistics},
 #ifdef WIN32
-    {"msvcrt", initmsvcrt},
-    {"_locale", init_locale},
+    {"msvcrt", PyInit_msvcrt},
+    {"_locale", PyInit__locale},
 #endif
-    /* XXX Should _subprocess go in a WIN32 block?  not WIN64? */
-    {"_subprocess", init_subprocess},
+    {"_tracemalloc", PyInit__tracemalloc},
+    /* XXX Should _winapi go in a WIN32 block?  not WIN64? */
+    {"_winapi", PyInit__winapi},
 
-    {"_codecs", init_codecs},
-    {"_weakref", init_weakref},
-    {"_hotshot", init_hotshot},
-    {"_random", init_random},
-    {"_bisect", init_bisect},
-    {"_heapq", init_heapq},
-    {"_lsprof", init_lsprof},
-    {"itertools", inititertools},
-    {"_collections", init_collections},
-    {"_symtable", init_symtable},
-    {"mmap", initmmap},
-    {"_csv", init_csv},
-    {"_sre", init_sre},
-    {"parser", initparser},
-    {"_winreg", init_winreg},
-    {"_struct", init_struct},
-    {"datetime", initdatetime},
-    {"_functools", init_functools},
-    {"_json", init_json},
+    {"_codecs", PyInit__codecs},
+    {"_weakref", PyInit__weakref},
+    {"_random", PyInit__random},
+    {"_bisect", PyInit__bisect},
+    {"_heapq", PyInit__heapq},
+    {"_lsprof", PyInit__lsprof},
+    {"itertools", PyInit_itertools},
+    {"_collections", PyInit__collections},
+    {"_symtable", PyInit__symtable},
+    {"mmap", PyInit_mmap},
+    {"_csv", PyInit__csv},
+    {"_sre", PyInit__sre},
+    {"parser", PyInit_parser},
+    {"winreg", PyInit_winreg},
+    {"_struct", PyInit__struct},
+    {"_datetime", PyInit__datetime},
+    {"_functools", PyInit__functools},
+    {"_json", PyInit__json},
 
-    {"xxsubtype", initxxsubtype},
-    {"zipimport", initzipimport},
-    {"zlib", initzlib},
+    {"xxsubtype", PyInit_xxsubtype},
+    {"_xxsubinterpreters", PyInit__xxsubinterpreters},
+#ifdef _Py_HAVE_ZLIB
+    {"zlib", PyInit_zlib},
+#endif
 
     /* CJK codecs */
-    {"_multibytecodec", init_multibytecodec},
-    {"_codecs_cn", init_codecs_cn},
-    {"_codecs_hk", init_codecs_hk},
-    {"_codecs_iso2022", init_codecs_iso2022},
-    {"_codecs_jp", init_codecs_jp},
-    {"_codecs_kr", init_codecs_kr},
-    {"_codecs_tw", init_codecs_tw},
+    {"_multibytecodec", PyInit__multibytecodec},
+    {"_codecs_cn", PyInit__codecs_cn},
+    {"_codecs_hk", PyInit__codecs_hk},
+    {"_codecs_iso2022", PyInit__codecs_iso2022},
+    {"_codecs_jp", PyInit__codecs_jp},
+    {"_codecs_kr", PyInit__codecs_kr},
+    {"_codecs_tw", PyInit__codecs_tw},
 
 /* tools/freeze/makeconfig.py marker for additional "_inittab" entries */
 /* -- ADDMODULE MARKER 2 -- */
@@ -154,16 +156,22 @@ struct _inittab _PyImport_Inittab[] = {
     {"marshal", PyMarshal_Init},
 
     /* This lives it with import.c */
-    {"imp", initimp},
+    {"_imp", PyInit__imp},
 
     /* These entries are here for sys.builtin_module_names */
-    {"__main__", NULL},
-    {"__builtin__", NULL},
+    {"builtins", NULL},
     {"sys", NULL},
-    {"exceptions", NULL},
     {"_warnings", _PyWarnings_Init},
+    {"_string", PyInit__string},
 
-    {"_io", init_io},
+    {"_io", PyInit__io},
+    {"_pickle", PyInit__pickle},
+    {"atexit", PyInit_atexit},
+    {"_stat", PyInit__stat},
+    {"_opcode", PyInit__opcode},
+
+    {"_contextvars", PyInit__contextvars},
+    {"_peg_parser", PyInit__peg_parser},
 
     /* Sentinel */
     {0, 0}

@@ -1,7 +1,3 @@
-/*****************************************************************
-  This file should be kept compatible with Python 2.3, see PEP 291.
- *****************************************************************/
-
 #include "Python.h"
 #include <ffi.h>
 #ifdef MS_WIN32
@@ -52,6 +48,21 @@ PyCStgDict_dealloc(StgDictObject *self)
     PyDict_Type.tp_dealloc((PyObject *)self);
 }
 
+static PyObject *
+PyCStgDict_sizeof(StgDictObject *self, void *unused)
+{
+    Py_ssize_t res;
+
+    res = _PyDict_SizeOf((PyDictObject *)self);
+    res += sizeof(StgDictObject) - sizeof(PyDictObject);
+    if (self->format)
+        res += strlen(self->format) + 1;
+    res += self->ndim * sizeof(Py_ssize_t);
+    if (self->ffi_type_pointer.elements)
+        res += (self->length + 1) * sizeof(ffi_type *);
+    return PyLong_FromSsize_t(res);
+}
+
 int
 PyCStgDict_clone(StgDictObject *dst, StgDictObject *src)
 {
@@ -80,14 +91,18 @@ PyCStgDict_clone(StgDictObject *dst, StgDictObject *src)
 
     if (src->format) {
         dst->format = PyMem_Malloc(strlen(src->format) + 1);
-        if (dst->format == NULL)
+        if (dst->format == NULL) {
+            PyErr_NoMemory();
             return -1;
+        }
         strcpy(dst->format, src->format);
     }
     if (src->shape) {
         dst->shape = PyMem_Malloc(sizeof(Py_ssize_t) * src->ndim);
-        if (dst->shape == NULL)
+        if (dst->shape == NULL) {
+            PyErr_NoMemory();
             return -1;
+        }
         memcpy(dst->shape, src->shape,
                sizeof(Py_ssize_t) * src->ndim);
     }
@@ -106,16 +121,21 @@ PyCStgDict_clone(StgDictObject *dst, StgDictObject *src)
     return 0;
 }
 
+static struct PyMethodDef PyCStgDict_methods[] = {
+    {"__sizeof__", (PyCFunction)PyCStgDict_sizeof, METH_NOARGS},
+    {NULL, NULL}                /* sentinel */
+};
+
 PyTypeObject PyCStgDict_Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
     "StgDict",
     sizeof(StgDictObject),
     0,
     (destructor)PyCStgDict_dealloc,             /* tp_dealloc */
-    0,                                          /* tp_print */
+    0,                                          /* tp_vectorcall_offset */
     0,                                          /* tp_getattr */
     0,                                          /* tp_setattr */
-    0,                                          /* tp_compare */
+    0,                                          /* tp_as_async */
     0,                                          /* tp_repr */
     0,                                          /* tp_as_number */
     0,                                          /* tp_as_sequence */
@@ -134,7 +154,7 @@ PyTypeObject PyCStgDict_Type = {
     0,                                          /* tp_weaklistoffset */
     0,                                          /* tp_iter */
     0,                                          /* tp_iternext */
-    0,                                          /* tp_methods */
+    PyCStgDict_methods,                         /* tp_methods */
     0,                                          /* tp_members */
     0,                                          /* tp_getset */
     0,                                          /* tp_base */
@@ -157,8 +177,6 @@ PyType_stgdict(PyObject *obj)
     if (!PyType_Check(obj))
         return NULL;
     type = (PyTypeObject *)obj;
-    if (!PyType_HasFeature(type, Py_TPFLAGS_HAVE_CLASS))
-        return NULL;
     if (!type->tp_dict || !PyCStgDict_CheckExact(type->tp_dict))
         return NULL;
     return (StgDictObject *)type->tp_dict;
@@ -172,9 +190,7 @@ PyType_stgdict(PyObject *obj)
 StgDictObject *
 PyObject_stgdict(PyObject *self)
 {
-    PyTypeObject *type = self->ob_type;
-    if (!PyType_HasFeature(type, Py_TPFLAGS_HAVE_CLASS))
-        return NULL;
+    PyTypeObject *type = Py_TYPE(self);
     if (!type->tp_dict || !PyCStgDict_CheckExact(type->tp_dict))
         return NULL;
     return (StgDictObject *)type->tp_dict;
@@ -215,7 +231,7 @@ MakeFields(PyObject *type, CFieldObject *descr,
             Py_DECREF(fieldlist);
             return -1;
         }
-        if (Py_TYPE(fdescr) != &PyCField_Type) {
+        if (!Py_IS_TYPE(fdescr, &PyCField_Type)) {
             PyErr_SetString(PyExc_TypeError, "unexpected type");
             Py_DECREF(fdescr);
             Py_DECREF(fieldlist);
@@ -232,13 +248,13 @@ MakeFields(PyObject *type, CFieldObject *descr,
             }
             continue;
         }
-        new_descr = (CFieldObject *)PyObject_CallObject((PyObject *)&PyCField_Type, NULL);
+        new_descr = (CFieldObject *)_PyObject_CallNoArg((PyObject *)&PyCField_Type);
         if (new_descr == NULL) {
             Py_DECREF(fdescr);
             Py_DECREF(fieldlist);
             return -1;
         }
-        assert(Py_TYPE(new_descr) == &PyCField_Type);
+        assert(Py_IS_TYPE(new_descr, &PyCField_Type));
         new_descr->size = fdescr->size;
         new_descr->offset = fdescr->offset + offset;
         new_descr->index = fdescr->index + index;
@@ -265,13 +281,15 @@ MakeFields(PyObject *type, CFieldObject *descr,
 static int
 MakeAnonFields(PyObject *type)
 {
+    _Py_IDENTIFIER(_anonymous_);
     PyObject *anon;
     PyObject *anon_names;
     Py_ssize_t i;
 
-    anon = PyObject_GetAttrString(type, "_anonymous_");
+    if (_PyObject_LookupAttrId(type, &PyId__anonymous_, &anon) < 0) {
+        return -1;
+    }
     if (anon == NULL) {
-        PyErr_Clear();
         return 0;
     }
     anon_names = PySequence_Fast(anon, "_anonymous_ must be a sequence");
@@ -286,7 +304,15 @@ MakeAnonFields(PyObject *type)
             Py_DECREF(anon_names);
             return -1;
         }
-        assert(Py_TYPE(descr) == &PyCField_Type);
+        if (!Py_IS_TYPE(descr, &PyCField_Type)) {
+            PyErr_Format(PyExc_AttributeError,
+                         "'%U' is specified in _anonymous_ but not in "
+                         "_fields_",
+                         fname);
+            Py_DECREF(anon_names);
+            Py_DECREF(descr);
+            return -1;
+        }
         descr->anonymous = 1;
 
         /* descr is in the field descriptor. */
@@ -305,24 +331,29 @@ MakeAnonFields(PyObject *type)
 }
 
 /*
-  Retrive the (optional) _pack_ attribute from a type, the _fields_ attribute,
+  Retrieve the (optional) _pack_ attribute from a type, the _fields_ attribute,
   and create an StgDictObject.  Used for Structure and Union subclasses.
 */
 int
 PyCStructUnionType_update_stgdict(PyObject *type, PyObject *fields, int isStruct)
 {
+    _Py_IDENTIFIER(_swappedbytes_);
+    _Py_IDENTIFIER(_use_broken_old_ctypes_structure_semantics_);
+    _Py_IDENTIFIER(_pack_);
     StgDictObject *stgdict, *basedict;
     Py_ssize_t len, offset, size, align, i;
     Py_ssize_t union_size, total_align;
     Py_ssize_t field_size = 0;
     int bitofs;
-    PyObject *isPacked;
-    int pack = 0;
+    PyObject *tmp;
+    int isPacked;
+    int pack;
     Py_ssize_t ffi_ofs;
     int big_endian;
+    int arrays_seen = 0;
 
     /* HACK Alert: I cannot be bothered to fix ctypes.com, so there has to
-       be a way to use the old, broken sematics: _fields_ are not extended
+       be a way to use the old, broken semantics: _fields_ are not extended
        but replaced in subclasses.
 
        XXX Remove this in ctypes 1.0!
@@ -332,32 +363,59 @@ PyCStructUnionType_update_stgdict(PyObject *type, PyObject *fields, int isStruct
     if (fields == NULL)
         return 0;
 
-#ifdef WORDS_BIGENDIAN
-    big_endian = PyObject_HasAttrString(type, "_swappedbytes_") ? 0 : 1;
-#else
-    big_endian = PyObject_HasAttrString(type, "_swappedbytes_") ? 1 : 0;
-#endif
+    if (_PyObject_LookupAttrId(type, &PyId__swappedbytes_, &tmp) < 0) {
+        return -1;
+    }
+    if (tmp) {
+        Py_DECREF(tmp);
+        big_endian = !PY_BIG_ENDIAN;
+    }
+    else {
+        big_endian = PY_BIG_ENDIAN;
+    }
 
-    use_broken_old_ctypes_semantics = \
-        PyObject_HasAttrString(type, "_use_broken_old_ctypes_structure_semantics_");
+    if (_PyObject_LookupAttrId(type,
+                &PyId__use_broken_old_ctypes_structure_semantics_, &tmp) < 0)
+    {
+        return -1;
+    }
+    if (tmp) {
+        Py_DECREF(tmp);
+        use_broken_old_ctypes_semantics = 1;
+    }
+    else {
+        use_broken_old_ctypes_semantics = 0;
+    }
 
-    isPacked = PyObject_GetAttrString(type, "_pack_");
-    if (isPacked) {
-        pack = _PyInt_AsInt(isPacked);
-        if (pack < 0 || PyErr_Occurred()) {
-            Py_XDECREF(isPacked);
-            PyErr_SetString(PyExc_ValueError,
-                            "_pack_ must be a non-negative integer");
+    if (_PyObject_LookupAttrId(type, &PyId__pack_, &tmp) < 0) {
+        return -1;
+    }
+    if (tmp) {
+        isPacked = 1;
+        pack = _PyLong_AsInt(tmp);
+        Py_DECREF(tmp);
+        if (pack < 0) {
+            if (!PyErr_Occurred() ||
+                PyErr_ExceptionMatches(PyExc_TypeError) ||
+                PyErr_ExceptionMatches(PyExc_OverflowError))
+            {
+                PyErr_SetString(PyExc_ValueError,
+                                "_pack_ must be a non-negative integer");
+            }
             return -1;
         }
-        Py_DECREF(isPacked);
-    } else
-        PyErr_Clear();
+    }
+    else {
+        isPacked = 0;
+        pack = 0;
+    }
 
-    len = PySequence_Length(fields);
+    len = PySequence_Size(fields);
     if (len == -1) {
-        PyErr_SetString(PyExc_TypeError,
-                        "'_fields_' must be a sequence of pairs");
+        if (PyErr_ExceptionMatches(PyExc_TypeError)) {
+            PyErr_SetString(PyExc_TypeError,
+                            "'_fields_' must be a sequence of pairs");
+        }
         return -1;
     }
 
@@ -382,22 +440,31 @@ PyCStructUnionType_update_stgdict(PyObject *type, PyObject *fields, int isStruct
         PyMem_Free(stgdict->ffi_type_pointer.elements);
 
     basedict = PyType_stgdict((PyObject *)((PyTypeObject *)type)->tp_base);
+    if (basedict) {
+        stgdict->flags |= (basedict->flags &
+                           (TYPEFLAG_HASUNION | TYPEFLAG_HASBITFIELD));
+    }
+    if (!isStruct) {
+        stgdict->flags |= TYPEFLAG_HASUNION;
+    }
     if (basedict && !use_broken_old_ctypes_semantics) {
         size = offset = basedict->size;
         align = basedict->align;
         union_size = 0;
         total_align = align ? align : 1;
         stgdict->ffi_type_pointer.type = FFI_TYPE_STRUCT;
-        stgdict->ffi_type_pointer.elements = PyMem_Malloc(sizeof(ffi_type *) * (basedict->length + len + 1));
+        stgdict->ffi_type_pointer.elements = PyMem_New(ffi_type *, basedict->length + len + 1);
         if (stgdict->ffi_type_pointer.elements == NULL) {
             PyErr_NoMemory();
             return -1;
         }
         memset(stgdict->ffi_type_pointer.elements, 0,
                sizeof(ffi_type *) * (basedict->length + len + 1));
-        memcpy(stgdict->ffi_type_pointer.elements,
-               basedict->ffi_type_pointer.elements,
-               sizeof(ffi_type *) * (basedict->length));
+        if (basedict->length > 0) {
+            memcpy(stgdict->ffi_type_pointer.elements,
+                   basedict->ffi_type_pointer.elements,
+                   sizeof(ffi_type *) * (basedict->length));
+        }
         ffi_ofs = basedict->length;
     } else {
         offset = 0;
@@ -406,7 +473,7 @@ PyCStructUnionType_update_stgdict(PyObject *type, PyObject *fields, int isStruct
         union_size = 0;
         total_align = 1;
         stgdict->ffi_type_pointer.type = FFI_TYPE_STRUCT;
-        stgdict->ffi_type_pointer.elements = PyMem_Malloc(sizeof(ffi_type *) * (len + 1));
+        stgdict->ffi_type_pointer.elements = PyMem_New(ffi_type *, len + 1);
         if (stgdict->ffi_type_pointer.elements == NULL) {
             PyErr_NoMemory();
             return -1;
@@ -421,10 +488,12 @@ PyCStructUnionType_update_stgdict(PyObject *type, PyObject *fields, int isStruct
         stgdict->format = _ctypes_alloc_format_string(NULL, "T{");
     } else {
         /* PEP3118 doesn't support union, or packed structures (well,
-           only standard packing, but we dont support the pep for
+           only standard packing, but we don't support the pep for
            that). Use 'B' for bytes. */
         stgdict->format = _ctypes_alloc_format_string(NULL, "B");
     }
+    if (stgdict->format == NULL)
+        return -1;
 
 #define realdict ((PyObject *)&stgdict->dict)
     for (i = 0; i < len; ++i) {
@@ -434,29 +503,29 @@ PyCStructUnionType_update_stgdict(PyObject *type, PyObject *fields, int isStruct
         StgDictObject *dict;
         int bitsize = 0;
 
-        if (!pair || !PyArg_ParseTuple(pair, "OO|i", &name, &desc, &bitsize)) {
-            PyErr_SetString(PyExc_AttributeError,
-                            "'_fields_' must be a sequence of pairs");
+        if (!pair || !PyArg_ParseTuple(pair, "UO|i", &name, &desc, &bitsize)) {
+            PyErr_SetString(PyExc_TypeError,
+                            "'_fields_' must be a sequence of (name, C type) pairs");
             Py_XDECREF(pair);
             return -1;
         }
+        if (PyCArrayTypeObject_Check(desc))
+            arrays_seen = 1;
         dict = PyType_stgdict(desc);
         if (dict == NULL) {
             Py_DECREF(pair);
             PyErr_Format(PyExc_TypeError,
-#if (PY_VERSION_HEX < 0x02050000)
-                         "second item in _fields_ tuple (index %d) must be a C type",
-#else
                          "second item in _fields_ tuple (index %zd) must be a C type",
-#endif
                          i);
             return -1;
         }
         stgdict->ffi_type_pointer.elements[ffi_ofs + i] = &dict->ffi_type_pointer;
         if (dict->flags & (TYPEFLAG_ISPOINTER | TYPEFLAG_HASPOINTER))
             stgdict->flags |= TYPEFLAG_HASPOINTER;
+        stgdict->flags |= dict->flags & (TYPEFLAG_HASUNION | TYPEFLAG_HASBITFIELD);
         dict->flags |= DICTFLAG_FINAL; /* mark field type final */
         if (PyTuple_Size(pair) == 3) { /* bits specified */
+            stgdict->flags |= TYPEFLAG_HASBITFIELD;
             switch(dict->ffi_type_pointer.type) {
             case FFI_TYPE_UINT8:
             case FFI_TYPE_UINT16:
@@ -490,19 +559,16 @@ PyCStructUnionType_update_stgdict(PyObject *type, PyObject *fields, int isStruct
             }
         } else
             bitsize = 0;
+
         if (isStruct && !isPacked) {
-            char *fieldfmt = dict->format ? dict->format : "B";
-            char *fieldname = PyString_AsString(name);
+            const char *fieldfmt = dict->format ? dict->format : "B";
+            const char *fieldname = PyUnicode_AsUTF8(name);
             char *ptr;
-            Py_ssize_t len; 
+            Py_ssize_t len;
             char *buf;
 
             if (fieldname == NULL)
             {
-                PyErr_Format(PyExc_TypeError,
-                             "structure field name must be string not %s",
-                             name->ob_type->tp_name);
-                                
                 Py_DECREF(pair);
                 return -1;
             }
@@ -518,7 +584,12 @@ PyCStructUnionType_update_stgdict(PyObject *type, PyObject *fields, int isStruct
             sprintf(buf, "%s:%s:", fieldfmt, fieldname);
 
             ptr = stgdict->format;
-            stgdict->format = _ctypes_alloc_format_string(stgdict->format, buf);
+            if (dict->shape != NULL) {
+                stgdict->format = _ctypes_alloc_format_string_with_shape(
+                    dict->ndim, dict->shape, stgdict->format, buf);
+            } else {
+                stgdict->format = _ctypes_alloc_format_string(stgdict->format, buf);
+            }
             PyMem_Free(ptr);
             PyMem_Free(buf);
 
@@ -527,6 +598,7 @@ PyCStructUnionType_update_stgdict(PyObject *type, PyObject *fields, int isStruct
                 return -1;
             }
         }
+
         if (isStruct) {
             prop = PyCField_FromDesc(desc, i,
                                    &field_size, bitsize, &bitofs,
@@ -580,6 +652,240 @@ PyCStructUnionType_update_stgdict(PyObject *type, PyObject *fields, int isStruct
     stgdict->size = size;
     stgdict->align = total_align;
     stgdict->length = len;      /* ADD ffi_ofs? */
+
+#define MAX_STRUCT_SIZE 16
+
+    if (arrays_seen && (size <= MAX_STRUCT_SIZE)) {
+        /*
+         * See bpo-22273. Arrays are normally treated as pointers, which is
+         * fine when an array name is being passed as parameter, but not when
+         * passing structures by value that contain arrays. On 64-bit Linux,
+         * small structures passed by value are passed in registers, and in
+         * order to do this, libffi needs to know the true type of the array
+         * members of structs. Treating them as pointers breaks things.
+         *
+         * By small structures, we mean ones that are 16 bytes or less. In that
+         * case, there can't be more than 16 elements after unrolling arrays,
+         * as we (will) disallow bitfields. So we can collect the true ffi_type
+         * values in a fixed-size local array on the stack and, if any arrays
+         * were seen, replace the ffi_type_pointer.elements with a more
+         * accurate set, to allow libffi to marshal them into registers
+         * correctly. It means one more loop over the fields, but if we got
+         * here, the structure is small, so there aren't too many of those.
+         *
+         * Although the passing in registers is specific to 64-bit Linux, the
+         * array-in-struct vs. pointer problem is general. But we restrict the
+         * type transformation to small structs nonetheless.
+         *
+         * Note that although a union may be small in terms of memory usage, it
+         * could contain many overlapping declarations of arrays, e.g.
+         *
+         * union {
+         *     unsigned int_8 foo [16];
+         *     unsigned uint_8 bar [16];
+         *     unsigned int_16 baz[8];
+         *     unsigned uint_16 bozz[8];
+         *     unsigned int_32 fizz[4];
+         *     unsigned uint_32 buzz[4];
+         * }
+         *
+         * which is still only 16 bytes in size. We need to convert this into
+         * the following equivalent for libffi:
+         *
+         * union {
+         *     struct { int_8 e1; int_8 e2; ... int_8 e_16; } f1;
+         *     struct { uint_8 e1; uint_8 e2; ... uint_8 e_16; } f2;
+         *     struct { int_16 e1; int_16 e2; ... int_16 e_8; } f3;
+         *     struct { uint_16 e1; uint_16 e2; ... uint_16 e_8; } f4;
+         *     struct { int_32 e1; int_32 e2; ... int_32 e_4; } f5;
+         *     struct { uint_32 e1; uint_32 e2; ... uint_32 e_4; } f6;
+         * }
+         *
+         * So the struct/union needs setting up as follows: all non-array
+         * elements copied across as is, and all array elements replaced with
+         * an equivalent struct which has as many fields as the array has
+         * elements, plus one NULL pointer.
+         */
+
+        Py_ssize_t num_ffi_type_pointers = 0;  /* for the dummy fields */
+        Py_ssize_t num_ffi_types = 0;  /* for the dummy structures */
+        size_t alloc_size;  /* total bytes to allocate */
+        void *type_block;  /* to hold all the type information needed */
+        ffi_type **element_types;  /* of this struct/union */
+        ffi_type **dummy_types;  /* of the dummy struct elements */
+        ffi_type *structs;  /* point to struct aliases of arrays */
+        Py_ssize_t element_index;  /* index into element_types for this */
+        Py_ssize_t dummy_index = 0; /* index into dummy field pointers */
+        Py_ssize_t struct_index = 0; /* index into dummy structs */
+
+        /* first pass to see how much memory to allocate */
+        for (i = 0; i < len; ++i) {
+            PyObject *name, *desc;
+            PyObject *pair = PySequence_GetItem(fields, i);
+            StgDictObject *dict;
+            int bitsize = 0;
+
+            if (pair == NULL) {
+                return -1;
+            }
+            if (!PyArg_ParseTuple(pair, "UO|i", &name, &desc, &bitsize)) {
+                PyErr_SetString(PyExc_TypeError,
+                    "'_fields_' must be a sequence of (name, C type) pairs");
+                Py_DECREF(pair);
+                return -1;
+            }
+            dict = PyType_stgdict(desc);
+            if (dict == NULL) {
+                Py_DECREF(pair);
+                PyErr_Format(PyExc_TypeError,
+                    "second item in _fields_ tuple (index %zd) must be a C type",
+                    i);
+                return -1;
+            }
+            if (!PyCArrayTypeObject_Check(desc)) {
+                /* Not an array. Just need an ffi_type pointer. */
+                num_ffi_type_pointers++;
+            }
+            else {
+                /* It's an array. */
+                Py_ssize_t length = dict->length;
+                StgDictObject *edict;
+
+                edict = PyType_stgdict(dict->proto);
+                if (edict == NULL) {
+                    Py_DECREF(pair);
+                    PyErr_Format(PyExc_TypeError,
+                        "second item in _fields_ tuple (index %zd) must be a C type",
+                        i);
+                    return -1;
+                }
+                /*
+                 * We need one extra ffi_type to hold the struct, and one
+                 * ffi_type pointer per array element + one for a NULL to
+                 * mark the end.
+                 */
+                num_ffi_types++;
+                num_ffi_type_pointers += length + 1;
+            }
+            Py_DECREF(pair);
+        }
+
+        /*
+         * At this point, we know we need storage for some ffi_types and some
+         * ffi_type pointers. We'll allocate these in one block.
+         * There are three sub-blocks of information: the ffi_type pointers to
+         * this structure/union's elements, the ffi_type_pointers to the
+         * dummy fields standing in for array elements, and the
+         * ffi_types representing the dummy structures.
+         */
+        alloc_size = (ffi_ofs + 1 + len + num_ffi_type_pointers) * sizeof(ffi_type *) +
+                        num_ffi_types * sizeof(ffi_type);
+        type_block = PyMem_Malloc(alloc_size);
+
+        if (type_block == NULL) {
+            PyErr_NoMemory();
+            return -1;
+        }
+        /*
+         * the first block takes up ffi_ofs + len + 1 which is the pointers *
+         * for this struct/union. The second block takes up
+         * num_ffi_type_pointers, so the sum of these is ffi_ofs + len + 1 +
+         * num_ffi_type_pointers as allocated above. The last bit is the
+         * num_ffi_types structs.
+         */
+        element_types = (ffi_type **) type_block;
+        dummy_types = &element_types[ffi_ofs + len + 1];
+        structs = (ffi_type *) &dummy_types[num_ffi_type_pointers];
+
+        if (num_ffi_types > 0) {
+            memset(structs, 0, num_ffi_types * sizeof(ffi_type));
+        }
+        if (ffi_ofs && (basedict != NULL)) {
+            memcpy(element_types,
+                basedict->ffi_type_pointer.elements,
+                ffi_ofs * sizeof(ffi_type *));
+        }
+        element_index = ffi_ofs;
+
+        /* second pass to actually set the type pointers */
+        for (i = 0; i < len; ++i) {
+            PyObject *name, *desc;
+            PyObject *pair = PySequence_GetItem(fields, i);
+            StgDictObject *dict;
+            int bitsize = 0;
+
+            if (pair == NULL) {
+                PyMem_Free(type_block);
+                return -1;
+            }
+            /* In theory, we made this call in the first pass, so it *shouldn't*
+             * fail. However, you never know, and the code above might change
+             * later - keeping the check in here is a tad defensive but it
+             * will affect program size only slightly and performance hardly at
+             * all.
+             */
+            if (!PyArg_ParseTuple(pair, "UO|i", &name, &desc, &bitsize)) {
+                PyErr_SetString(PyExc_TypeError,
+                                "'_fields_' must be a sequence of (name, C type) pairs");
+                Py_DECREF(pair);
+                PyMem_Free(type_block);
+                return -1;
+            }
+            dict = PyType_stgdict(desc);
+            /* Possibly this check could be avoided, but see above comment. */
+            if (dict == NULL) {
+                Py_DECREF(pair);
+                PyMem_Free(type_block);
+                PyErr_Format(PyExc_TypeError,
+                             "second item in _fields_ tuple (index %zd) must be a C type",
+                             i);
+                return -1;
+            }
+            assert(element_index < (ffi_ofs + len)); /* will be used below */
+            if (!PyCArrayTypeObject_Check(desc)) {
+                /* Not an array. Just copy over the element ffi_type. */
+                element_types[element_index++] = &dict->ffi_type_pointer;
+            }
+            else {
+                Py_ssize_t length = dict->length;
+                StgDictObject *edict;
+
+                edict = PyType_stgdict(dict->proto);
+                if (edict == NULL) {
+                    Py_DECREF(pair);
+                    PyMem_Free(type_block);
+                    PyErr_Format(PyExc_TypeError,
+                                 "second item in _fields_ tuple (index %zd) must be a C type",
+                                 i);
+                    return -1;
+                }
+                element_types[element_index++] = &structs[struct_index];
+                structs[struct_index].size = length * edict->ffi_type_pointer.size;
+                structs[struct_index].alignment = edict->ffi_type_pointer.alignment;
+                structs[struct_index].type = FFI_TYPE_STRUCT;
+                structs[struct_index].elements = &dummy_types[dummy_index];
+                ++struct_index;
+                /* Copy over the element's type, length times. */
+                while (length > 0) {
+                    assert(dummy_index < (num_ffi_type_pointers));
+                    dummy_types[dummy_index++] = &edict->ffi_type_pointer;
+                    length--;
+                }
+                assert(dummy_index < (num_ffi_type_pointers));
+                dummy_types[dummy_index++] = NULL;
+            }
+            Py_DECREF(pair);
+        }
+
+        element_types[element_index] = NULL;
+        /*
+         * Replace the old elements with the new, taking into account
+         * base class elements where necessary.
+         */
+        assert(stgdict->ffi_type_pointer.elements);
+        PyMem_Free(stgdict->ffi_type_pointer.elements);
+        stgdict->ffi_type_pointer.elements = element_types;
+    }
 
     /* We did check that this flag was NOT set above, it must not
        have been set until now. */

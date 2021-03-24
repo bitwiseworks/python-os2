@@ -1,47 +1,29 @@
-# Test the frozen module defined in frozen.c.
+"""Basic test of the frozen module (source is in Python/frozen.c)."""
 
-from test.test_support import captured_stdout, run_unittest
-import unittest
+# The Python/frozen.c source code contains a marshalled Python module
+# and therefore depends on the marshal format as well as the bytecode
+# format.  If those formats have been changed then frozen.c needs to be
+# updated.
+#
+# The test_importlib also tests this module but because those tests
+# are much more complicated, it might be unclear why they are failing.
+# Invalid marshalled data in frozen.c could case the interpreter to
+# crash when __hello__ is imported.
+
 import sys
+import unittest
+from test.support import captured_stdout
 
-class FrozenTests(unittest.TestCase):
+
+class TestFrozen(unittest.TestCase):
     def test_frozen(self):
-
-        with captured_stdout() as stdout:
-            try:
-                import __hello__
-            except ImportError, x:
-                self.fail("import __hello__ failed:" + str(x))
-
-            try:
-                import __phello__
-            except ImportError, x:
-                self.fail("import __phello__ failed:" + str(x))
-
-            try:
-                import __phello__.spam
-            except ImportError, x:
-                self.fail("import __phello__.spam failed:" + str(x))
-
-            try:
-                import __phello__.foo
-            except ImportError:
-                pass
-            else:
-                self.fail("import __phello__.foo should have failed")
-
-        self.assertEqual(stdout.getvalue(),
-                         'Hello world...\nHello world...\nHello world...\n')
-
-        del sys.modules['__hello__']
-        del sys.modules['__phello__']
-        del sys.modules['__phello__.spam']
-
-
-def test_main():
-    run_unittest(FrozenTests)
-
+        name = '__hello__'
+        if name in sys.modules:
+            del sys.modules[name]
+        with captured_stdout() as out:
+            import __hello__
+        self.assertEqual(out.getvalue(), 'Hello world!\n')
 
 
 if __name__ == '__main__':
-    test_main()
+    unittest.main()

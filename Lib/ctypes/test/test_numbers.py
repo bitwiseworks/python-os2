@@ -12,10 +12,10 @@ def valid_ranges(*types):
     for t in types:
         fmt = t._type_
         size = struct.calcsize(fmt)
-        a = struct.unpack(fmt, ("\x00"*32)[:size])[0]
-        b = struct.unpack(fmt, ("\xFF"*32)[:size])[0]
-        c = struct.unpack(fmt, ("\x7F"+"\x00"*32)[:size])[0]
-        d = struct.unpack(fmt, ("\x80"+"\xFF"*32)[:size])[0]
+        a = struct.unpack(fmt, (b"\x00"*32)[:size])[0]
+        b = struct.unpack(fmt, (b"\xFF"*32)[:size])[0]
+        c = struct.unpack(fmt, (b"\x7F"+b"\x00"*32)[:size])[0]
+        d = struct.unpack(fmt, (b"\x80"+b"\xFF"*32)[:size])[0]
         result.append((min(a, b, c, d), max(a, b, c, d)))
     return result
 
@@ -76,18 +76,19 @@ class NumberTestCase(unittest.TestCase):
             self.assertEqual(t(v).value, truth(v))
 
     def test_typeerror(self):
-        # Only numbers are allowed in the contructor,
+        # Only numbers are allowed in the constructor,
         # otherwise TypeError is raised
         for t in signed_types + unsigned_types + float_types:
             self.assertRaises(TypeError, t, "")
             self.assertRaises(TypeError, t, None)
 
-##    def test_valid_ranges(self):
-##        # invalid values of the correct type
-##        # raise ValueError (not OverflowError)
-##        for t, (l, h) in zip(unsigned_types, unsigned_ranges):
-##            self.assertRaises(ValueError, t, l-1)
-##            self.assertRaises(ValueError, t, h+1)
+    @unittest.skip('test disabled')
+    def test_valid_ranges(self):
+        # invalid values of the correct type
+        # raise ValueError (not OverflowError)
+        for t, (l, h) in zip(unsigned_types, unsigned_ranges):
+            self.assertRaises(ValueError, t, l-1)
+            self.assertRaises(ValueError, t, h+1)
 
     def test_from_param(self):
         # the from_param class method attribute always
@@ -104,7 +105,7 @@ class NumberTestCase(unittest.TestCase):
 
     def test_floats(self):
         # c_float and c_double can be created from
-        # Python int, long and float
+        # Python int and float
         class FloatLike(object):
             def __float__(self):
                 return 2.0
@@ -112,7 +113,7 @@ class NumberTestCase(unittest.TestCase):
         for t in float_types:
             self.assertEqual(t(2.0).value, 2.0)
             self.assertEqual(t(2).value, 2.0)
-            self.assertEqual(t(2L).value, 2.0)
+            self.assertEqual(t(2).value, 2.0)
             self.assertEqual(t(f).value, 2.0)
 
     def test_integers(self):
@@ -123,12 +124,18 @@ class NumberTestCase(unittest.TestCase):
         class IntLike(object):
             def __int__(self):
                 return 2
-        i = IntLike()
+        d = IntLike()
+        class IndexLike(object):
+            def __index__(self):
+                return 2
+        i = IndexLike()
         # integers cannot be constructed from floats,
         # but from integer-like objects
         for t in signed_types + unsigned_types:
             self.assertRaises(TypeError, t, 3.14)
             self.assertRaises(TypeError, t, f)
+            with self.assertWarns(DeprecationWarning):
+                self.assertEqual(t(d).value, 2)
             self.assertEqual(t(i).value, 2)
 
     def test_sizes(self):
@@ -181,34 +188,36 @@ class NumberTestCase(unittest.TestCase):
             a = array(t._type_, [3.14])
             v = t.from_address(a.buffer_info()[0])
             self.assertEqual(v.value, a[0])
-            self.assertTrue(type(v) is t)
+            self.assertIs(type(v), t)
             a[0] = 2.3456e17
             self.assertEqual(v.value, a[0])
-            self.assertTrue(type(v) is t)
+            self.assertIs(type(v), t)
 
     def test_char_from_address(self):
         from ctypes import c_char
         from array import array
 
-        a = array('c', 'x')
+        a = array('b', [0])
+        a[0] = ord('x')
         v = c_char.from_address(a.buffer_info()[0])
-        self.assertEqual(v.value, a[0])
-        self.assertTrue(type(v) is c_char)
+        self.assertEqual(v.value, b'x')
+        self.assertIs(type(v), c_char)
 
-        a[0] = '?'
-        self.assertEqual(v.value, a[0])
+        a[0] = ord('?')
+        self.assertEqual(v.value, b'?')
 
     # array does not support c_bool / 't'
-    # def test_bool_from_address(self):
-    #     from ctypes import c_bool
-    #     from array import array
-    #     a = array(c_bool._type_, [True])
-    #     v = t.from_address(a.buffer_info()[0])
-    #     self.assertEqual(v.value, a[0])
-    #     self.assertEqual(type(v) is t)
-    #     a[0] = False
-    #     self.assertEqual(v.value, a[0])
-    #     self.assertEqual(type(v) is t)
+    @unittest.skip('test disabled')
+    def test_bool_from_address(self):
+        from ctypes import c_bool
+        from array import array
+        a = array(c_bool._type_, [True])
+        v = t.from_address(a.buffer_info()[0])
+        self.assertEqual(v.value, a[0])
+        self.assertEqual(type(v) is t)
+        a[0] = False
+        self.assertEqual(v.value, a[0])
+        self.assertEqual(type(v) is t)
 
     def test_init(self):
         # c_int() can be initialized from Python's int, and c_int.
@@ -226,8 +235,9 @@ class NumberTestCase(unittest.TestCase):
             if (hasattr(t, "__ctype_le__")):
                 self.assertRaises(OverflowError, t.__ctype_le__, big_int)
 
-##    def test_perf(self):
-##        check_perf()
+    @unittest.skip('test disabled')
+    def test_perf(self):
+        check_perf()
 
 from ctypes import _SimpleCData
 class c_int_S(_SimpleCData):
@@ -237,7 +247,7 @@ class c_int_S(_SimpleCData):
 def run_test(rep, msg, func, arg=None):
 ##    items = [None] * rep
     items = range(rep)
-    from time import clock
+    from time import perf_counter as clock
     if arg is not None:
         start = clock()
         for i in items:
@@ -248,7 +258,7 @@ def run_test(rep, msg, func, arg=None):
         for i in items:
             func(); func(); func(); func(); func()
         stop = clock()
-    print "%15s: %.2f us" % (msg, ((stop-start)*1e6/5/rep))
+    print("%15s: %.2f us" % (msg, ((stop-start)*1e6/5/rep)))
 
 def check_perf():
     # Construct 5 objects

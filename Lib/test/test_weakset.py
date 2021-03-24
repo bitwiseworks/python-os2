@@ -1,14 +1,8 @@
 import unittest
-from test import test_support
-from weakref import proxy, ref, WeakSet
-import operator
-import copy
+from weakref import WeakSet
 import string
-import os
-from random import randrange, shuffle
-import sys
-import warnings
-import collections
+from collections import UserString as ustr
+from collections.abc import Set, MutableSet
 import gc
 import contextlib
 
@@ -16,40 +10,27 @@ import contextlib
 class Foo:
     pass
 
-class SomeClass(object):
-    def __init__(self, value):
-        self.value = value
-    def __eq__(self, other):
-        if type(other) != type(self):
-            return False
-        return other.value == self.value
-
-    def __ne__(self, other):
-        return not self.__eq__(other)
-
-    def __hash__(self):
-        return hash((SomeClass, self.value))
-
-class RefCycle(object):
+class RefCycle:
     def __init__(self):
         self.cycle = self
+
 
 class TestWeakSet(unittest.TestCase):
 
     def setUp(self):
         # need to keep references to them
-        self.items = [SomeClass(c) for c in ('a', 'b', 'c')]
-        self.items2 = [SomeClass(c) for c in ('x', 'y', 'z')]
-        self.letters = [SomeClass(c) for c in string.ascii_letters]
-        self.ab_items = [SomeClass(c) for c in 'ab']
-        self.abcde_items = [SomeClass(c) for c in 'abcde']
-        self.def_items = [SomeClass(c) for c in 'def']
+        self.items = [ustr(c) for c in ('a', 'b', 'c')]
+        self.items2 = [ustr(c) for c in ('x', 'y', 'z')]
+        self.ab_items = [ustr(c) for c in 'ab']
+        self.abcde_items = [ustr(c) for c in 'abcde']
+        self.def_items = [ustr(c) for c in 'def']
         self.ab_weakset = WeakSet(self.ab_items)
         self.abcde_weakset = WeakSet(self.abcde_items)
         self.def_weakset = WeakSet(self.def_items)
+        self.letters = [ustr(c) for c in string.ascii_letters]
         self.s = WeakSet(self.items)
         self.d = dict.fromkeys(self.items)
-        self.obj = SomeClass('F')
+        self.obj = ustr('F')
         self.fs = WeakSet([self.obj])
 
     def test_methods(self):
@@ -76,7 +57,7 @@ class TestWeakSet(unittest.TestCase):
         self.assertNotIn(1, self.s)
         self.assertIn(self.obj, self.fs)
         del self.obj
-        self.assertNotIn(SomeClass('F'), self.fs)
+        self.assertNotIn(ustr('F'), self.fs)
 
     def test_union(self):
         u = self.s.union(self.items2)
@@ -226,7 +207,7 @@ class TestWeakSet(unittest.TestCase):
         self.assertNotEqual(id(self.s), id(dup))
 
     def test_add(self):
-        x = SomeClass('Q')
+        x = ustr('Q')
         self.s.add(x)
         self.assertIn(x, self.s)
         dup = self.s.copy()
@@ -239,14 +220,14 @@ class TestWeakSet(unittest.TestCase):
         self.assertTrue(len(self.fs) == 1)
 
     def test_remove(self):
-        x = SomeClass('a')
+        x = ustr('a')
         self.s.remove(x)
         self.assertNotIn(x, self.s)
         self.assertRaises(KeyError, self.s.remove, x)
         self.assertRaises(TypeError, self.s.remove, [])
 
     def test_discard(self):
-        a, q = SomeClass('a'), SomeClass('Q')
+        a, q = ustr('a'), ustr('Q')
         self.s.discard(a)
         self.assertNotIn(a, self.s)
         self.s.discard(q)
@@ -349,6 +330,7 @@ class TestWeakSet(unittest.TestCase):
         self.assertFalse(self.s == set(self.items))
         self.assertFalse(self.s == list(self.items))
         self.assertFalse(self.s == tuple(self.items))
+        self.assertFalse(self.s == WeakSet([Foo]))
         self.assertFalse(self.s == 1)
 
     def test_ne(self):
@@ -360,7 +342,7 @@ class TestWeakSet(unittest.TestCase):
     def test_weak_destroy_while_iterating(self):
         # Issue #7105: iterators shouldn't crash when a key is implicitly removed
         # Create new items to be sure no-one else holds a reference
-        items = [SomeClass(c) for c in ('a', 'b', 'c')]
+        items = [ustr(c) for c in ('a', 'b', 'c')]
         s = WeakSet(items)
         it = iter(s)
         next(it)             # Trigger internal iteration
@@ -375,15 +357,20 @@ class TestWeakSet(unittest.TestCase):
 
     def test_weak_destroy_and_mutate_while_iterating(self):
         # Issue #7105: iterators shouldn't crash when a key is implicitly removed
-        items = [SomeClass(c) for c in string.ascii_letters]
+        items = [ustr(c) for c in string.ascii_letters]
         s = WeakSet(items)
         @contextlib.contextmanager
         def testcontext():
             try:
                 it = iter(s)
-                next(it)
+                # Start iterator
+                yielded = ustr(str(next(it)))
                 # Schedule an item for removal and recreate it
-                u = SomeClass(str(items.pop()))
+                u = ustr(str(items.pop()))
+                if yielded == u:
+                    # The iterator still has a reference to the removed item,
+                    # advance it (issue #20006).
+                    next(it)
                 gc.collect()      # just in case
                 yield u
             finally:
@@ -448,9 +435,13 @@ class TestWeakSet(unittest.TestCase):
             self.assertGreaterEqual(n2, 0)
             self.assertLessEqual(n2, n1)
 
+    def test_repr(self):
+        assert repr(self.s) == repr(self.s.data)
 
-def test_main(verbose=None):
-    test_support.run_unittest(TestWeakSet)
+    def test_abc(self):
+        self.assertIsInstance(self.s, Set)
+        self.assertIsInstance(self.s, MutableSet)
+
 
 if __name__ == "__main__":
-    test_main(verbose=True)
+    unittest.main()

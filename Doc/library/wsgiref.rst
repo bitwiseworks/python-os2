@@ -3,11 +3,11 @@
 
 .. module:: wsgiref
    :synopsis: WSGI Utilities and Reference Implementation.
+
 .. moduleauthor:: Phillip J. Eby <pje@telecommunity.com>
 .. sectionauthor:: Phillip J. Eby <pje@telecommunity.com>
 
-
-.. versionadded:: 2.5
+--------------
 
 The Web Server Gateway Interface (WSGI) is a standard interface between web
 server software and web applications written in Python. Having a standard
@@ -24,10 +24,10 @@ be used to add WSGI support to a web server or framework.  It provides utilities
 for manipulating WSGI environment variables and response headers, base classes
 for implementing WSGI servers, a demo HTTP server that serves WSGI applications,
 and a validation tool that checks WSGI servers and applications for conformance
-to the WSGI specification (:pep:`333`).
+to the WSGI specification (:pep:`3333`).
 
-See http://www.wsgi.org for more information about WSGI, and links to tutorials
-and other resources.
+See `wsgi.readthedocs.io <https://wsgi.readthedocs.io/>`_ for more information about WSGI, and links
+to tutorials and other resources.
 
 .. XXX If you're just trying to write a web application...
 
@@ -41,9 +41,9 @@ and other resources.
 
 This module provides a variety of utility functions for working with WSGI
 environments.  A WSGI environment is a dictionary containing HTTP request
-variables as described in :pep:`333`.  All of the functions taking an *environ*
+variables as described in :pep:`3333`.  All of the functions taking an *environ*
 parameter expect a WSGI-compliant dictionary to be supplied; please see
-:pep:`333` for a detailed specification.
+:pep:`3333` for a detailed specification.
 
 
 .. function:: guess_scheme(environ)
@@ -54,15 +54,15 @@ parameter expect a WSGI-compliant dictionary to be supplied; please see
 
    This function is useful when creating a gateway that wraps CGI or a CGI-like
    protocol such as FastCGI.  Typically, servers providing such protocols will
-   include a ``HTTPS`` variable with a value of "1" "yes", or "on" when a request
+   include a ``HTTPS`` variable with a value of "1", "yes", or "on" when a request
    is received via SSL.  So, this function returns "https" if such a value is
    found, and "http" otherwise.
 
 
-.. function:: request_uri(environ, include_query=1)
+.. function:: request_uri(environ, include_query=True)
 
    Return the full request URI, optionally including the query string, using the
-   algorithm found in the "URL Reconstruction" section of :pep:`333`.  If
+   algorithm found in the "URL Reconstruction" section of :pep:`3333`.  If
    *include_query* is false, the query string is not included in the resulting URI.
 
 
@@ -106,7 +106,7 @@ parameter expect a WSGI-compliant dictionary to be supplied; please see
 
    This routine adds various parameters required for WSGI, including ``HTTP_HOST``,
    ``SERVER_NAME``, ``SERVER_PORT``, ``REQUEST_METHOD``, ``SCRIPT_NAME``,
-   ``PATH_INFO``, and all of the :pep:`333`\ -defined ``wsgi.*`` variables.  It
+   ``PATH_INFO``, and all of the :pep:`3333`\ -defined ``wsgi.*`` variables.  It
    only supplies default values, and does not replace any existing settings for
    these variables.
 
@@ -125,17 +125,17 @@ parameter expect a WSGI-compliant dictionary to be supplied; please see
           setup_testing_defaults(environ)
 
           status = '200 OK'
-          headers = [('Content-type', 'text/plain')]
+          headers = [('Content-type', 'text/plain; charset=utf-8')]
 
           start_response(status, headers)
 
-          ret = ["%s: %s\n" % (key, value)
-                 for key, value in environ.iteritems()]
+          ret = [("%s: %s\n" % (key, value)).encode("utf-8")
+                 for key, value in environ.items()]
           return ret
 
-      httpd = make_server('', 8000, simple_app)
-      print "Serving on port 8000..."
-      httpd.serve_forever()
+      with make_server('', 8000, simple_app) as httpd:
+          print("Serving on port 8000...")
+          httpd.serve_forever()
 
 
 In addition to the environment functions above, the :mod:`wsgiref.util` module
@@ -144,7 +144,7 @@ also provides these miscellaneous utilities:
 
 .. function:: is_hop_by_hop(header_name)
 
-   Return true if 'header_name' is an HTTP/1.1 "Hop-by-Hop" header, as defined by
+   Return ``True`` if 'header_name' is an HTTP/1.1 "Hop-by-Hop" header, as defined by
    :rfc:`2616`.
 
 
@@ -154,8 +154,8 @@ also provides these miscellaneous utilities:
    support both :meth:`__getitem__` and :meth:`__iter__` iteration styles, for
    compatibility with Python 2.1 and Jython. As the object is iterated over, the
    optional *blksize* parameter will be repeatedly passed to the *filelike*
-   object's :meth:`read` method to obtain strings to yield.  When :meth:`read`
-   returns an empty string, iteration is ended and is not resumable.
+   object's :meth:`read` method to obtain bytestrings to yield.  When :meth:`read`
+   returns an empty bytestring, iteration is ended and is not resumable.
 
    If *filelike* has a :meth:`close` method, the returned object will also have a
    :meth:`close` method, and it will invoke the *filelike* object's :meth:`close`
@@ -163,7 +163,7 @@ also provides these miscellaneous utilities:
 
    Example usage::
 
-      from StringIO import StringIO
+      from io import StringIO
       from wsgiref.util import FileWrapper
 
       # We're using a StringIO-buffer for as the file-like object
@@ -171,8 +171,10 @@ also provides these miscellaneous utilities:
       wrapper = FileWrapper(filelike, blksize=5)
 
       for chunk in wrapper:
-          print chunk
+          print(chunk)
 
+   .. deprecated:: 3.8
+      Support for :meth:`sequence protocol <__getitem__>` is deprecated.
 
 
 :mod:`wsgiref.headers` -- WSGI response header tools
@@ -186,16 +188,15 @@ This module provides a single class, :class:`Headers`, for convenient
 manipulation of WSGI response headers using a mapping-like interface.
 
 
-.. class:: Headers(headers)
+.. class:: Headers([headers])
 
    Create a mapping-like object wrapping *headers*, which must be a list of header
-   name/value tuples as described in :pep:`333`.  Any changes made to the new
-   :class:`Headers` object will directly update the *headers* list it was created
-   with.
+   name/value tuples as described in :pep:`3333`. The default value of *headers* is
+   an empty list.
 
    :class:`Headers` objects support typical mapping operations including
    :meth:`__getitem__`, :meth:`get`, :meth:`__setitem__`, :meth:`setdefault`,
-   :meth:`__delitem__`, :meth:`__contains__` and :meth:`has_key`.  For each of
+   :meth:`__delitem__` and :meth:`__contains__`.  For each of
    these methods, the key is the header name (treated case-insensitively), and the
    value is the first value associated with that header name.  Setting a header
    deletes any existing values for that header, then adds a new value at the end of
@@ -214,11 +215,11 @@ manipulation of WSGI response headers using a mapping-like interface.
    :meth:`items`, which is the same as the length of the wrapped header list.  In
    fact, the :meth:`items` method just returns a copy of the wrapped header list.
 
-   Calling ``str()`` on a :class:`Headers` object returns a formatted string
+   Calling ``bytes()`` on a :class:`Headers` object returns a formatted bytestring
    suitable for transmission as HTTP response headers.  Each header is placed on a
    line with its value, separated by a colon and a space. Each line is terminated
-   by a carriage return and line feed, and the string is terminated with a blank
-   line.
+   by a carriage return and line feed, and the bytestring is terminated with a
+   blank line.
 
    In addition to their mapping interface and formatting features, :class:`Headers`
    objects also have the following methods for querying and adding multi-valued
@@ -255,6 +256,10 @@ manipulation of WSGI response headers using a mapping-like interface.
          Content-Disposition: attachment; filename="bud.gif"
 
 
+   .. versionchanged:: 3.5
+      *headers* parameter is optional.
+
+
 :mod:`wsgiref.simple_server` -- a simple WSGI HTTP server
 ---------------------------------------------------------
 
@@ -262,7 +267,7 @@ manipulation of WSGI response headers using a mapping-like interface.
    :synopsis: A simple WSGI HTTP server.
 
 
-This module implements a simple HTTP server (based on :mod:`BaseHTTPServer`)
+This module implements a simple HTTP server (based on :mod:`http.server`)
 that serves WSGI applications.  Each server instance serves a single WSGI
 application on a given host and port.  If you want to serve multiple
 applications on a single host and port, you should create a WSGI application
@@ -276,20 +281,20 @@ request.  (E.g., using the :func:`shift_path_info` function from
    Create a new WSGI server listening on *host* and *port*, accepting connections
    for *app*.  The return value is an instance of the supplied *server_class*, and
    will process requests using the specified *handler_class*.  *app* must be a WSGI
-   application object, as defined by :pep:`333`.
+   application object, as defined by :pep:`3333`.
 
    Example usage::
 
       from wsgiref.simple_server import make_server, demo_app
 
-      httpd = make_server('', 8000, demo_app)
-      print "Serving HTTP on port 8000..."
+      with make_server('', 8000, demo_app) as httpd:
+          print("Serving HTTP on port 8000...")
 
-      # Respond to requests until process is killed
-      httpd.serve_forever()
+          # Respond to requests until process is killed
+          httpd.serve_forever()
 
-      # Alternative: serve one request, then exit
-      httpd.handle_request()
+          # Alternative: serve one request, then exit
+          httpd.handle_request()
 
 
 .. function:: demo_app(environ, start_response)
@@ -305,13 +310,13 @@ request.  (E.g., using the :func:`shift_path_info` function from
 
    Create a :class:`WSGIServer` instance.  *server_address* should be a
    ``(host,port)`` tuple, and *RequestHandlerClass* should be the subclass of
-   :class:`BaseHTTPServer.BaseHTTPRequestHandler` that will be used to process
+   :class:`http.server.BaseHTTPRequestHandler` that will be used to process
    requests.
 
    You do not normally need to call this constructor, as the :func:`make_server`
    function can handle all the details for you.
 
-   :class:`WSGIServer` is a subclass of :class:`BaseHTTPServer.HTTPServer`, so all
+   :class:`WSGIServer` is a subclass of :class:`http.server.HTTPServer`, so all
    of its methods (such as :meth:`serve_forever` and :meth:`handle_request`) are
    available. :class:`WSGIServer` also provides these WSGI-specific methods:
 
@@ -350,7 +355,7 @@ request.  (E.g., using the :func:`shift_path_info` function from
       :attr:`base_environ` dictionary attribute and then adds various headers derived
       from the HTTP request.  Each call to this method should return a new dictionary
       containing all of the relevant CGI environment variables as specified in
-      :pep:`333`.
+      :pep:`3333`.
 
 
    .. method:: WSGIRequestHandler.get_stderr()
@@ -380,7 +385,7 @@ application objects that validate communications between a WSGI server or
 gateway and a WSGI application object, to check both sides for protocol
 conformance.
 
-Note that this utility does not guarantee complete :pep:`333` compliance; an
+Note that this utility does not guarantee complete :pep:`3333` compliance; an
 absence of errors from this module does not necessarily mean that errors do not
 exist.  However, if this module does produce an error, then it is virtually
 certain that either the server or application is not 100% compliant.
@@ -394,7 +399,7 @@ Paste" library.
    Wrap *application* and return a new WSGI application object.  The returned
    application will forward all requests to the original *application*, and will
    check that both the *application* and the server invoking it are conforming to
-   the WSGI specification and to RFC 2616.
+   the WSGI specification and to :rfc:`2616`.
 
    Any detected nonconformance results in an :exc:`AssertionError` being raised;
    note, however, that how these errors are handled is server-dependent.  For
@@ -405,7 +410,7 @@ Paste" library.
 
    This wrapper may also generate output using the :mod:`warnings` module to
    indicate behaviors that are questionable but which may not actually be
-   prohibited by :pep:`333`.  Unless they are suppressed using Python command-line
+   prohibited by :pep:`3333`.  Unless they are suppressed using Python command-line
    options or the :mod:`warnings` API, any such warnings will be written to
    ``sys.stderr`` (*not* ``wsgi.errors``, unless they happen to be the same
    object).
@@ -418,20 +423,20 @@ Paste" library.
       # Our callable object which is intentionally not compliant to the
       # standard, so the validator is going to break
       def simple_app(environ, start_response):
-          status = '200 OK' # HTTP Status
-          headers = [('Content-type', 'text/plain')] # HTTP Headers
+          status = '200 OK'  # HTTP Status
+          headers = [('Content-type', 'text/plain')]  # HTTP Headers
           start_response(status, headers)
 
           # This is going to break because we need to return a list, and
           # the validator is going to inform us
-          return "Hello World"
+          return b"Hello World"
 
       # This is the application wrapped in a validator
       validator_app = validator(simple_app)
 
-      httpd = make_server('', 8000, validator_app)
-      print "Listening on port 8000...."
-      httpd.serve_forever()
+      with make_server('', 8000, validator_app) as httpd:
+          print("Listening on port 8000....")
+          httpd.serve_forever()
 
 
 :mod:`wsgiref.handlers` -- server/gateway base classes
@@ -460,6 +465,32 @@ input, output, and error streams.
    environment.
 
 
+.. class:: IISCGIHandler()
+
+   A specialized alternative to :class:`CGIHandler`, for use when deploying on
+   Microsoft's IIS web server, without having set the config allowPathInfo
+   option (IIS>=7) or metabase allowPathInfoForScriptMappings (IIS<7).
+
+   By default, IIS gives a ``PATH_INFO`` that duplicates the ``SCRIPT_NAME`` at
+   the front, causing problems for WSGI applications that wish to implement
+   routing. This handler strips any such duplicated path.
+
+   IIS can be configured to pass the correct ``PATH_INFO``, but this causes
+   another bug where ``PATH_TRANSLATED`` is wrong. Luckily this variable is
+   rarely used and is not guaranteed by WSGI. On IIS<7, though, the
+   setting can only be made on a vhost level, affecting all other script
+   mappings, many of which break when exposed to the ``PATH_TRANSLATED`` bug.
+   For this reason IIS<7 is almost never deployed with the fix (Even IIS7
+   rarely uses it because there is still no UI for it.).
+
+   There is no way for CGI code to tell whether the option was set, so a
+   separate handler class is provided.  It is used in the same way as
+   :class:`CGIHandler`, i.e., by calling ``IISCGIHandler().run(app)``, where
+   ``app`` is the WSGI application object you wish to invoke.
+
+   .. versionadded:: 3.2
+
+
 .. class:: BaseCGIHandler(stdin, stdout, stderr, environ, multithread=True, multiprocess=False)
 
    Similar to :class:`CGIHandler`, but instead of using the :mod:`sys` and
@@ -479,7 +510,7 @@ input, output, and error streams.
 
    Similar to :class:`BaseCGIHandler`, but designed for use with HTTP origin
    servers.  If you are writing an HTTP server implementation, you will probably
-   want to subclass this instead of :class:`BaseCGIHandler`
+   want to subclass this instead of :class:`BaseCGIHandler`.
 
    This class is a subclass of :class:`BaseHandler`.  It overrides the
    :meth:`__init__`, :meth:`get_stdin`, :meth:`get_stderr`, :meth:`add_cgi_vars`,
@@ -487,6 +518,9 @@ input, output, and error streams.
    environment and streams via the constructor.  The supplied environment and
    streams are stored in the :attr:`stdin`, :attr:`stdout`, :attr:`stderr`, and
    :attr:`environ` attributes.
+
+   The :meth:`~io.BufferedIOBase.write` method of *stdout* should write
+   each chunk in full, like :class:`io.BufferedIOBase`.
 
 
 .. class:: BaseHandler()
@@ -511,7 +545,7 @@ input, output, and error streams.
 
    .. method:: BaseHandler._write(data)
 
-      Buffer the string *data* for transmission to the client.  It's okay if this
+      Buffer the bytes *data* for transmission to the client.  It's okay if this
       method actually transmits the data; :class:`BaseHandler` just separates write
       and flush operations for greater efficiency when the underlying system actually
       has such a distinction.
@@ -587,6 +621,9 @@ input, output, and error streams.
       as :class:`BaseCGIHandler` and :class:`CGIHandler`) that are not HTTP origin
       servers.
 
+      .. versionchanged:: 3.3
+         The term "Python" is replaced with implementation specific term like
+         "CPython", "Jython" etc.
 
    .. method:: BaseHandler.get_scheme()
 
@@ -630,7 +667,7 @@ input, output, and error streams.
 
       This method can access the current error information using ``sys.exc_info()``,
       and should pass that information to *start_response* when calling it (as
-      described in the "Error Handling" section of :pep:`333`).
+      described in the "Error Handling" section of :pep:`3333`).
 
       The default implementation just uses the :attr:`error_status`,
       :attr:`error_headers`, and :attr:`error_body` attributes to generate an output
@@ -645,30 +682,30 @@ input, output, and error streams.
    .. attribute:: BaseHandler.error_status
 
       The HTTP status used for error responses.  This should be a status string as
-      defined in :pep:`333`; it defaults to a 500 code and message.
+      defined in :pep:`3333`; it defaults to a 500 code and message.
 
 
    .. attribute:: BaseHandler.error_headers
 
       The HTTP headers used for error responses.  This should be a list of WSGI
-      response headers (``(name, value)`` tuples), as described in :pep:`333`.  The
+      response headers (``(name, value)`` tuples), as described in :pep:`3333`.  The
       default list just sets the content type to ``text/plain``.
 
 
    .. attribute:: BaseHandler.error_body
 
-      The error response body.  This should be an HTTP response body string. It
+      The error response body.  This should be an HTTP response body bytestring. It
       defaults to the plain text, "A server error occurred.  Please contact the
       administrator."
 
-   Methods and attributes for :pep:`333`'s "Optional Platform-Specific File
+   Methods and attributes for :pep:`3333`'s "Optional Platform-Specific File
    Handling" feature:
 
 
    .. attribute:: BaseHandler.wsgi_file_wrapper
 
       A ``wsgi.file_wrapper`` factory, or ``None``.  The default value of this
-      attribute is the :class:`FileWrapper` class from :mod:`wsgiref.util`.
+      attribute is the :class:`wsgiref.util.FileWrapper` class.
 
 
    .. method:: BaseHandler.sendfile()
@@ -700,6 +737,24 @@ input, output, and error streams.
       version of the response set to the client.  It defaults to ``"1.0"``.
 
 
+.. function:: read_environ()
+
+   Transcode CGI variables from ``os.environ`` to :pep:`3333` "bytes in unicode"
+   strings, returning a new dictionary.  This function is used by
+   :class:`CGIHandler` and :class:`IISCGIHandler` in place of directly using
+   ``os.environ``, which is not necessarily WSGI-compliant on all platforms
+   and web servers using Python 3 -- specifically, ones where the OS's
+   actual environment is Unicode (i.e. Windows), or ones where the environment
+   is bytes, but the system encoding used by Python to decode it is anything
+   other than ISO-8859-1 (e.g. Unix systems using UTF-8).
+
+   If you are implementing a CGI-based handler of your own, you probably want
+   to use this routine instead of just copying values out of ``os.environ``
+   directly.
+
+   .. versionadded:: 3.2
+
+
 Examples
 --------
 
@@ -711,18 +766,24 @@ This is a working "Hello World" WSGI application::
    # object that accepts two arguments. For that purpose, we're going to
    # use a function (note that you're not limited to a function, you can
    # use a class for example). The first argument passed to the function
-   # is a dictionary containing CGI-style envrironment variables and the
-   # second variable is the callable object (see PEP 333).
+   # is a dictionary containing CGI-style environment variables and the
+   # second variable is the callable object.
    def hello_world_app(environ, start_response):
-       status = '200 OK' # HTTP Status
-       headers = [('Content-type', 'text/plain')] # HTTP Headers
+       status = '200 OK'  # HTTP Status
+       headers = [('Content-type', 'text/plain; charset=utf-8')]  # HTTP Headers
        start_response(status, headers)
 
        # The returned object is going to be printed
-       return ["Hello World"]
+       return [b"Hello World"]
 
-   httpd = make_server('', 8000, hello_world_app)
-   print "Serving on port 8000..."
+   with make_server('', 8000, hello_world_app) as httpd:
+       print("Serving on port 8000...")
 
-   # Serve until process is killed
-   httpd.serve_forever()
+       # Serve until process is killed
+       httpd.serve_forever()
+
+
+Example of a WSGI application serving the current directory, accept optional
+directory and port number (default: 8000) on the command line:
+
+.. literalinclude:: ../../Tools/scripts/serve.py

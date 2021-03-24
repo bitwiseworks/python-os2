@@ -1,7 +1,7 @@
-#-*- coding: ISO-8859-1 -*-
+#-*- coding: iso-8859-1 -*-
 # pysqlite2/test/types.py: tests for type conversion and detection
 #
-# Copyright (C) 2005-2007 Gerhard Häring <gh@ghaering.de>
+# Copyright (C) 2005 Gerhard Häring <gh@ghaering.de>
 #
 # This file is part of pysqlite.
 #
@@ -41,10 +41,10 @@ class SqliteTypeTests(unittest.TestCase):
         self.con.close()
 
     def CheckString(self):
-        self.cur.execute("insert into test(s) values (?)", (u"Österreich",))
+        self.cur.execute("insert into test(s) values (?)", ("Österreich",))
         self.cur.execute("select s from test")
         row = self.cur.fetchone()
-        self.assertEqual(row[0], u"Österreich")
+        self.assertEqual(row[0], "Österreich")
 
     def CheckSmallInt(self):
         self.cur.execute("insert into test(i) values (?)", (42,))
@@ -67,56 +67,31 @@ class SqliteTypeTests(unittest.TestCase):
         self.assertEqual(row[0], val)
 
     def CheckBlob(self):
-        val = buffer("Guglhupf")
+        sample = b"Guglhupf"
+        val = memoryview(sample)
         self.cur.execute("insert into test(b) values (?)", (val,))
         self.cur.execute("select b from test")
         row = self.cur.fetchone()
-        self.assertEqual(row[0], val)
+        self.assertEqual(row[0], sample)
 
     def CheckUnicodeExecute(self):
-        self.cur.execute(u"select 'Österreich'")
+        self.cur.execute("select 'Österreich'")
         row = self.cur.fetchone()
-        self.assertEqual(row[0], u"Österreich")
-
-    def CheckNonUtf8_Default(self):
-        try:
-            self.cur.execute("select ?", (chr(150),))
-            self.fail("should have raised a ProgrammingError")
-        except sqlite.ProgrammingError:
-            pass
-
-    def CheckNonUtf8_TextFactoryString(self):
-        orig_text_factory = self.con.text_factory
-        try:
-            self.con.text_factory = str
-            self.cur.execute("select ?", (chr(150),))
-        finally:
-            self.con.text_factory = orig_text_factory
-
-    def CheckNonUtf8_TextFactoryOptimizedUnicode(self):
-        orig_text_factory = self.con.text_factory
-        try:
-            try:
-                self.con.text_factory = sqlite.OptimizedUnicode
-                self.cur.execute("select ?", (chr(150),))
-                self.fail("should have raised a ProgrammingError")
-            except sqlite.ProgrammingError:
-                pass
-        finally:
-            self.con.text_factory = orig_text_factory
+        self.assertEqual(row[0], "Österreich")
 
 class DeclTypesTests(unittest.TestCase):
     class Foo:
         def __init__(self, _val):
+            if isinstance(_val, bytes):
+                # sqlite3 always calls __init__ with a bytes created from a
+                # UTF-8 string when __conform__ was used to store the object.
+                _val = _val.decode('utf-8')
             self.val = _val
 
-        def __cmp__(self, other):
+        def __eq__(self, other):
             if not isinstance(other, DeclTypesTests.Foo):
-                raise ValueError
-            if self.val == other.val:
-                return 0
-            else:
-                return 1
+                return NotImplemented
+            return self.val == other.val
 
         def __conform__(self, protocol):
             if protocol is sqlite.PrepareProtocol:
@@ -127,10 +102,16 @@ class DeclTypesTests(unittest.TestCase):
         def __str__(self):
             return "<%s>" % self.val
 
+    class BadConform:
+        def __init__(self, exc):
+            self.exc = exc
+        def __conform__(self, protocol):
+            raise self.exc
+
     def setUp(self):
         self.con = sqlite.connect(":memory:", detect_types=sqlite.PARSE_DECLTYPES)
         self.cur = self.con.cursor()
-        self.cur.execute("create table test(i int, s str, f float, b bool, u unicode, foo foo, bin blob, n1 number, n2 number(5))")
+        self.cur.execute("create table test(i int, s str, f float, b bool, u unicode, foo foo, bin blob, n1 number, n2 number(5), bad bad)")
 
         # override float, make them always return the same number
         sqlite.converters["FLOAT"] = lambda x: 47.2
@@ -138,6 +119,7 @@ class DeclTypesTests(unittest.TestCase):
         # and implement two custom ones
         sqlite.converters["BOOL"] = lambda x: bool(int(x))
         sqlite.converters["FOO"] = DeclTypesTests.Foo
+        sqlite.converters["BAD"] = DeclTypesTests.BadConform
         sqlite.converters["WRONG"] = lambda x: "WRONG"
         sqlite.converters["NUMBER"] = float
 
@@ -145,6 +127,8 @@ class DeclTypesTests(unittest.TestCase):
         del sqlite.converters["FLOAT"]
         del sqlite.converters["BOOL"]
         del sqlite.converters["FOO"]
+        del sqlite.converters["BAD"]
+        del sqlite.converters["WRONG"]
         del sqlite.converters["NUMBER"]
         self.cur.close()
         self.con.close()
@@ -184,17 +168,17 @@ class DeclTypesTests(unittest.TestCase):
         self.cur.execute("insert into test(b) values (?)", (False,))
         self.cur.execute("select b from test")
         row = self.cur.fetchone()
-        self.assertEqual(row[0], False)
+        self.assertIs(row[0], False)
 
         self.cur.execute("delete from test")
         self.cur.execute("insert into test(b) values (?)", (True,))
         self.cur.execute("select b from test")
         row = self.cur.fetchone()
-        self.assertEqual(row[0], True)
+        self.assertIs(row[0], True)
 
     def CheckUnicode(self):
         # default
-        val = u"\xd6sterreich"
+        val = "\xd6sterreich"
         self.cur.execute("insert into test(u) values (?)", (val,))
         self.cur.execute("select u from test")
         row = self.cur.fetchone()
@@ -207,35 +191,39 @@ class DeclTypesTests(unittest.TestCase):
         row = self.cur.fetchone()
         self.assertEqual(row[0], val)
 
+    def CheckErrorInConform(self):
+        val = DeclTypesTests.BadConform(TypeError)
+        with self.assertRaises(sqlite.InterfaceError):
+            self.cur.execute("insert into test(bad) values (?)", (val,))
+        with self.assertRaises(sqlite.InterfaceError):
+            self.cur.execute("insert into test(bad) values (:val)", {"val": val})
+
+        val = DeclTypesTests.BadConform(KeyboardInterrupt)
+        with self.assertRaises(KeyboardInterrupt):
+            self.cur.execute("insert into test(bad) values (?)", (val,))
+        with self.assertRaises(KeyboardInterrupt):
+            self.cur.execute("insert into test(bad) values (:val)", {"val": val})
+
     def CheckUnsupportedSeq(self):
         class Bar: pass
         val = Bar()
-        try:
+        with self.assertRaises(sqlite.InterfaceError):
             self.cur.execute("insert into test(f) values (?)", (val,))
-            self.fail("should have raised an InterfaceError")
-        except sqlite.InterfaceError:
-            pass
-        except:
-            self.fail("should have raised an InterfaceError")
 
     def CheckUnsupportedDict(self):
         class Bar: pass
         val = Bar()
-        try:
+        with self.assertRaises(sqlite.InterfaceError):
             self.cur.execute("insert into test(f) values (:val)", {"val": val})
-            self.fail("should have raised an InterfaceError")
-        except sqlite.InterfaceError:
-            pass
-        except:
-            self.fail("should have raised an InterfaceError")
 
     def CheckBlob(self):
         # default
-        val = buffer("Guglhupf")
+        sample = b"Guglhupf"
+        val = memoryview(sample)
         self.cur.execute("insert into test(bin) values (?)", (val,))
         self.cur.execute("select bin from test")
         row = self.cur.fetchone()
-        self.assertEqual(row[0], val)
+        self.assertEqual(row[0], sample)
 
     def CheckNumber1(self):
         self.cur.execute("insert into test(n1) values (5)")
@@ -256,9 +244,9 @@ class ColNamesTests(unittest.TestCase):
         self.cur = self.con.cursor()
         self.cur.execute("create table test(x foo)")
 
-        sqlite.converters["FOO"] = lambda x: "[%s]" % x
-        sqlite.converters["BAR"] = lambda x: "<%s>" % x
-        sqlite.converters["EXC"] = lambda x: 5 // 0
+        sqlite.converters["FOO"] = lambda x: "[%s]" % x.decode("ascii")
+        sqlite.converters["BAR"] = lambda x: "<%s>" % x.decode("ascii")
+        sqlite.converters["EXC"] = lambda x: 5/0
         sqlite.converters["B1B1"] = lambda x: "MARKER"
 
     def tearDown(self):
@@ -287,16 +275,16 @@ class ColNamesTests(unittest.TestCase):
 
     def CheckColName(self):
         self.cur.execute("insert into test(x) values (?)", ("xxx",))
-        self.cur.execute('select x as "x [bar]" from test')
+        self.cur.execute('select x as "x y [bar]" from test')
         val = self.cur.fetchone()[0]
         self.assertEqual(val, "<xxx>")
 
         # Check if the stripping of colnames works. Everything after the first
-        # whitespace should be stripped.
-        self.assertEqual(self.cur.description[0][0], "x")
+        # '[' (and the preceeding space) should be stripped.
+        self.assertEqual(self.cur.description[0][0], "x y")
 
     def CheckCaseInConverterName(self):
-        self.cur.execute("""select 'other' as "x [b1b1]\"""")
+        self.cur.execute("select 'other' as \"x [b1b1]\"")
         val = self.cur.fetchone()[0]
         self.assertEqual(val, "MARKER")
 
@@ -307,6 +295,45 @@ class ColNamesTests(unittest.TestCase):
         """
         self.cur.execute("select * from test where 0 = 1")
         self.assertEqual(self.cur.description[0][0], "x")
+
+    def CheckCursorDescriptionInsert(self):
+        self.cur.execute("insert into test values (1)")
+        self.assertIsNone(self.cur.description)
+
+
+@unittest.skipIf(sqlite.sqlite_version_info < (3, 8, 3), "CTEs not supported")
+class CommonTableExpressionTests(unittest.TestCase):
+
+    def setUp(self):
+        self.con = sqlite.connect(":memory:")
+        self.cur = self.con.cursor()
+        self.cur.execute("create table test(x foo)")
+
+    def tearDown(self):
+        self.cur.close()
+        self.con.close()
+
+    def CheckCursorDescriptionCTESimple(self):
+        self.cur.execute("with one as (select 1) select * from one")
+        self.assertIsNotNone(self.cur.description)
+        self.assertEqual(self.cur.description[0][0], "1")
+
+    def CheckCursorDescriptionCTESMultipleColumns(self):
+        self.cur.execute("insert into test values(1)")
+        self.cur.execute("insert into test values(2)")
+        self.cur.execute("with testCTE as (select * from test) select * from testCTE")
+        self.assertIsNotNone(self.cur.description)
+        self.assertEqual(self.cur.description[0][0], "x")
+
+    def CheckCursorDescriptionCTE(self):
+        self.cur.execute("insert into test values (1)")
+        self.cur.execute("with bar as (select * from test) select * from test where x = 1")
+        self.assertIsNotNone(self.cur.description)
+        self.assertEqual(self.cur.description[0][0], "x")
+        self.cur.execute("with bar as (select * from test) select * from test where x = 2")
+        self.assertIsNotNone(self.cur.description)
+        self.assertEqual(self.cur.description[0][0], "x")
+
 
 class ObjectAdaptationTests(unittest.TestCase):
     def cast(obj):
@@ -346,8 +373,8 @@ class BinaryConverterTests(unittest.TestCase):
         self.con.close()
 
     def CheckBinaryInputForConverter(self):
-        testdata = "abcdefg" * 10
-        result = self.con.execute('select ? as "x [bin]"', (buffer(zlib.compress(testdata)),)).fetchone()[0]
+        testdata = b"abcdefg" * 10
+        result = self.con.execute('select ? as "x [bin]"', (memoryview(zlib.compress(testdata)),)).fetchone()[0]
         self.assertEqual(testdata, result)
 
 class DateTimeTests(unittest.TestCase):
@@ -374,13 +401,10 @@ class DateTimeTests(unittest.TestCase):
         ts2 = self.cur.fetchone()[0]
         self.assertEqual(ts, ts2)
 
+    @unittest.skipIf(sqlite.sqlite_version_info < (3, 1),
+                     'the date functions are available on 3.1 or later')
     def CheckSqlTimestamp(self):
-        # The date functions are only available in SQLite version 3.1 or later
-        if sqlite.sqlite_version_info < (3, 1):
-            return
-
-        # SQLite's current_timestamp uses UTC time, while datetime.datetime.now() uses local time.
-        now = datetime.datetime.now()
+        now = datetime.datetime.utcnow()
         self.cur.execute("insert into test(ts) values (current_timestamp)")
         self.cur.execute("select ts from test")
         ts = self.cur.fetchone()[0]
@@ -408,7 +432,8 @@ def suite():
     adaptation_suite = unittest.makeSuite(ObjectAdaptationTests, "Check")
     bin_suite = unittest.makeSuite(BinaryConverterTests, "Check")
     date_suite = unittest.makeSuite(DateTimeTests, "Check")
-    return unittest.TestSuite((sqlite_type_suite, decltypes_type_suite, colnames_type_suite, adaptation_suite, bin_suite, date_suite))
+    cte_suite = unittest.makeSuite(CommonTableExpressionTests, "Check")
+    return unittest.TestSuite((sqlite_type_suite, decltypes_type_suite, colnames_type_suite, adaptation_suite, bin_suite, date_suite, cte_suite))
 
 def test():
     runner = unittest.TextTestRunner()

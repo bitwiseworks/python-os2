@@ -10,4 +10,6 @@ cur = con.cursor()
 cur.execute("select * from people order by age")
 
 # Retrieve all rows as a sequence and print that sequence:
-print cur.fetchall()
+print(cur.fetchall())
+
+con.close()

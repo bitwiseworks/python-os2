@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """ Utility for parsing HTML entity definitions available from:
 
       http://www.w3.org/ as e.g.
@@ -13,9 +13,8 @@
 
 """
 import re,sys
-import TextTools
 
-entityRE = re.compile('<!ENTITY +(\w+) +CDATA +"([^"]+)" +-- +((?:.|\n)+?) *-->')
+entityRE = re.compile(r'<!ENTITY +(\w+) +CDATA +"([^"]+)" +-- +((?:.|\n)+?) *-->')
 
 def parse(text,pos=0,endpos=None):
 
@@ -35,30 +34,31 @@ def parse(text,pos=0,endpos=None):
 def writefile(f,defs):
 
     f.write("entitydefs = {\n")
-    items = defs.items()
-    items.sort()
-    for name,(charcode,comment) in items:
+    items = sorted(defs.items())
+    for name, (charcode,comment) in items:
         if charcode[:2] == '&#':
             code = int(charcode[2:-1])
             if code < 256:
-                charcode = "'\%o'" % code
+                charcode = r"'\%o'" % code
             else:
                 charcode = repr(charcode)
         else:
             charcode = repr(charcode)
-        comment = TextTools.collapse(comment)
+        comment = ' '.join(comment.split())
         f.write("    '%s':\t%s,  \t# %s\n" % (name,charcode,comment))
     f.write('\n}\n')
 
 if __name__ == '__main__':
     if len(sys.argv) > 1:
-        infile = open(sys.argv[1])
+        with open(sys.argv[1]) as infile:
+            text = infile.read()
     else:
-        infile = sys.stdin
-    if len(sys.argv) > 2:
-        outfile = open(sys.argv[2],'w')
-    else:
-        outfile = sys.stdout
-    text = infile.read()
+        text = sys.stdin.read()
+
     defs = parse(text)
-    writefile(outfile,defs)
+
+    if len(sys.argv) > 2:
+        with open(sys.argv[2],'w') as outfile:
+            writefile(outfile, defs)
+    else:
+        writefile(sys.stdout, defs)

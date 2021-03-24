@@ -1,8 +1,8 @@
 """Tests for distutils.command.bdist."""
 import os
 import unittest
-
-from test.test_support import run_unittest
+from test.support import run_unittest
+import warnings
 
 from distutils.command.bdist import bdist
 from distutils.tests import support
@@ -22,7 +22,7 @@ class BuildTestCase(support.TempdirManager,
 
         # what formats does bdist offer?
         formats = ['bztar', 'gztar', 'msi', 'rpm', 'tar',
-                   'wininst', 'zip', 'ztar']
+                   'wininst', 'xztar', 'zip', 'ztar']
         found = sorted(cmd.format_command)
         self.assertEqual(found, formats)
 
@@ -34,13 +34,18 @@ class BuildTestCase(support.TempdirManager,
         cmd.ensure_finalized()
         dist.command_obj['bdist'] = cmd
 
-        names = ['bdist_dumb', 'bdist_wininst']
-        # bdist_rpm does not support --skip-build
+        names = ['bdist_dumb', 'bdist_wininst']  # bdist_rpm does not support --skip-build
         if os.name == 'nt':
             names.append('bdist_msi')
 
         for name in names:
-            subcmd = cmd.get_finalized_command(name)
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore', 'bdist_wininst command is deprecated',
+                                        DeprecationWarning)
+                subcmd = cmd.get_finalized_command(name)
+            if getattr(subcmd, '_unsupported', False):
+                # command is not supported on this build
+                continue
             self.assertTrue(subcmd.skip_build,
                             '%s should take --skip-build from bdist' % name)
 

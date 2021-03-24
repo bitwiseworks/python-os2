@@ -15,6 +15,10 @@ con.executemany("insert into person(firstname, lastname) values (?, ?)", persons
 
 # Print the table contents
 for row in con.execute("select firstname, lastname from person"):
-    print row
+    print(row)
 
-print "I just deleted", con.execute("delete from person").rowcount, "rows"
+print("I just deleted", con.execute("delete from person").rowcount, "rows")
+
+# close is not a shortcut method and it's not called automatically,
+# so the connection object should be closed manually
+con.close()

@@ -1,12 +1,11 @@
-
 :mod:`parser` --- Access Python parse trees
 ===========================================
 
 .. module:: parser
    :synopsis: Access parse trees for Python source code.
+
 .. moduleauthor:: Fred L. Drake, Jr. <fdrake@acm.org>
 .. sectionauthor:: Fred L. Drake, Jr. <fdrake@acm.org>
-
 
 .. Copyright 1995 Virginia Polytechnic Institute and State University and Fred
    L. Drake, Jr.  This copyright notice must be distributed on all copies, but
@@ -17,6 +16,8 @@
 
 .. index:: single: parsing; Python source code
 
+--------------
+
 The :mod:`parser` module provides an interface to Python's internal parser and
 byte-code compiler.  The primary purpose for this interface is to allow Python
 code to edit the parse tree of a Python expression and create executable code
@@ -24,17 +25,11 @@ from this.  This is better than trying to parse and modify an arbitrary Python
 code fragment as a string because parsing is performed in a manner identical to
 the code forming the application.  It is also faster.
 
-.. note::
+.. warning::
 
-   From Python 2.5 onward, it's much more convenient to cut in at the Abstract
-   Syntax Tree (AST) generation and compilation stage, using the :mod:`ast`
-   module.
-
-   The :mod:`parser` module exports the names documented here also with "st"
-   replaced by "ast"; this is a legacy from the time when there was no other
-   AST and has nothing to do with the AST found in Python 2.5.  This is also the
-   reason for the functions' keyword arguments being called *ast*, not *st*.
-   The "ast" functions have been removed in Python 3.
+   The parser module is deprecated and will be removed in future versions of
+   Python. For the majority of use cases you can leverage the Abstract Syntax
+   Tree (AST) generation and compilation stage, using the :mod:`ast` module.
 
 There are a few things to note about this module which are important to making
 use of the data structures created.  This is not a tutorial on editing the parse
@@ -56,7 +51,8 @@ Python version to another as source text will always allow correct parse trees
 to be created in the target version, with the only restriction being that
 migrating to an older version of the interpreter will not support more recent
 language constructs.  The parse trees are not typically compatible from one
-version to another, whereas source code has always been forward-compatible.
+version to another, though source code has usually been forward-compatible within
+a major release series.
 
 Each element of the sequences returned by :func:`st2list` or :func:`st2tuple`
 has a simple form.  Sequences representing non-terminal elements in the grammar
@@ -68,7 +64,7 @@ of the production as recognized in the input string: these are always sequences
 which have the same form as the parent.  An important aspect of this structure
 which should be noted is that keywords used to identify the parent node type,
 such as the keyword :keyword:`if` in an :const:`if_stmt`, are included in the
-node tree without any special treatment.  For example, the :keyword:`if` keyword
+node tree without any special treatment.  For example, the :keyword:`!if` keyword
 is represented by the tuple ``(1, 'if')``, where ``1`` is the numeric value
 associated with all :const:`NAME` tokens, including variable and function names
 defined by the user.  In an alternate form returned when line number information
@@ -171,9 +167,9 @@ executable code objects.  Parse trees may be extracted with or without line
 numbering information.
 
 
-.. function:: st2list(ast[, line_info])
+.. function:: st2list(st, line_info=False, col_info=False)
 
-   This function accepts an ST object from the caller in *ast* and returns a
+   This function accepts an ST object from the caller in *st* and returns a
    Python list representing the equivalent parse tree.  The resulting list
    representation can be used for inspection or the creation of a new parse tree in
    list form.  This function does not fail so long as memory is available to build
@@ -189,9 +185,9 @@ numbering information.
    This information is omitted if the flag is false or omitted.
 
 
-.. function:: st2tuple(ast[, line_info])
+.. function:: st2tuple(st, line_info=False, col_info=False)
 
-   This function accepts an ST object from the caller in *ast* and returns a
+   This function accepts an ST object from the caller in *st* and returns a
    Python tuple representing the equivalent parse tree.  Other than returning a
    tuple instead of a list, this function is identical to :func:`st2list`.
 
@@ -200,16 +196,18 @@ numbering information.
    information is omitted if the flag is false or omitted.
 
 
-.. function:: compilest(ast, filename='<syntax-tree>')
+.. function:: compilest(st, filename='<syntax-tree>')
 
-   .. index:: builtin: eval
+   .. index::
+      builtin: exec
+      builtin: eval
 
    The Python byte compiler can be invoked on an ST object to produce code objects
-   which can be used as part of an :keyword:`exec` statement or a call to the
-   built-in :func:`eval` function. This function provides the interface to the
-   compiler, passing the internal parse tree from *ast* to the parser, using the
-   source file name specified by the *filename* parameter. The default value
-   supplied for *filename* indicates that the source was an ST object.
+   which can be used as part of a call to the built-in :func:`exec` or :func:`eval`
+   functions. This function provides the interface to the compiler, passing the
+   internal parse tree from *st* to the parser, using the source file name
+   specified by the *filename* parameter. The default value supplied for *filename*
+   indicates that the source was an ST object.
 
    Compiling an ST object may result in exceptions related to compilation; an
    example would be a :exc:`SyntaxError` caused by the parse tree for ``del f(0)``:
@@ -232,22 +230,22 @@ determine if an ST was created from source code via :func:`expr` or
 :func:`suite` or from a parse tree via :func:`sequence2st`.
 
 
-.. function:: isexpr(ast)
+.. function:: isexpr(st)
 
    .. index:: builtin: compile
 
-   When *ast* represents an ``'eval'`` form, this function returns true, otherwise
-   it returns false.  This is useful, since code objects normally cannot be queried
+   When *st* represents an ``'eval'`` form, this function returns ``True``, otherwise
+   it returns ``False``.  This is useful, since code objects normally cannot be queried
    for this information using existing built-in functions.  Note that the code
    objects created by :func:`compilest` cannot be queried like this either, and
    are identical to those created by the built-in :func:`compile` function.
 
 
-.. function:: issuite(ast)
+.. function:: issuite(st)
 
    This function mirrors :func:`isexpr` in that it reports whether an ST object
    represents an ``'exec'`` form, commonly known as a "suite."  It is not safe to
-   assume that this function is equivalent to ``not isexpr(ast)``, as additional
+   assume that this function is equivalent to ``not isexpr(st)``, as additional
    syntactic fragments may be supported in the future.
 
 
@@ -297,7 +295,7 @@ ST objects (using the :mod:`pickle` module) is also supported.
 ST objects have the following methods:
 
 
-.. method:: ST.compile([filename])
+.. method:: ST.compile(filename='<syntax-tree>')
 
    Same as ``compilest(st, filename)``.
 
@@ -312,14 +310,14 @@ ST objects have the following methods:
    Same as ``issuite(st)``.
 
 
-.. method:: ST.tolist([line_info])
+.. method:: ST.tolist(line_info=False, col_info=False)
 
-   Same as ``st2list(st, line_info)``.
+   Same as ``st2list(st, line_info, col_info)``.
 
 
-.. method:: ST.totuple([line_info])
+.. method:: ST.totuple(line_info=False, col_info=False)
 
-   Same as ``st2tuple(st, line_info)``.
+   Same as ``st2tuple(st, line_info, col_info)``.
 
 
 Example: Emulation of :func:`compile`

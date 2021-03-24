@@ -104,7 +104,7 @@ class BottomMatcher(object):
                 current_ast_node.was_checked = True
                 for child in current_ast_node.children:
                     # multiple statements, recheck
-                    if isinstance(child, pytree.Leaf) and child.value == u";":
+                    if isinstance(child, pytree.Leaf) and child.value == ";":
                         current_ast_node.was_checked = False
                         break
                 if current_ast_node.type == 1:
@@ -117,10 +117,7 @@ class BottomMatcher(object):
                     #token matches
                     current_ac_node = current_ac_node.transition_table[node_token]
                     for fixer in current_ac_node.fixers:
-                        if not fixer in results:
-                            results[fixer] = []
                         results[fixer].append(current_ast_node)
-
                 else:
                     #matching failed, reset automaton
                     current_ac_node = self.root
@@ -134,8 +131,6 @@ class BottomMatcher(object):
                         #token matches
                         current_ac_node = current_ac_node.transition_table[node_token]
                         for fixer in current_ac_node.fixers:
-                            if not fixer in results.keys():
-                                results[fixer] = []
                             results[fixer].append(current_ast_node)
 
                 current_ast_node = current_ast_node.parent

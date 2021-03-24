@@ -1,19 +1,19 @@
 import array
 import unittest
-from test.test_support import run_unittest, import_module, get_attribute
+from test.support import import_module, get_attribute
 import os, struct
 fcntl = import_module('fcntl')
 termios = import_module('termios')
 get_attribute(termios, 'TIOCGPGRP') #Can't run tests without this feature
 
 try:
-    tty = open("/dev/tty", "r")
-except IOError:
+    tty = open("/dev/tty", "rb")
+except OSError:
     raise unittest.SkipTest("Unable to open /dev/tty")
 else:
-    # Skip if another process is in foreground
-    r = fcntl.ioctl(tty, termios.TIOCGPGRP, "    ")
-    tty.close()
+    with tty:
+        # Skip if another process is in foreground
+        r = fcntl.ioctl(tty, termios.TIOCGPGRP, "    ")
     rpgrp = struct.unpack("i", r)[0]
     if rpgrp not in (os.getpgrp(), os.getsid(0)):
         raise unittest.SkipTest("Neither the process group nor the session "
@@ -30,10 +30,10 @@ class IoctlTests(unittest.TestCase):
         # If this process has been put into the background, TIOCGPGRP returns
         # the session ID instead of the process group id.
         ids = (os.getpgrp(), os.getsid(0))
-        tty = open("/dev/tty", "r")
-        r = fcntl.ioctl(tty, termios.TIOCGPGRP, "    ")
-        rpgrp = struct.unpack("i", r)[0]
-        self.assertIn(rpgrp, ids)
+        with open("/dev/tty", "rb") as tty:
+            r = fcntl.ioctl(tty, termios.TIOCGPGRP, "    ")
+            rpgrp = struct.unpack("i", r)[0]
+            self.assertIn(rpgrp, ids)
 
     def _check_ioctl_mutate_len(self, nbytes=None):
         buf = array.array('i')
@@ -47,8 +47,8 @@ class IoctlTests(unittest.TestCase):
             self.assertEqual(len(buf) * intsize, nbytes)   # sanity check
         else:
             buf.append(fill)
-        with open("/dev/tty", "r") as tty:
-            r = fcntl.ioctl(tty, termios.TIOCGPGRP, buf, 1)
+        with open("/dev/tty", "rb") as tty:
+            r = fcntl.ioctl(tty, termios.TIOCGPGRP, buf, True)
         rpgrp = buf[0]
         self.assertEqual(r, 0)
         self.assertIn(rpgrp, ids)
@@ -72,7 +72,7 @@ class IoctlTests(unittest.TestCase):
         try:
             if termios.TIOCSWINSZ < 0:
                 set_winsz_opcode_maybe_neg = termios.TIOCSWINSZ
-                set_winsz_opcode_pos = termios.TIOCSWINSZ & 0xffffffffL
+                set_winsz_opcode_pos = termios.TIOCSWINSZ & 0xffffffff
             else:
                 set_winsz_opcode_pos = termios.TIOCSWINSZ
                 set_winsz_opcode_maybe_neg, = struct.unpack("i",
@@ -86,8 +86,6 @@ class IoctlTests(unittest.TestCase):
             os.close(mfd)
             os.close(sfd)
 
-def test_main():
-    run_unittest(IoctlTests)
 
 if __name__ == "__main__":
-    test_main()
+    unittest.main()
