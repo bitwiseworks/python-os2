@@ -2595,6 +2595,77 @@ exit:
 
 #endif /* (defined(HAVE_SPAWNV) || defined(HAVE_WSPAWNV) || defined(HAVE_RTPSPAWN)) */
 
+#if defined(__OS2__)
+
+PyDoc_STRVAR(os_spawn2__doc__,
+"spawnve($module, mode, path, argv, cwd, env, stdfds /)\n"
+"--\n"
+"\n"
+"Execute the program specified by path in a new process.\n"
+"\n"
+"  mode\n"
+"    Mode of process creation.\n"
+"  path\n"
+"    Path of executable file.\n"
+"  argv\n"
+"    Tuple or list of strings.\n"
+"  cwd\n"
+"    Initial working directory for the new process.\n"
+"  env\n"
+"    Dictionary of strings mapping to strings.\n"
+"  stdfds\n"
+"    Tuple or list of 3 file descriptors for standard I/O.");
+
+#define OS_SPAWN2_METHODDEF    \
+    {"spawn2", (PyCFunction)(void(*)(void))os_spawn2, METH_FASTCALL, os_spawn2__doc__},
+
+static PyObject *
+os_spawn2_impl(PyObject *module, int mode, path_t *path, PyObject *argv,
+                path_t *cwd, PyObject *env, PyObject *stdfds);
+
+static PyObject *
+os_spawn2(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+{
+    PyObject *return_value = NULL;
+    int mode;
+    path_t path = PATH_T_INITIALIZE("spawn2", "path", 0, 0);
+    path_t cwd = PATH_T_INITIALIZE("spawn2", "cwd", 0, 0);
+    PyObject *argv;
+    PyObject *env;
+    PyObject *stdfds;
+
+    if (!_PyArg_CheckPositional("spawn2", nargs, 6, 6)) {
+        goto exit;
+    }
+    if (PyFloat_Check(args[0])) {
+        PyErr_SetString(PyExc_TypeError,
+                        "integer argument expected, got float" );
+        goto exit;
+    }
+    mode = _PyLong_AsInt(args[0]);
+    if (mode == -1 && PyErr_Occurred()) {
+        goto exit;
+    }
+    if (!path_converter(args[1], &path)) {
+        goto exit;
+    }
+    argv = args[2];
+    if (!path_converter(args[3], &cwd)) {
+        goto exit;
+    }
+    env = args[4];
+    stdfds = args[5];
+    return_value = os_spawn2_impl(module, mode, &path, argv, &cwd, env, stdfds);
+
+exit:
+    /* Cleanup for path */
+    path_cleanup(&path);
+
+    return return_value;
+}
+
+#endif /* __OS2__ */
+
 #if defined(HAVE_FORK)
 
 PyDoc_STRVAR(os_register_at_fork__doc__,
@@ -2832,7 +2903,7 @@ exit:
 
 #endif /* defined(HAVE_SCHED_H) && defined(HAVE_SCHED_SETSCHEDULER) */
 
-#if defined(HAVE_SCHED_H) && (defined(HAVE_SCHED_SETPARAM) || defined(HAVE_SCHED_SETSCHEDULER) || defined(POSIX_SPAWN_SETSCHEDULER) || defined(POSIX_SPAWN_SETSCHEDPARAM))
+#if (defined(HAVE_SCHED_H) || defined(__OS2__)) && (defined(HAVE_SCHED_SETPARAM) || defined(HAVE_SCHED_SETSCHEDULER) || defined(POSIX_SPAWN_SETSCHEDULER) || defined(POSIX_SPAWN_SETSCHEDPARAM))
 
 PyDoc_STRVAR(os_sched_param__doc__,
 "sched_param(sched_priority)\n"

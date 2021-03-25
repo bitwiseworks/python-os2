@@ -488,7 +488,9 @@ time_gmtime(PyObject *self, PyObject *args)
 }
 
 #ifndef HAVE_TIMEGM
+#ifndef __OS2__
 static time_t
+#endif
 timegm(struct tm *p)
 {
     /* XXX: the following implementation will not work for tm_year < 1970.

@@ -5675,7 +5675,7 @@ parse_envlist(PyObject* env, Py_ssize_t *envc_ptr)
 {
     Py_ssize_t i, pos, envc;
     PyObject *keys=NULL, *vals=NULL;
-    PyObject *key, *val, *key2, *val2, *keyval;
+    PyObject *key, *val, *key2, *val2, *keyval=NULL;
     EXECV_CHAR **envlist;
 #ifdef __OS2__
     ULONG envid;
@@ -6762,7 +6762,7 @@ os.spawn2
         Mode of process creation.
     path: path_t
         Path of executable file.
-    args: object
+    argv: object
         Tuple or list of strings.
     cwd: path_t
         Initial working directory for the new process.
@@ -6777,26 +6777,20 @@ using LIBCx spawn2 API.
 [clinic start generated code]*/
 
 static PyObject *
-os_spawn2_impl(PyObject *self, PyObject *args)
+os_spawn2_impl(PyObject *module, int mode, path_t *path, PyObject *argv,
+                path_t *cwd, PyObject *env, PyObject *stdfds)
 /*[clinic end generated code: output=xxx input=xxx]*/
 {
-    char *path, *cwd = NULL;
-    PyObject *argv, *env, *stdfds;
-    char **argvlist;
-    char **envlist;
+    EXECV_CHAR **argvlist;
+    EXECV_CHAR **envlist;
     PyObject *key, *val, *keys=NULL, *vals=NULL, *res=NULL;
-    int mode, i, pos, argc, envc, stdfdc;
+    Py_ssize_t pos, argc, i, envc, stdfdc;
     Py_intptr_t spawnval;
     PyObject *(*argv_getitem)(PyObject *, Py_ssize_t);
-    int lastarg = 0;
+    Py_ssize_t lastarg = 0;
     PyObject *(*stdfd_getitem)(PyObject *, Py_ssize_t);
     int stdfdlist[3] = {0};
 
-    /* Note: no need in et and Py_FileSystemDefaultEncoding for path arguments
-     * as on OS/2 this is always the same as the default encoding. */
-    if (!PyArg_ParseTuple(args, "isOzOO:spawn2", &mode,
-                          &path, &argv, &cwd, &env, &stdfds))
-        return NULL;
     if (PyList_Check(argv)) {
         argc = PyList_Size(argv);
         argv_getitem = PyList_GetItem;
@@ -6903,7 +6897,7 @@ os_spawn2_impl(PyObject *self, PyObject *args)
             /* Note that we don't process pseudo-env vars here as they are
              * processed internally by spawn2() to guarantee thread safety
              * in P_2_THREADSAFE mode. */
-            len = PyString_Size(key) + PyString_Size(val) + 2;
+            len = PyBytes_GET_SIZE(key) + PyBytes_GET_SIZE(val) + 2;
             p = PyMem_NEW(char, len);
             if (p == NULL) {
                 PyErr_NoMemory();
@@ -6930,9 +6924,13 @@ os_spawn2_impl(PyObject *self, PyObject *args)
         }
     }
 
+    if (PySys_Audit("os.spawn2", "iOOOO", mode, path->object, argv, cwd->object, env) < 0) {
+        goto fail_2;
+    }
+
     Py_BEGIN_ALLOW_THREADS
 
-    spawnval = spawn2(mode, path, (const char * const *)argvlist, cwd,
+    spawnval = spawn2(mode, path->narrow, (const char * const *)argvlist, cwd->narrow,
                       (const char * const *)envlist,
                       stdfdc == -1 ? NULL : stdfdlist);
 
@@ -7101,7 +7099,7 @@ os_fork_impl(PyObject *module)
 #endif /* HAVE_FORK */
 
 
-#ifdef HAVE_SCHED_H
+#if defined(HAVE_SCHED_H) || defined(__OS2__)
 #ifdef HAVE_SCHED_GET_PRIORITY_MAX
 /*[clinic input]
 os.sched_get_priority_max
@@ -7361,6 +7359,7 @@ os_sched_rr_get_interval_impl(PyObject *module, pid_t pid)
 #endif /* HAVE_SCHED_RR_GET_INTERVAL */
 
 
+#ifndef __OS2__
 /*[clinic input]
 os.sched_yield
 
@@ -7375,6 +7374,7 @@ os_sched_yield_impl(PyObject *module)
         return posix_error();
     Py_RETURN_NONE;
 }
+#endif
 
 #ifdef HAVE_SCHED_SETAFFINITY
 /* The minimum number of CPUs allocated in a cpu_set_t */
