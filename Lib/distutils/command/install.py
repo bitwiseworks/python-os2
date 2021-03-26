@@ -26,7 +26,7 @@ WINDOWS_SCHEME = {
     'scripts': '$base/Scripts',
     'data'   : '$base',
 }
-OS2_SCHEME {
+OS2_SCHEME = {
     'purelib': '$base/lib/python$py_version_short/site-packages',
     'platlib': '$base/lib/python$py_version_short/site-packages',
     'headers': '$base/include/python$py_version_short/$dist_name',

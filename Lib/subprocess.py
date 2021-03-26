@@ -222,7 +222,7 @@ if _mswindows:
             return "%s(%d)" % (self.__class__.__name__, int(self))
 
         __del__ = Close
-else if not _os2:
+elif not _os2:
     # When select or poll has indicated that the file is writable,
     # we can write up to _PIPE_BUF bytes without risk of blocking.
     # POSIX defines PIPE_BUF as >= 512.
@@ -2056,7 +2056,7 @@ class Popen(object):
                 self._save_input(input)
 
                 if self._input:
-                input_view = memoryview(self._input)
+                    input_view = memoryview(self._input)
 
                 with _PopenSelector() as selector:
                     if self.stdin and input:
