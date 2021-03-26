@@ -24,6 +24,12 @@
 #  endif
 #endif
 
+#if defined(__OS2__)
+#define INCL_DOS
+#define INCL_DOSERRORS
+#include <os2.h>
+#endif
+
 #ifndef PLATLIBDIR
 #  error "PLATLIBDIR macro must be defined"
 #endif
@@ -1513,6 +1519,15 @@ config_get_locale_encoding(PyConfig *config, wchar_t **locale_encoding)
     return PyConfig_SetBytesString(config, locale_encoding, encoding);
 #elif defined(_Py_FORCE_UTF8_LOCALE)
     return PyConfig_SetString(config, locale_encoding, L"utf-8");
+#elif defined(__OS2__)
+    char encoding[100];
+    ULONG cp[3];
+    ULONG cplen;
+
+    strcpy( encoding, "");
+    if (DosQueryCp (sizeof (cp), cp, &cplen) == NO_ERROR)
+        PyOS_snprintf(encoding, sizeof(encoding), "cp%lu", cp[0]);
+    return PyConfig_SetBytesString(config, locale_encoding, encoding);
 #else
     const char *encoding = nl_langinfo(CODESET);
     if (!encoding || encoding[0] == '\0') {
