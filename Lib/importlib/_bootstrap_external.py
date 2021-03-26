@@ -20,7 +20,7 @@ work. One should use importlib as the public-facing version of this module.
 # anything specified at the class level.
 
 # Bootstrap-related code ######################################################
-_CASE_INSENSITIVE_PLATFORMS_STR_KEY = 'win',
+_CASE_INSENSITIVE_PLATFORMS_STR_KEY = 'win', 'os2knix'
 _CASE_INSENSITIVE_PLATFORMS_BYTES_KEY = 'cygwin', 'darwin'
 _CASE_INSENSITIVE_PLATFORMS =  (_CASE_INSENSITIVE_PLATFORMS_BYTES_KEY
                                 + _CASE_INSENSITIVE_PLATFORMS_STR_KEY)
@@ -1587,7 +1587,7 @@ def _setup(_bootstrap_module):
     self_module = sys.modules[__name__]
 
     # Directly load the os module (needed during bootstrap).
-    os_details = ('posix', ['/']), ('nt', ['\\', '/'])
+    os_details = ('posix', ['/']), ('nt', ['\\', '/']), ('os2', ['/', '\\'])
     for builtin_os, path_separators in os_details:
         # Assumption made in _path_join()
         assert all(len(sep) == 1 for sep in path_separators)
@@ -1602,7 +1602,7 @@ def _setup(_bootstrap_module):
             except ImportError:
                 continue
     else:
-        raise ImportError('importlib requires posix or nt')
+        raise ImportError('importlib requires posix or nt or os2')
 
     setattr(self_module, '_os', os_module)
     setattr(self_module, 'path_sep', path_sep)
