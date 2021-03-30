@@ -1,7 +1,7 @@
 """distutils.emxccompiler
 
 Provides the EMXCCompiler class, a subclass of UnixCCompiler that
-handles the EMX port of the GNU C compiler to OS/2.
+handles the libc port of the GNU C compiler to OS/2.
 """
 
 # issues:
@@ -10,41 +10,47 @@ handles the EMX port of the GNU C compiler to OS/2.
 #   We put export_symbols in a def-file, as though the DLL can have
 #   an arbitrary length name, but truncate the output filename.
 #
-# * only use OMF objects and use LINK386 as the linker (-Zomf)
+# * only use OMF objects and use -Zomf for the linker
 #
 # * always build for multithreading (-Zmt) as the accompanying OS/2 port
 #   of Python is only distributed with threads enabled.
 #
 # tested configurations:
 #
-# * EMX gcc 2.81/EMX 0.9d fix03
+# * gcc version 9.2.0 20190812 (OS/2 RPM build 9.2.0-5.oc00) (GCC)
 
-__revision__ = "$Id$"
 
-import os,sys,copy
+import os
+import sys
+import copy
+# something is wrong with subprocess.py !!!!! fix it
+# from subprocess import Popen, PIPE
+import re
+
 from distutils.ccompiler import gen_preprocess_options, gen_lib_options
 from distutils.unixccompiler import UnixCCompiler
 from distutils.file_util import write_file
-from distutils.errors import DistutilsExecError, CompileError, UnknownFileError
+from distutils.errors import (DistutilsExecError, CCompilerError,
+        CompileError, UnknownFileError)
+from distutils.version import StrictVersion
+from distutils.spawn import find_executable
 from distutils import log
 
 class EMXCCompiler (UnixCCompiler):
+    """ Handles the libc port of the GNU C compiler to OS/2.
+    """
 
     _rc_extensions = ['.rc', '.RC']
-
     compiler_type = 'emx'
-    obj_extension = ".obj"
-    static_lib_extension = ".lib"
+    obj_extension = ".o"
+    static_lib_extension = ".a"
     shared_lib_extension = ".dll"
     static_lib_format = "%s%s"
     shared_lib_format = "%s%s"
     res_extension = ".res"      # compiled resource file
     exe_extension = ".exe"
 
-    def __init__ (self,
-                  verbose=0,
-                  dry_run=0,
-                  force=0):
+    def __init__(self, verbose=0, dry_run=0, force=0):
 
         UnixCCompiler.__init__ (self, verbose, dry_run, force)
 
@@ -53,11 +59,12 @@ class EMXCCompiler (UnixCCompiler):
                          (status, details))
         if status is not CONFIG_H_OK:
             self.warn(
-                "Python's pyconfig.h doesn't seem to support your compiler.  " +
-                ("Reason: %s." % details) +
-                "Compiling may fail because of undefined preprocessor macros.")
+                "Python's pyconfig.h doesn't seem to support your compiler. "
+                "Reason: %s. "
+                "Compiling may fail because of undefined preprocessor macros."
+                % details)
 
-        (self.gcc_version, self.ld_version) = \
+        self.gcc_version, self.ld_version = \
             get_versions()
         self.debug_print(self.compiler_type + ": gcc %s, ld %s\n" %
                          (self.gcc_version,
@@ -65,11 +72,14 @@ class EMXCCompiler (UnixCCompiler):
 
         # want the gcc library statically linked (so that we don't have
         # to distribute a version dependent on the compiler we have)
-        self.dll_libraries=["gcc"]
+        # self.dll_libraries=["gcc"]
+        # was removed by the python 3.9 update, as I doupt it makes sense
+        self.dll_libraries=[]
 
     # __init__ ()
 
     def _compile(self, obj, src, ext, cc_args, extra_postargs, pp_opts):
+
         if ext == '.rc':
             # gcc requires '.rc' compiled to binary ('.res') files !!!
             try:
@@ -83,21 +93,11 @@ class EMXCCompiler (UnixCCompiler):
             except DistutilsExecError as msg:
                 raise CompileError(msg)
 
-    def link (self,
-              target_desc,
-              objects,
-              output_filename,
-              output_dir=None,
-              libraries=None,
-              library_dirs=None,
-              runtime_library_dirs=None,
-              export_symbols=None,
-              debug=0,
-              extra_preargs=None,
-              extra_postargs=None,
-              build_temp=None,
-              target_lang=None):
-
+    def link(self, target_desc, objects, output_filename, output_dir=None,
+             libraries=None, library_dirs=None, runtime_library_dirs=None,
+             export_symbols=None, debug=0, extra_preargs=None,
+             extra_postargs=None, build_temp=None, target_lang=None):
+        """Link the objects."""
         # use separate copies, so we can modify the lists
         extra_preargs = copy.copy(extra_preargs or [])
         libraries = copy.copy(libraries or [])
@@ -137,6 +137,7 @@ class EMXCCompiler (UnixCCompiler):
             def_file = os.path.join(temp_dir, dll_name + ".def")
 
             # Generate .def file
+            # open !!!! add a bldlevel
             contents = [
                 "LIBRARY %s INITINSTANCE TERMINSTANCE" % \
                 pyd_name8,
@@ -148,6 +149,7 @@ class EMXCCompiler (UnixCCompiler):
                          "writing %s" % def_file)
 
             # next add options for def-file and to creating import libraries
+
             # for gcc/ld the def-file is specified as any other object files
             objects.append(def_file)
 
@@ -163,20 +165,14 @@ class EMXCCompiler (UnixCCompiler):
         if not debug:
             extra_preargs.append("-s")
 
-        UnixCCompiler.link(self,
-                           target_desc,
-                           objects,
-                           pyd_name,
-                           output_dir,
-                           libraries,
-                           library_dirs,
+        UnixCCompiler.link(self, target_desc, objects, pyd_name,
+                           output_dir, libraries, library_dirs,
                            runtime_library_dirs,
                            None, # export_symbols, we do this in our def-file
-                           debug,
-                           extra_preargs,
-                           extra_postargs,
-                           build_temp,
+                           debug, extra_preargs, extra_postargs, build_temp,
                            target_lang)
+
+        # open!!! create _dll.a lib eventually
         # if filename exceed 8.3, create a symlink to 8.3 pyd
         if len(os.path.basename(output_filename)) > 8+1+3:
             try:
@@ -189,28 +185,27 @@ class EMXCCompiler (UnixCCompiler):
 
     # -- Miscellaneous methods -----------------------------------------
 
-    def object_filenames (self,
-                          source_filenames,
-                          strip_dir=0,
-                          output_dir=''):
-        # Copied from ccompiler.py, extended to return .res as 'object'-file
-        # for .rc input file
-        if output_dir is None: output_dir = ''
+    def object_filenames(self, source_filenames, strip_dir=0, output_dir=''):
+        """Adds supports for rc and res files."""
+        if output_dir is None:
+            output_dir = ''
         obj_names = []
         for src_name in source_filenames:
-            (base, ext) = os.path.splitext (src_name)
+            base, ext = os.path.splitext(src_name)
             base = os.path.splitdrive(base)[1] # Chop off the drive
             base = base[os.path.isabs(base):]  # If abs, chop off leading /
+            log.info("trace %s %s %s" % (base, ext, output_dir))
             if ext not in (self.src_extensions + self._rc_extensions):
                 raise UnknownFileError("unknown file type '%s' (from '%s')" % \
                       (ext, src_name))
             if strip_dir:
                 base = os.path.basename (base)
             if ext in self._rc_extensions:
-                obj_names.append (os.path.join (output_dir,
+                # these need to be compiled to object files
+                obj_names.append (os.path.join(output_dir,
                                                 base + self.res_extension))
             else:
-                obj_names.append (os.path.join (output_dir,
+                obj_names.append (os.path.join(output_dir,
                                                 base + self.obj_extension))
         return obj_names
 
@@ -249,7 +244,6 @@ CONFIG_H_NOTOK = "not ok"
 CONFIG_H_UNCERTAIN = "uncertain"
 
 def check_config_h():
-
     """Check if the current Python installation appears amenable to building
     extensions with GCC.
 
@@ -271,10 +265,11 @@ def check_config_h():
     # "pyconfig.h" check -- should probably be renamed...
 
     from distutils import sysconfig
+
     # if sys.version contains GCC then python was compiled with
     # GCC, and the pyconfig.h file should be OK
     if "GCC" in sys.version:
-        return (CONFIG_H_OK, "sys.version mentions 'GCC'")
+        return CONFIG_H_OK, "sys.version mentions 'GCC'"
 
     # let's see if __GNUC__ is mentioned in python.h
     fn = sysconfig.get_config_h_filename()
@@ -291,29 +286,33 @@ def check_config_h():
         return (CONFIG_H_UNCERTAIN,
                 "couldn't read '%s': %s" % (fn, exc.strerror))
 
+RE_VERSION = re.compile(br'(\d+\.\d+(\.\d+)*)')
+
 def get_versions():
     """ Try to find out the versions of gcc and ld.
-        If not possible it returns None for it.
+    If gcc is not found, or the output does not match
+    `RE_VERSION`, returns None.
     """
-    from distutils.version import StrictVersion
-    from distutils.spawn import find_executable
-    import re
+
+    # EMX ld has no way of reporting version number, and we use GCC
+    # anyway - so we can link OMF DLLs
+    ld_version = None
 
     gcc_exe = find_executable('gcc')
     if gcc_exe:
-        out = os.popen(gcc_exe + ' -dumpversion','r')
+        gcc_version = None
+        return(gcc_version, ld_version)
+        # something is wrong with subprocess.py !!!!! fix it
+        # out = Popen(gcc_exe + ' -dumpversion', shell=True, stdout=PIPE).stdout
         try:
             out_string = out.read()
         finally:
             out.close()
-        result = re.search('(\d+\.\d+\.\d+)',out_string)
+        result = RE_VERSION.search(out_string)
         if result:
             gcc_version = StrictVersion(result.group(1))
         else:
             gcc_version = None
     else:
         gcc_version = None
-    # EMX ld has no way of reporting version number, and we use GCC
-    # anyway - so we can link OMF DLLs
-    ld_version = None
     return (gcc_version, ld_version)
