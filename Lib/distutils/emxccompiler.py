@@ -23,11 +23,8 @@ handles the libc port of the GNU C compiler to OS/2.
 import os
 import sys
 import copy
-# something is wrong with subprocess.py !!!!! fix it
-# from subprocess import Popen, PIPE
 import re
 
-from distutils.ccompiler import gen_preprocess_options, gen_lib_options
 from distutils.unixccompiler import UnixCCompiler
 from distutils.file_util import write_file
 from distutils.errors import (DistutilsExecError, CCompilerError,
@@ -35,6 +32,7 @@ from distutils.errors import (DistutilsExecError, CCompilerError,
 from distutils.version import StrictVersion
 from distutils.spawn import find_executable
 from distutils import log
+from functools import reduce
 
 class EMXCCompiler (UnixCCompiler):
     """ Handles the libc port of the GNU C compiler to OS/2.
@@ -64,16 +62,10 @@ class EMXCCompiler (UnixCCompiler):
                 "Compiling may fail because of undefined preprocessor macros."
                 % details)
 
-        self.gcc_version, self.ld_version = \
-            get_versions()
-        self.debug_print(self.compiler_type + ": gcc %s, ld %s\n" %
-                         (self.gcc_version,
-                          self.ld_version) )
-
         # want the gcc library statically linked (so that we don't have
         # to distribute a version dependent on the compiler we have)
         # self.dll_libraries=["gcc"]
-        # was removed by the python 3.9 update, as I doupt it makes sense
+        # was removed by the python 3.9 update, as I doubt it makes sense
         self.dll_libraries=[]
 
     # __init__ ()
@@ -194,7 +186,6 @@ class EMXCCompiler (UnixCCompiler):
             base, ext = os.path.splitext(src_name)
             base = os.path.splitdrive(base)[1] # Chop off the drive
             base = base[os.path.isabs(base):]  # If abs, chop off leading /
-            log.info("trace %s %s %s" % (base, ext, output_dir))
             if ext not in (self.src_extensions + self._rc_extensions):
                 raise UnknownFileError("unknown file type '%s' (from '%s')" % \
                       (ext, src_name))
@@ -286,33 +277,3 @@ def check_config_h():
         return (CONFIG_H_UNCERTAIN,
                 "couldn't read '%s': %s" % (fn, exc.strerror))
 
-RE_VERSION = re.compile(br'(\d+\.\d+(\.\d+)*)')
-
-def get_versions():
-    """ Try to find out the versions of gcc and ld.
-    If gcc is not found, or the output does not match
-    `RE_VERSION`, returns None.
-    """
-
-    # EMX ld has no way of reporting version number, and we use GCC
-    # anyway - so we can link OMF DLLs
-    ld_version = None
-
-    gcc_exe = find_executable('gcc')
-    if gcc_exe:
-        gcc_version = None
-        return(gcc_version, ld_version)
-        # something is wrong with subprocess.py !!!!! fix it
-        # out = Popen(gcc_exe + ' -dumpversion', shell=True, stdout=PIPE).stdout
-        try:
-            out_string = out.read()
-        finally:
-            out.close()
-        result = RE_VERSION.search(out_string)
-        if result:
-            gcc_version = StrictVersion(result.group(1))
-        else:
-            gcc_version = None
-    else:
-        gcc_version = None
-    return (gcc_version, ld_version)
