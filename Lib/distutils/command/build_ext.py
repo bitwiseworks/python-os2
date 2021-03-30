@@ -740,6 +740,8 @@ class build_ext(Command):
                     link_libpython = True
                 elif sys.platform == 'cygwin':
                     link_libpython = True
+                elif sys.platform.startswith('os2'):
+                    link_libpython = True
                 elif '_PYTHON_HOST_PLATFORM' in os.environ:
                     # We are cross-compiling for one of the relevant platforms
                     if get_config_var('ANDROID_API_LEVEL') != 0:
