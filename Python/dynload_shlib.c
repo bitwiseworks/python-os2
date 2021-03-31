@@ -39,6 +39,7 @@ const char *_PyImport_DynLoadFiletab[] = {
     ".dll",
 #elif defined(__OS2__)
     ".dll",
+    ".pyd",
 #else  /* !__CYGWIN__ */
     "." SOABI ".so",
 #ifdef ALT_SOABI
