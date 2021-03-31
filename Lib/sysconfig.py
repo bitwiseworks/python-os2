@@ -462,6 +462,14 @@ def _init_non_posix(vars):
     vars['VERSION'] = _PY_VERSION_SHORT_NO_DOT
     vars['BINDIR'] = os.path.dirname(_safe_realpath(sys.executable))
 
+def _init_os2(vars):
+    """Initialize the module as appropriate for OS/2"""
+    import _imp
+    _init_posix(vars)
+    # set the python module extension to .pyd instead of .dll -
+    # for compatibility with previous releases
+    vars['EXT_SUFFIX'] = _imp.extension_suffixes()[0]
+
 #
 # public APIs
 #
@@ -579,7 +587,9 @@ def get_config_vars(*args):
         if os.name == 'nt':
             _init_non_posix(_CONFIG_VARS)
             _CONFIG_VARS['TZPATH'] = ''
-        if os.name == 'posix' or os.name == 'os2':
+        if os.name == 'os2':
+            _init_os2(_CONFIG_VARS)
+        if os.name == 'posix':
             _init_posix(_CONFIG_VARS)
         # For backward compatibility, see issue19555
         SO = _CONFIG_VARS.get('EXT_SUFFIX')
