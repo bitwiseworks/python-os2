@@ -6784,7 +6784,7 @@ os_spawn2_impl(PyObject *module, int mode, path_t *path, PyObject *argv,
     EXECV_CHAR **argvlist;
     EXECV_CHAR **envlist;
     PyObject *key, *val, *keys=NULL, *vals=NULL, *res=NULL;
-    Py_ssize_t pos, argc, i, envc, stdfdc;
+    Py_ssize_t pos, argc, i, envc, stdfdc, stdfdc_none;
     Py_intptr_t spawnval;
     PyObject *(*argv_getitem)(PyObject *, Py_ssize_t);
     Py_ssize_t lastarg = 0;
@@ -6909,7 +6909,9 @@ os_spawn2_impl(PyObject *module, int mode, path_t *path, PyObject *argv,
         envlist[envc] = 0;
     }
 
+    // create a stdfd list.
     if (stdfdc != -1) {
+        stdfdc_none = 0;
         for (i = 0; i < stdfdc; i++) {
             PyObject *elem = (*stdfd_getitem)(stdfds, i);
             if (elem == Py_None) {
@@ -6921,8 +6923,14 @@ os_spawn2_impl(PyObject *module, int mode, path_t *path, PyObject *argv,
                     goto fail_2;
                 }
             }
+            if (stdfdlist[i] == -1)
+                stdfdc_none++;
         }
     }
+    // the stdfdlist entries can all be -1, which means no redirecting done
+    // our spwan2 can't handle that, so take that into account here
+    if (stdfdc == stdfdc_none)
+        stdfdc = -1;
 
     if (PySys_Audit("os.spawn2", "iOOOO", mode, path->object, argv, cwd->object, env) < 0) {
         goto fail_2;

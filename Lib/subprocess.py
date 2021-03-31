@@ -1729,12 +1729,9 @@ class Popen(object):
                 # output pipe are maintained in this process or else the
                 # pipe will not close when the child process exits and the
                 # ReadFile will hang.
-                if p2cread is not None and p2cwrite is not None:
-                    _close_in_parent(p2cread)
-                if c2pwrite is not None and c2pread is not None:
-                    _close_in_parent(c2pwrite)
-                if errwrite is not None and errread is not None:
-                    _close_in_parent(errwrite)
+                self._close_pipe_fds(p2cread, p2cwrite,
+                                     c2pread, c2pwrite,
+                                     errread, errwrite)
 
                 self._child_created = True
                 self.pid = pid
