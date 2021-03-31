@@ -2629,7 +2629,7 @@ os_spawn2(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     PyObject *return_value = NULL;
     int mode;
     path_t path = PATH_T_INITIALIZE("spawn2", "path", 0, 0);
-    path_t cwd = PATH_T_INITIALIZE("spawn2", "cwd", 0, 0);
+    path_t cwd = PATH_T_INITIALIZE("spawn2", "cwd", 1, 0);
     PyObject *argv;
     PyObject *env;
     PyObject *stdfds;
@@ -2660,6 +2660,7 @@ os_spawn2(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 exit:
     /* Cleanup for path */
     path_cleanup(&path);
+    path_cleanup(&cwd);
 
     return return_value;
 }
