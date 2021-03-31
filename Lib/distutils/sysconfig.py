@@ -497,7 +497,8 @@ def _init_os2():
     _init_posix()
     # set the python module extension to .pyd instead of .dll -
     # for compatibility with previous releases
-    _config_vars['EXT_SUFFIX'] = '.pyd'
+    global _config_vars
+    _config_vars['EXT_SUFFIX'] = _imp.extension_suffixes()[0]
 
 
 def get_config_vars(*args):

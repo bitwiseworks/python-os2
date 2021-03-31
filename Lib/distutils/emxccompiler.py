@@ -19,7 +19,6 @@ handles the libc port of the GNU C compiler to OS/2.
 #
 # * gcc version 9.2.0 20190812 (OS/2 RPM build 9.2.0-5.oc00) (GCC)
 
-
 import os
 import sys
 import copy
@@ -33,6 +32,7 @@ from distutils.version import StrictVersion
 from distutils.spawn import find_executable
 from distutils import log
 from functools import reduce
+from distutils.sysconfig import get_config_vars
 
 class EMXCCompiler (UnixCCompiler):
     """ Handles the libc port of the GNU C compiler to OS/2.
@@ -42,7 +42,7 @@ class EMXCCompiler (UnixCCompiler):
     compiler_type = 'emx'
     obj_extension = ".o"
     static_lib_extension = ".a"
-    shared_lib_extension = ".dll"
+    shared_lib_extension = get_config_vars().get('EXT_SUFFIX')
     static_lib_format = "%s%s"
     shared_lib_format = "%s%s"
     res_extension = ".res"      # compiled resource file
@@ -106,7 +106,7 @@ class EMXCCompiler (UnixCCompiler):
 
         # full relative path of pyd
         pyd_name = os.path.join(os.path.dirname(output_filename),
-            pyd_name8 + ".pyd")
+            pyd_name8 + self.shared_lib_extension)
 
         # handle export symbols by creating a def-file
         # with executables this only works with gcc/ld as linker
@@ -171,7 +171,7 @@ class EMXCCompiler (UnixCCompiler):
                 os.remove( output_filename)
             except OSError:
                 pass
-            os.symlink( pyd_name8 + ".pyd", output_filename)
+            os.symlink( pyd_name8 + self.shared_lib_extension, output_filename)
 
     # link ()
 
