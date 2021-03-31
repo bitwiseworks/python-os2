@@ -66,6 +66,9 @@ static void _PyMem_SetupDebugHooksDomain(PyMemAllocatorDomain domain);
 
 #ifdef MS_WINDOWS
 #  include <windows.h>
+#elif defined(__OS2__)
+#  define INCL_BASE
+#  include <os2.h>
 #elif defined(HAVE_MMAP)
 #  include <sys/mman.h>
 #  ifdef MAP_ANONYMOUS
@@ -140,6 +143,23 @@ static void
 _PyObject_ArenaVirtualFree(void *ctx, void *ptr, size_t size)
 {
     VirtualFree(ptr, 0, MEM_RELEASE);
+}
+
+#elif defined(__OS2__)
+static void *
+_PyObject_ArenaVirtualAlloc(void *ctx, size_t size)
+{
+    PVOID ptr;
+    APIRET arc = DosAllocMem(&ptr, size, PAG_COMMIT | PAG_READ | PAG_WRITE | OBJ_ANY);
+    if (arc)
+        arc = DosAllocMem(&ptr, size, PAG_COMMIT | PAG_READ | PAG_WRITE);
+    return arc ? NULL : ptr;
+}
+
+static void
+_PyObject_ArenaVirtualFree(void *ctx, void *ptr, size_t size)
+{
+    DosFreeMem(ptr);
 }
 
 #elif defined(ARENAS_USE_MMAP)
