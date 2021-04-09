@@ -696,10 +696,20 @@ $(PYTHONFRAMEWORKDIR)/Versions/$(VERSION)/$(PYTHONFRAMEWORK): \
 	$(LN) -fsn Versions/Current/$(PYTHONFRAMEWORK) $(PYTHONFRAMEWORKDIR)/$(PYTHONFRAMEWORK)
 	$(LN) -fsn Versions/Current/Resources $(PYTHONFRAMEWORKDIR)/Resources
 
-ifneq ($(filter os2emx os2knix,$(MACHDEP)),) # bird hack!
-$(DLLLIBRARY) $(LDLIBRARY): $(LIBRARY_OBJS)
+ifneq ($(filter os2emx os2knix,$(MACHDEP)),)
+VENDOR ?=community
+DLLBASENAME = $(basename $(DLLLIBRARY))
+BUILD_INFO=\#\#1\#\# $(shell date +'%d %b %Y %H:%M:%S')     $(shell uname -n)
+BUILDLEVEL_INFO=@\#$(VENDOR):$(VERSION)\#@$(BUILD_INFO)::::0::@@$(DLLBASENAME)
+
+$(DLLLIBRARY) $(LDLIBRARY): $(LIBRARY_OBJS) python$(LDVERSION).def
 	$(LDSHARED) -o $(DLLLIBRARY) $^ $(LIBS) $(MODLIBS) $(SYSLIBS)
 	emximp -o $(LDLIBRARY) $(DLLLIBRARY)
+
+python$(LDVERSION).def:
+	echo "LIBRARY $(DLLBASENAME) INITINSTANCE TERMINSTANCE" >$@
+	echo "DESCRIPTION \"$(BUILDLEVEL_INFO)\"" >>$@
+	echo "DATA MULTIPLE" >>$@
 
 else # CYGWIN
 # This rule builds the Cygwin Python DLL and import library if configured
