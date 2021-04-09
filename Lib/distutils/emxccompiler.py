@@ -6,14 +6,7 @@ handles the libc port of the GNU C compiler to OS/2.
 
 # issues:
 #
-# * OS/2 insists that DLLs can have names no longer than 8 characters
-#   We put export_symbols in a def-file, as though the DLL can have
-#   an arbitrary length name, but truncate the output filename.
-#
-# * only use OMF objects and use -Zomf for the linker
-#
-# * always build for multithreading (-Zmt) as the accompanying OS/2 port
-#   of Python is only distributed with threads enabled.
+# * none so far
 #
 # tested configurations:
 #
@@ -33,6 +26,7 @@ from distutils.spawn import find_executable
 from distutils import log
 from functools import reduce
 from distutils.sysconfig import get_config_vars
+from datetime import datetime
 
 class EMXCCompiler (UnixCCompiler):
     """ Handles the libc port of the GNU C compiler to OS/2.
@@ -98,15 +92,17 @@ class EMXCCompiler (UnixCCompiler):
         # Additional libraries
         libraries.extend(self.dll_libraries)
 
-        # get pyd name and extension
-        pyd_name8, pyd_ext = os.path.splitext( os.path.basename(output_filename))
+        # get dll/pyd name and extension
+        dll_name, dll_extension = os.path.splitext( os.path.basename(output_filename))
         # if name is longer than 8.3, generate a hashed 8.3 name
-        if len(os.path.basename(output_filename)) > 8+1+3:
-            pyd_name8 = os.path.basename(output_filename)[:3] + str(reduce(lambda x,y:x+y, map(ord, output_filename)) % 65536)
+        if len(dll_name) > 8+1+3:
+            dll_name8 = os.path.basename(output_filename)[:3] + str(reduce(lambda x,y:x+y, map(ord, output_filename)) % 65536)
+        else:
+            dll_name8 = dll_name
 
-        # full relative path of pyd
-        pyd_name = os.path.join(os.path.dirname(output_filename),
-            pyd_name8 + self.shared_lib_extension)
+        # full relative path of dll/pyd
+        dll_namefull = os.path.join(os.path.dirname(output_filename),
+            dll_name8 + self.shared_lib_extension)
 
         # handle export symbols by creating a def-file
         # with executables this only works with gcc/ld as linker
@@ -121,20 +117,30 @@ class EMXCCompiler (UnixCCompiler):
             # object files are, build_temp doesn't help much
             # where are the object files
             temp_dir = os.path.dirname(objects[0])
-            # name of dll to give the helper files the same base name
-            (dll_name, dll_extension) = os.path.splitext(
-                os.path.basename(output_filename))
 
             # generate the filenames for these files
             def_file = os.path.join(temp_dir, dll_name + ".def")
 
+            # prepare some needed values for the buildlevel
+            vendor = os.getenv('VENDOR')
+            if not vendor:
+                vendor = "python build system"
+            now = datetime.now()
+            date_time = now.strftime("%d %b %Y %H:%M:%S") 
+            version = self.version
+            if not version:
+                version = "0.0"
+            (osname, host, release, osversion, machine) = os.uname()
+
             # Generate .def file
-            # open !!!! add a bldlevel
             contents = [
                 "LIBRARY %s INITINSTANCE TERMINSTANCE" % \
-                pyd_name8,
+                dll_name8,
+                "DESCRIPTION \"@#%s:%s#@##1## %s     %s::::0::@@%s\"" % \
+                (vendor, version, date_time, host, dll_name),
                 "DATA MULTIPLE NONSHARED",
                 "EXPORTS"]
+
             for sym in export_symbols:
                 contents.append('  "_%s"' % sym)
             self.execute(write_file, (def_file, contents),
@@ -157,7 +163,7 @@ class EMXCCompiler (UnixCCompiler):
         if not debug:
             extra_preargs.append("-s")
 
-        UnixCCompiler.link(self, target_desc, objects, pyd_name,
+        UnixCCompiler.link(self, target_desc, objects, dll_namefull,
                            output_dir, libraries, library_dirs,
                            runtime_library_dirs,
                            None, # export_symbols, we do this in our def-file
@@ -165,13 +171,13 @@ class EMXCCompiler (UnixCCompiler):
                            target_lang)
 
         # open!!! create _dll.a lib eventually
-        # if filename exceed 8.3, create a symlink to 8.3 pyd
-        if len(os.path.basename(output_filename)) > 8+1+3:
+        # if filename exceed 8.3, create a symlink to 8.3 dll/pyd
+        if len(dll_name) > 8+1+3:
             try:
                 os.remove( output_filename)
             except OSError:
                 pass
-            os.symlink( pyd_name8 + self.shared_lib_extension, output_filename)
+            os.symlink( dll_name8 + self.shared_lib_extension, output_filename)
 
     # link ()
 

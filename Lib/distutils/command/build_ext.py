@@ -335,6 +335,8 @@ class build_ext(Command):
             self.compiler.set_runtime_library_dirs(self.rpath)
         if self.link_objects is not None:
             self.compiler.set_link_objects(self.link_objects)
+        if sys.platform.startswith('os2'):
+            self.compiler.set_link_version(self.distribution.get_version())
 
         # Now actually compile and link everything.
         self.build_extensions()

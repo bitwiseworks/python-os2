@@ -115,6 +115,9 @@ class CCompiler:
         # named library files) to include on any link
         self.objects = []
 
+        if sys.platform.startswith('os2'):
+            self.version = None
+
         for key in self.executables.keys():
             self.set_executable(key, self.executables[key])
 
@@ -301,6 +304,12 @@ class CCompiler:
         """
         self.objects = objects[:]
 
+    if sys.platform.startswith('os2'):
+        def set_link_version(self, version):
+            """Set the version, so we can create a nice bldlevel string in the
+            linking stage
+            """
+            self.version = version
 
     # -- Private utility methods --------------------------------------
     # (here for the convenience of subclasses)
