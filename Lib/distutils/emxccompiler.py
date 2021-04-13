@@ -26,7 +26,12 @@ from distutils.spawn import find_executable
 from distutils import log
 from functools import reduce
 from distutils.sysconfig import get_config_vars
-from datetime import datetime
+
+try:
+    from datetime import datetime
+    BOOTSTRAP = False
+except ImportError:
+    BOOTSTRAP = True
 
 class EMXCCompiler (UnixCCompiler):
     """ Handles the libc port of the GNU C compiler to OS/2.
@@ -94,8 +99,8 @@ class EMXCCompiler (UnixCCompiler):
 
         # get dll/pyd name and extension
         dll_name, dll_extension = os.path.splitext( os.path.basename(output_filename))
-        # if name is longer than 8.3, generate a hashed 8.3 name
-        if len(dll_name) > 8+1+3:
+        # if name is longer than 8 char, generate a hashed 8 char name
+        if len(dll_name) > 8:
             dll_name8 = os.path.basename(output_filename)[:3] + str(reduce(lambda x,y:x+y, map(ord, output_filename)) % 65536)
         else:
             dll_name8 = dll_name
@@ -125,8 +130,11 @@ class EMXCCompiler (UnixCCompiler):
             vendor = os.getenv('VENDOR')
             if not vendor:
                 vendor = "python build system"
-            now = datetime.now()
-            date_time = now.strftime("%d %b %Y %H:%M:%S") 
+            if not BOOTSTRAP:
+                now = datetime.now()
+                date_time = now.strftime("%d %b %Y %H:%M:%S")
+            else:
+                date_time = os.getenv("BOOTSTRAP_TIME")
             version = self.version
             if not version:
                 version = "0.0"
@@ -170,9 +178,8 @@ class EMXCCompiler (UnixCCompiler):
                            debug, extra_preargs, extra_postargs, build_temp,
                            target_lang)
 
-        # open!!! create _dll.a lib eventually
-        # if filename exceed 8.3, create a symlink to 8.3 dll/pyd
-        if len(dll_name) > 8+1+3:
+        # if filename exceed 8 char, create a symlink to the 8 char dll/pyd
+        if len(dll_name) > 8:
             try:
                 os.remove( output_filename)
             except OSError:
