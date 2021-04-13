@@ -3003,7 +3003,14 @@ validate_tzpath() {
     fi
 }
 
+case $ac_sys_system in
+  *OS/2* | *emx* | *os2*)
+    TZPATH="/@unixroot/usr/share/zoneinfo;/@unixroot/usr/lib/zoneinfo;/@unixroot/usr/share/lib/zoneinfo;/@unixroot/etc/zoneinfo"
+  ;;
+  *)
 TZPATH="/usr/share/zoneinfo:/usr/lib/zoneinfo:/usr/share/lib/zoneinfo:/etc/zoneinfo"
+  ;;
+  esac
 AC_MSG_CHECKING(for --with-tzpath)
 AC_ARG_WITH(tzpath,
             AS_HELP_STRING([--with-tzpath=<list of absolute paths separated by pathsep>]
