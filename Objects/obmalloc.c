@@ -145,7 +145,7 @@ _PyObject_ArenaVirtualFree(void *ctx, void *ptr, size_t size)
     VirtualFree(ptr, 0, MEM_RELEASE);
 }
 
-#elif defined(__OS2__)
+#elif defined(__OS2__x)
 static void *
 _PyObject_ArenaVirtualAlloc(void *ctx, size_t size)
 {
@@ -454,7 +454,7 @@ _PyMem_GetCurrentAllocatorName(void)
 static PyObjectArenaAllocator _PyObject_Arena = {NULL,
 #ifdef MS_WINDOWS
     _PyObject_ArenaVirtualAlloc, _PyObject_ArenaVirtualFree
-#elif defined(__OS2__)
+#elif defined(__OS2__x)
     _PyObject_ArenaVirtualAlloc, _PyObject_ArenaVirtualFree
 #elif defined(ARENAS_USE_MMAP)
     _PyObject_ArenaMmap, _PyObject_ArenaMunmap
