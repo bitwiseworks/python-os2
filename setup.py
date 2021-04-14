@@ -1746,7 +1746,7 @@ class PyBuildExt(build_ext):
 
     def detect_multiprocessing(self):
         # Richard Oudkerk's multiprocessing module
-        if MS_WINDOWS:
+        if MS_WINDOWS or OS2:
             multiprocessing_srcs = ['_multiprocessing/multiprocessing.c',
                                     '_multiprocessing/semaphore.c']
 
