@@ -549,7 +549,7 @@ def NamedTemporaryFile(mode='w+b', buffering=-1, encoding=None,
         _os.close(fd)
         raise
 
-if _os.name != 'posix' or _sys.platform == 'cygwin' or _sys.platform == 'os2emx' or _sys.platform == 'os2knix'::
+if _os.name != 'posix' or _sys.platform == 'cygwin' or _sys.platform == 'os2emx' or _sys.platform == 'os2knix':
     # On non-POSIX and Cygwin systems, assume that we cannot unlink a file
     # while it is open.
     TemporaryFile = NamedTemporaryFile
