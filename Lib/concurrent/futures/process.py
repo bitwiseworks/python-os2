@@ -532,6 +532,8 @@ def _check_system_limits():
         if _system_limited:
             raise NotImplementedError(_system_limited)
     _system_limits_checked = True
+    if os.name == 'os2':
+        return
     try:
         nsems_max = os.sysconf("SC_SEM_NSEMS_MAX")
     except (AttributeError, ValueError):
