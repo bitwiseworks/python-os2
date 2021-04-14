@@ -23,14 +23,10 @@
 #  define SEM_VALUE_MAX LONG_MAX
 #else
 #  include <fcntl.h>                 /* O_CREAT and O_EXCL */
-# ifndef __OS2__
-#  if defined(HAVE_SEM_OPEN) && !defined(POSIX_SEMAPHORES_NOT_ENABLED)
+#  if defined(HAVE_SEM_OPEN) && !defined(POSIX_SEMAPHORES_NOT_ENABLED) || defined(__OS2__)
 #    include <semaphore.h>
      typedef sem_t *SEM_HANDLE;
 #  endif
-# else
-#  define SEM_HANDLE HANDLE
-#endif
 #endif
 
 /*
