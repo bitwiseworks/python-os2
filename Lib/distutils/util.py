@@ -143,7 +143,7 @@ def change_root (new_root, pathname):
     if new_root is None or new_root == '':
         return pathname
 
-    if os.name == 'posix':
+    if os.name == 'posix' or os.name == 'os2':
         if not os.path.isabs(pathname):
             return os.path.join(new_root, pathname)
         else:
