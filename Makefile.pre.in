@@ -1327,7 +1327,8 @@ altbininstall: $(BUILDPYTHON) @FRAMEWORKPYTHONW@
 	fi
 	if test -f $(LDLIBRARY) && test "$(PYTHONFRAMEWORKDIR)" = "no-framework" ; then \
 		if test -n "$(DLLLIBRARY)" ; then \
-			$(INSTALL_SHARED) $(DLLLIBRARY) $(DESTDIR)$(BINDIR); \
+			$(INSTALL_SHARED) $(DLLLIBRARY) $(DESTDIR)$(LIBDIR); \
+			$(INSTALL_SHARED) $(LDLIBRARY) $(DESTDIR)$(LIBDIR); \
 		else \
 			$(INSTALL_SHARED) $(LDLIBRARY) $(DESTDIR)$(LIBDIR)/$(INSTSONAME); \
 			if test $(LDLIBRARY) != $(INSTSONAME); then \
@@ -1833,9 +1834,6 @@ TAGS::
 pycremoval:
 	-find $(srcdir) -depth -name '__pycache__' -exec rm -rf {} ';'
 	-find $(srcdir) -name '*.py[co]' -exec rm -f {} ';'
-	-find . -name '*.exe' -exec rm -f {} ';'
-	-find . -name '*.dll' -exec rm -f {} ';'
-	-find . -name '*.pyd' -exec rm -f {} ';'
 
 rmtestturds:
 	-rm -f *BAD *GOOD *SKIPPED
@@ -1855,6 +1853,9 @@ clean-retain-profile: pycremoval
 	find . -name '*.s[ol]' -exec rm -f {} ';'
 	find . -name '*.so.[0-9]*.[0-9]*' -exec rm -f {} ';'
 	find . -name '*.lst' -exec rm -f {} ';'
+	find . -name '*.exe' -exec rm -f {} ';'
+	find . -name '*.dll' -exec rm -f {} ';'
+	find . -name '*.pyd' -exec rm -f {} ';'
 	find build -name 'fficonfig.h' -exec rm -f {} ';' || true
 	find build -name '*.py' -exec rm -f {} ';' || true
 	find build -name '*.py[co]' -exec rm -f {} ';' || true
