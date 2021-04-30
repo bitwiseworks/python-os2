@@ -915,6 +915,14 @@ calculate_which(const wchar_t *path_env, wchar_t *program_name,
             *abs_path_p = abs_path;
             return _PyStatus_OK();
         }
+
+#ifdef __OS2__ // search with .exe as well
+        add_exe_suffix(&abs_path);
+        if (isxfile(abs_path)) {
+            *abs_path_p = abs_path;
+            return _PyStatus_OK();
+        }
+#endif
         PyMem_RawFree(abs_path);
 
         if (!delim) {
