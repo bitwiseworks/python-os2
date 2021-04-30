@@ -8,6 +8,9 @@
 #include "Python.h"
 #include <stddef.h>
 #include <signal.h>
+#ifdef __OS2__
+#include <setjmp.h>
+#endif
 #include <errno.h>
 #include <sys/time.h>
 
@@ -1182,6 +1185,7 @@ setup_readline(readlinestate *mod_state)
 /* Wrapper around GNU readline that handles signals differently. */
 
 static char *completed_input_string;
+#ifndef __OS2__
 static void
 rlhandler(char *text)
 {
@@ -1255,6 +1259,42 @@ readline_until_enter_or_signal(const char *prompt, int *signal)
     return completed_input_string;
 }
 
+#else
+/* Interrupt handler */
+
+static jmp_buf jbuf;
+
+/* ARGSUSED */
+static void
+onintr(int sig)
+{
+    longjmp(jbuf, 1);
+}
+
+
+static char *
+readline_until_enter_or_signal(const char *prompt, int *signal)
+{
+    PyOS_sighandler_t old_inthandler;
+
+    *signal = 0;
+
+    old_inthandler = PyOS_setsig(SIGINT, onintr);
+    if (setjmp(jbuf)) {
+#ifdef HAVE_SIGRELSE
+        /* This seems necessary on SunOS 4.1 (Rasmus Hahn) */
+        sigrelse(SIGINT);
+#endif
+        PyOS_setsig(SIGINT, old_inthandler);
+        *signal = 1;
+        return NULL;
+    }
+    completed_input_string = readline(prompt);
+    PyOS_setsig(SIGINT, old_inthandler);
+
+    return completed_input_string;
+}
+#endif
 
 static char *
 call_readline(FILE *sys_stdin, FILE *sys_stdout, const char *prompt)
