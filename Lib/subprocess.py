@@ -1969,56 +1969,61 @@ class Popen(object):
             return self.returncode
 
 
+        if _os2:
+            # _readerthread and also the os2 part in _communicate is 
+            # borrowed from the winows implementation, so try to be in sync
+            def _readerthread(self, fh, buffer):
+                buffer.append(fh.read())
+                try:
+                    fh.close()
+                except IOError as e:
+                    # kLIBC close may fail with EBADF or even Error 0,
+                    # ignore for now
+                    pass
+
         def _communicate(self, input, endtime, orig_timeout):
             if _os2:
-                def _readerthread(file, buffer):
-                    while True:
-                        data = _eintr_retry_call(file.read)
-                        if data == "":
-                            try:
-                                file.close()
-                            except IOError as e:
-                                # kLIBC close may fail with EBADF or even Error 0,
-                                # ignore for now
-                                pass
-                            break
-                        buffer.append(data)
+                # Start reader threads feeding into a list hanging off of this
+                # object, unless they've already been started.
+                if self.stdout and not hasattr(self, "_stdout_buff"):
+                    self._stdout_buff = []
+                    self.stdout_thread = threading.Thread(target=self._readerthread,
+                                                     args=(self.stdout, self._stdout_buff))
+                    self.stdout_thread.daemon = True
+                    self.stdout_thread.start()
 
-                stdout = None # Return
-                stderr = None # Return
-
-                if self.stdout:
-                    stdout = []
-                    stdout_thread = threading.Thread(target=_readerthread,
-                                                     args=(self.stdout, stdout))
-                    stdout_thread.setDaemon(True)
-                    stdout_thread.start()
-
-                if self.stderr:
-                    stderr = []
-                    stderr_thread = threading.Thread(target=_readerthread,
-                                                     args=(self.stderr, stderr))
-                    stderr_thread.setDaemon(True)
-                    stderr_thread.start()
+                if self.stderr and not hasattr(self, "_stderr_buff"):
+                    self._stderr_buff = []
+                    self.stderr_thread = threading.Thread(target=self._readerthread,
+                                                     args=(self.stderr, self._stderr_buff))
+                    self.stderr_thread.daemon = True
+                    self.stderr_thread.start()
 
                 if self.stdin:
-                    if input is not None:
-                        try:
-                            _eintr_retry_call(self.stdin.write, input)
-                        except IOError as e:
-                            if e.errno != errno.EPIPE:
-                                raise
-                    try:
-                        self.stdin.close()
-                    except IOError as e:
-                        # kLIBC close may fail with EBADF or even Error 0,
-                        # ignore for now
-                        pass
+                    self._stdin_write(input)
 
+                # Wait for the reader threads, or time out.  If we time out, the
+                # threads remain reading and the fds left open in case the user
+                # calls communicate again.
+                if self.stdout is not None:
+                    self.stdout_thread.join(self._remaining_time(endtime))
+                    if self.stdout_thread.is_alive():
+                        raise TimeoutExpired(self.args, orig_timeout)
+                if self.stderr is not None:
+                    self.stderr_thread.join(self._remaining_time(endtime))
+                    if self.stderr_thread.is_alive():
+                        raise TimeoutExpired(self.args, orig_timeout)
+
+                # Collect the output from and close both pipes, now that we know
+                # both have been read successfully.
+                stdout = None
+                stderr = None
                 if self.stdout:
-                    stdout_thread.join()
+                    stdout = self._stdout_buff
+                    self.stdout.close()
                 if self.stderr:
-                    stderr_thread.join()
+                    stderr = self._stderr_buff
+                    self.stderr.close()
 
             else:
                 if self.stdin and not self._communication_started:
