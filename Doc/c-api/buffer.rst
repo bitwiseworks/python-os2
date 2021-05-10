@@ -21,8 +21,10 @@ first.
 
 Two examples of objects that support the buffer interface are strings and
 arrays. The string object exposes the character contents in the buffer
-interface's byte-oriented form. An array can also expose its contents, but it
-should be noted that array elements may be multi-byte values.
+interface's byte-oriented form. An array can only expose its contents via the
+old-style buffer interface. This limitation does not apply to Python 3,
+where :class:`memoryview` objects can be constructed from arrays, too.
+Array elements may be multi-byte values.
 
 An example user of the buffer interface is the file object's :meth:`write`
 method. Any object that can export a series of bytes through the buffer
@@ -72,7 +74,7 @@ The new-style Py_buffer struct
    .. c:member:: int ndim
 
       The number of dimensions the memory represents as a multi-dimensional
-      array.  If it is 0, :c:data:`strides` and :c:data:`suboffsets` must be
+      array.  If it is ``0``, :c:data:`strides` and :c:data:`suboffsets` must be
       *NULL*.
 
    .. c:member:: Py_ssize_t *shape
@@ -96,8 +98,11 @@ The new-style Py_buffer struct
       suboffset value that it negative indicates that no de-referencing should
       occur (striding in a contiguous memory block).
 
+      If all suboffsets are negative (i.e. no de-referencing is needed), then
+      this field must be NULL (the default value).
+
       Here is a function that returns a pointer to the element in an N-D array
-      pointed to by an N-dimesional index when there are both non-NULL strides
+      pointed to by an N-dimensional index when there are both non-NULL strides
       and suboffsets::
 
           void *get_item_pointer(int ndim, void *buf, Py_ssize_t *strides,
@@ -138,7 +143,7 @@ Buffer related functions
 
 .. c:function:: int PyObject_CheckBuffer(PyObject *obj)
 
-   Return 1 if *obj* supports the buffer interface otherwise 0.
+   Return ``1`` if *obj* supports the buffer interface otherwise ``0``.
 
 
 .. c:function:: int PyObject_GetBuffer(PyObject *obj, Py_buffer *view, int flags)
@@ -159,7 +164,7 @@ Buffer related functions
       :c:data:`Py_buffer` structure is filled in with non-default values and/or
       raise an error if the object can't support a simpler view of its memory.
 
-      0 is returned on success and -1 on error.
+      ``0`` is returned on success and ``-1`` on error.
 
       The following table gives possible values to the *flags* arguments.
 
@@ -268,12 +273,12 @@ Buffer related functions
 
 .. c:function:: int PyBuffer_IsContiguous(Py_buffer *view, char fortran)
 
-   Return 1 if the memory defined by the *view* is C-style (*fortran* is
+   Return ``1`` if the memory defined by the *view* is C-style (*fortran* is
    ``'C'``) or Fortran-style (*fortran* is ``'F'``) contiguous or either one
-   (*fortran* is ``'A'``).  Return 0 otherwise.
+   (*fortran* is ``'A'``).  Return ``0`` otherwise.
 
 
-.. c:function:: void PyBuffer_FillContiguousStrides(int ndim, Py_ssize_t *shape, Py_ssize_t *strides, Py_ssize_t itemsize, char fortran)
+.. c:function:: void PyBuffer_FillContiguousStrides(int ndims, Py_ssize_t *shape, Py_ssize_t *strides, int itemsize, char fortran)
 
    Fill the *strides* array with byte-strides of a contiguous (C-style if
    *fortran* is ``'C'`` or Fortran-style if *fortran* is ``'F'``) array of the
@@ -284,7 +289,7 @@ Buffer related functions
 
    Fill in a buffer-info structure, *view*, correctly for an exporter that can
    only share a contiguous chunk of memory of "unsigned bytes" of the given
-   length.  Return 0 on success and -1 (with raising an error) on error.
+   length.  Return ``0`` on success and ``-1`` (with raising an error) on error.
 
 
 MemoryView objects

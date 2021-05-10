@@ -16,23 +16,29 @@ available.  They are listed here in alphabetical order.
 :func:`basestring`   :func:`execfile`   :func:`issubclass`  :func:`print`      :func:`super`
 :func:`bin`          :func:`file`       :func:`iter`        :func:`property`   :func:`tuple`
 :func:`bool`         :func:`filter`     :func:`len`         :func:`range`      :func:`type`
-:func:`bytearray`    :func:`float`      :func:`list`        :func:`raw_input`  :func:`unichr`
+:func:`bytearray`    :func:`float`      |func-list|_        :func:`raw_input`  :func:`unichr`
 :func:`callable`     :func:`format`     :func:`locals`      :func:`reduce`     :func:`unicode`
 :func:`chr`          |func-frozenset|_  :func:`long`        :func:`reload`     :func:`vars`
 :func:`classmethod`  :func:`getattr`    :func:`map`         |func-repr|_       :func:`xrange`
 :func:`cmp`          :func:`globals`    :func:`max`         :func:`reversed`   :func:`zip`
 :func:`compile`      :func:`hasattr`    |func-memoryview|_  :func:`round`      :func:`__import__`
-:func:`complex`      :func:`hash`       :func:`min`         |func-set|_        :func:`apply`
-:func:`delattr`      :func:`help`       :func:`next`        :func:`setattr`    :func:`buffer`
-|func-dict|_         :func:`hex`        :func:`object`      :func:`slice`      :func:`coerce`
-:func:`dir`          :func:`id`         :func:`oct`         :func:`sorted`     :func:`intern`
+:func:`complex`      :func:`hash`       :func:`min`         |func-set|_        ..
+:func:`delattr`      :func:`help`       :func:`next`        :func:`setattr`    ..
+|func-dict|_         :func:`hex`        :func:`object`      :func:`slice`      ..
+:func:`dir`          :func:`id`         :func:`oct`         :func:`sorted`     ..
 ===================  =================  ==================  =================  ====================
+
+In addition, there are other four built-in functions that are no longer
+considered essential: :func:`apply`, :func:`buffer`, :func:`coerce`, and
+:func:`intern`.  They are documented in the :ref:`non-essential-built-in-funcs`
+section.
 
 .. using :func:`dict` would create a link to another page, so local targets are
    used, with replacement texts to make the output in the table consistent
 
 .. |func-dict| replace:: ``dict()``
 .. |func-frozenset| replace:: ``frozenset()``
+.. |func-list| replace:: ``list()``
 .. |func-memoryview| replace:: ``memoryview()``
 .. |func-repr| replace:: ``repr()``
 .. |func-set| replace:: ``set()``
@@ -47,7 +53,7 @@ available.  They are listed here in alphabetical order.
 
 .. function:: all(iterable)
 
-   Return True if all elements of the *iterable* are true (or if the iterable
+   Return ``True`` if all elements of the *iterable* are true (or if the iterable
    is empty).  Equivalent to::
 
       def all(iterable):
@@ -61,8 +67,8 @@ available.  They are listed here in alphabetical order.
 
 .. function:: any(iterable)
 
-   Return True if any element of the *iterable* is true.  If the iterable
-   is empty, return False.  Equivalent to::
+   Return ``True`` if any element of the *iterable* is true.  If the iterable
+   is empty, return ``False``.  Equivalent to::
 
       def any(iterable):
           for element in iterable:
@@ -92,13 +98,14 @@ available.  They are listed here in alphabetical order.
    .. versionadded:: 2.6
 
 
-.. function:: bool([x])
+.. class:: bool([x])
 
-   Convert a value to a Boolean, using the standard truth testing procedure.  If
-   *x* is false or omitted, this returns :const:`False`; otherwise it returns
-   :const:`True`. :class:`bool` is also a class, which is a subclass of
-   :class:`int`. Class :class:`bool` cannot be subclassed further.  Its only
-   instances are :const:`False` and :const:`True`.
+   Return a Boolean value, i.e. one of ``True`` or ``False``.  *x* is converted
+   using the standard truth testing procedure.  If *x* is false or omitted, this
+   returns :const:`False`; otherwise it returns :const:`True`. :class:`bool` is
+   also a class, which is a subclass of :class:`int`. Class :class:`bool` cannot
+   be subclassed further.  Its only instances are :const:`False` and
+   :const:`True`.
 
    .. index:: pair: Boolean; type
 
@@ -108,9 +115,9 @@ available.  They are listed here in alphabetical order.
       If no argument is given, this function returns :const:`False`.
 
 
-.. function:: bytearray([source[, encoding[, errors]]])
+.. class:: bytearray([source[, encoding[, errors]]])
 
-   Return a new array of bytes.  The :class:`bytearray` type is a mutable
+   Return a new array of bytes.  The :class:`bytearray` class is a mutable
    sequence of integers in the range 0 <= x < 256.  It has most of the usual
    methods of mutable sequences, described in :ref:`typesseq-mutable`, as well
    as most methods that the :class:`str` type has, see :ref:`string-methods`.
@@ -118,9 +125,9 @@ available.  They are listed here in alphabetical order.
    The optional *source* parameter can be used to initialize the array in a few
    different ways:
 
-   * If it is a *string*, you must also give the *encoding* (and optionally,
-     *errors*) parameters; :func:`bytearray` then converts the string to
-     bytes using :meth:`str.encode`.
+   * If it is *unicode*, you must also give the *encoding* (and optionally,
+     *errors*) parameters; :func:`bytearray` then converts the unicode to
+     bytes using :meth:`unicode.encode`.
 
    * If it is an *integer*, the array will have that size and will be
      initialized with null bytes.
@@ -168,19 +175,18 @@ available.  They are listed here in alphabetical order.
           def f(cls, arg1, arg2, ...):
               ...
 
-   The ``@classmethod`` form is a function :term:`decorator` -- see the description
-   of function definitions in :ref:`function` for details.
+   The ``@classmethod`` form is a function :term:`decorator` -- see
+   :ref:`function` for details.
 
-   It can be called either on the class (such as ``C.f()``) or on an instance (such
+   A class method can be called either on the class (such as ``C.f()``) or on an instance (such
    as ``C().f()``).  The instance is ignored except for its class. If a class
    method is called for a derived class, the derived class object is passed as the
    implied first argument.
 
    Class methods are different than C++ or Java static methods. If you want those,
-   see :func:`staticmethod` in this section.
+   see :func:`staticmethod`.
 
-   For more information on class methods, consult the documentation on the standard
-   type hierarchy in :ref:`types`.
+   For more information on class methods, see :ref:`types`.
 
    .. versionadded:: 2.2
 
@@ -217,7 +223,7 @@ available.  They are listed here in alphabetical order.
    The optional arguments *flags* and *dont_inherit* control which future
    statements (see :pep:`236`) affect the compilation of *source*.  If neither
    is present (or both are zero) the code is compiled with those future
-   statements that are in effect in the code that is calling compile.  If the
+   statements that are in effect in the code that is calling :func:`compile`.  If the
    *flags* argument is given and *dont_inherit* is not (or is zero) then the
    future statements specified by the *flags* argument are used in addition to
    those that would be used anyway. If *dont_inherit* is a non-zero integer then
@@ -232,12 +238,21 @@ available.  They are listed here in alphabetical order.
    This function raises :exc:`SyntaxError` if the compiled source is invalid,
    and :exc:`TypeError` if the source contains null bytes.
 
+   If you want to parse Python code into its AST representation, see
+   :func:`ast.parse`.
+
    .. note::
 
       When compiling a string with multi-line code in ``'single'`` or
       ``'eval'`` mode, input must be terminated by at least one newline
       character.  This is to facilitate detection of incomplete and complete
       statements in the :mod:`code` module.
+
+   .. warning::
+
+      It is possible to crash the Python interpreter with a
+      sufficiently large/complex string when compiling to an AST
+      object due to stack depth limitations in Python's AST compiler.
 
    .. versionchanged:: 2.3
       The *flags* and *dont_inherit* arguments were added.
@@ -250,9 +265,9 @@ available.  They are listed here in alphabetical order.
       does not have to end in a newline anymore.
 
 
-.. function:: complex([real[, imag]])
+.. class:: complex([real[, imag]])
 
-   Create a complex number with the value *real* + *imag*\*j or convert a string or
+   Return a complex number with the value *real* + *imag*\*1j or convert a string or
    number to a complex number.  If the first parameter is a string, it will be
    interpreted as a complex number and the function must be called without a second
    parameter.  The second parameter can never be a string. Each argument may be any
@@ -279,14 +294,13 @@ available.  They are listed here in alphabetical order.
 
 
 .. _func-dict:
-.. function:: dict(**kwarg)
-              dict(mapping, **kwarg)
-              dict(iterable, **kwarg)
+.. class:: dict(**kwarg)
+           dict(mapping, **kwarg)
+           dict(iterable, **kwarg)
    :noindex:
 
    Create a new dictionary.  The :class:`dict` object is the dictionary class.
-   See :class:`dict` and :ref:`typesmapping` for documentation about this
-   class.
+   See :class:`dict` and :ref:`typesmapping` for documentation about this class.
 
    For other containers see the built-in :class:`list`, :class:`set`, and
    :class:`tuple` classes, as well as the :mod:`collections` module.
@@ -303,7 +317,7 @@ available.  They are listed here in alphabetical order.
    :func:`dir` reports their attributes.
 
    If the object does not provide :meth:`__dir__`, the function tries its best to
-   gather information from the object's :attr:`__dict__` attribute, if defined, and
+   gather information from the object's :attr:`~object.__dict__` attribute, if defined, and
    from its type object.  The resulting list is not necessarily complete, and may
    be inaccurate when the object has a custom :func:`__getattr__`.
 
@@ -489,9 +503,11 @@ available.  They are listed here in alphabetical order.
    where the *function* returns false.
 
 
-.. function:: float([x])
+.. class:: float([x])
 
-   Convert a string or a number to floating point.  If the argument is a string, it
+   Return a floating point number constructed from a number or string *x*.
+
+   If the argument is a string, it
    must contain a possibly signed decimal or floating point number, possibly
    embedded in whitespace. The argument may also be [+|-]nan or [+|-]inf.
    Otherwise, the argument may be a plain or long integer
@@ -534,7 +550,7 @@ available.  They are listed here in alphabetical order.
 
 
 .. _func-frozenset:
-.. function:: frozenset([iterable])
+.. class:: frozenset([iterable])
    :noindex:
 
    Return a new :class:`frozenset` object, optionally with elements taken from
@@ -596,8 +612,21 @@ available.  They are listed here in alphabetical order.
 
 .. function:: hex(x)
 
-   Convert an integer number (of any size) to a hexadecimal string. The result is a
-   valid Python expression.
+   Convert an integer number (of any size) to a lowercase hexadecimal string
+   prefixed with "0x", for example:
+
+      >>> hex(255)
+      '0xff'
+      >>> hex(-42)
+      '-0x2a'
+      >>> hex(1L)
+      '0x1L'
+
+   If x is not a Python :class:`int` or :class:`long` object, it has to
+   define a __hex__() method that returns a string.
+
+   See also :func:`int` for converting a hexadecimal string to an
+   integer using a base of 16.
 
    .. note::
 
@@ -632,10 +661,10 @@ available.  They are listed here in alphabetical order.
    Consider using the :func:`raw_input` function for general input from users.
 
 
-.. function:: int(x=0)
-              int(x, base=10)
+.. class:: int(x=0)
+           int(x, base=10)
 
-   Convert a number or string *x* to an integer, or return ``0`` if no
+   Return an integer object constructed from a number or string *x*, or return ``0`` if no
    arguments are given.  If *x* is a number, it can be a plain integer, a long
    integer, or a floating point number.  If *x* is floating point, the conversion
    truncates towards zero.  If the argument is outside the integer range, the
@@ -647,7 +676,7 @@ available.  They are listed here in alphabetical order.
    preceded by ``+`` or ``-`` (with no space in between) and surrounded by
    whitespace.  A base-n literal consists of the digits 0 to n-1, with ``a``
    to ``z`` (or ``A`` to ``Z``) having
-   values 10 to 35.  The default *base* is 10. The allowed values are 0 and 2-36.
+   values 10 to 35.  The default *base* is 10. The allowed values are 0 and 2--36.
    Base-2, -8, and -16 literals can be optionally prefixed with ``0b``/``0B``,
    ``0o``/``0O``/``0``, or ``0x``/``0X``, as with integer literals in code.
    Base 0 means to interpret the string exactly as an integer literal, so that
@@ -664,10 +693,10 @@ available.  They are listed here in alphabetical order.
    is a type object (new-style class) and *object* is an object of that type or of
    a (direct, indirect or :term:`virtual <abstract base class>`) subclass
    thereof.  If *object* is not a class instance or
-   an object of the given type, the function always returns false.  If *classinfo*
-   is neither a class object nor a type object, it may be a tuple of class or type
-   objects, or may recursively contain other such tuples (other sequence types are
-   not accepted).  If *classinfo* is not a class, type, or tuple of classes, types,
+   an object of the given type, the function always returns false.
+   If *classinfo* is a tuple of class or type objects (or recursively, other
+   such tuples), return true if *object* is an instance of any of the classes
+   or types.  If *classinfo* is not a class, type, or tuple of classes, types,
    and such tuples, a :exc:`TypeError` exception is raised.
 
    .. versionchanged:: 2.2
@@ -713,10 +742,13 @@ available.  They are listed here in alphabetical order.
 .. function:: len(s)
 
    Return the length (the number of items) of an object.  The argument may be a
-   sequence (string, tuple or list) or a mapping (dictionary).
+   sequence (such as a string, bytes, tuple, list, or range) or a collection
+   (such as a dictionary, set, or frozen set).
 
 
-.. function:: list([iterable])
+.. _func-list:
+.. class:: list([iterable])
+   :noindex:
 
    Return a list whose items are the same and in the same order as *iterable*'s
    items.  *iterable* may be either a sequence, a container that supports
@@ -742,10 +774,11 @@ available.  They are listed here in alphabetical order.
       affect the values of local and free variables used by the interpreter.
 
 
-.. function:: long(x=0)
-              long(x, base=10)
+.. class:: long(x=0)
+           long(x, base=10)
 
-   Convert a string or number to a long integer.  If the argument is a string, it
+   Return a long integer object constructed from a string or number *x*.
+   If the argument is a string, it
    must contain a possibly signed number of arbitrary size, possibly embedded in
    whitespace. The *base* argument is interpreted in the same way as for
    :func:`int`, and may only be given when *x* is a string. Otherwise, the argument
@@ -823,7 +856,7 @@ available.  They are listed here in alphabetical order.
    .. versionadded:: 2.6
 
 
-.. function:: object()
+.. class:: object()
 
    Return a new featureless object.  :class:`object` is a base for all new style
    classes.  It has the methods that are common to all instances of new style
@@ -880,8 +913,8 @@ available.  They are listed here in alphabetical order.
    to use the system default, which is usually line buffered for tty devices and
    fully buffered for other files.  If omitted, the system default is used. [#]_
 
-   Modes ``'r+'``, ``'w+'`` and ``'a+'`` open the file for updating (note that
-   ``'w+'`` truncates the file).  Append ``'b'`` to the mode to open the file in
+   Modes ``'r+'``, ``'w+'`` and ``'a+'`` open the file for updating (reading and writing);
+   note that ``'w+'`` truncates the file.  Append ``'b'`` to the mode to open the file in
    binary mode, on systems that differentiate between binary and text files; on
    systems that don't have this distinction, adding the ``'b'`` has no effect.
 
@@ -973,14 +1006,16 @@ available.  They are listed here in alphabetical order.
    .. versionadded:: 2.6
 
 
-.. function:: property([fget[, fset[, fdel[, doc]]]])
+.. class:: property([fget[, fset[, fdel[, doc]]]])
 
    Return a property attribute for :term:`new-style class`\es (classes that
    derive from :class:`object`).
 
-   *fget* is a function for getting an attribute value, likewise *fset* is a
-   function for setting, and *fdel* a function for del'ing, an attribute.  Typical
-   use is to define a managed attribute ``x``::
+   *fget* is a function for getting an attribute value.  *fset* is a function
+   for setting an attribute value. *fdel* is a function for deleting an attribute
+   value.  And *doc* creates a docstring for the attribute.
+
+   A typical use is to define a managed attribute ``x``::
 
       class C(object):
           def __init__(self):
@@ -988,13 +1023,16 @@ available.  They are listed here in alphabetical order.
 
           def getx(self):
               return self._x
+
           def setx(self, value):
               self._x = value
+
           def delx(self):
               del self._x
+
           x = property(getx, setx, delx, "I'm the 'x' property.")
 
-   If then *c* is an instance of *C*, ``c.x`` will invoke the getter,
+   If *c* is an instance of *C*, ``c.x`` will invoke the getter,
    ``c.x = value`` will invoke the setter and ``del c.x`` the deleter.
 
    If given, *doc* will be the docstring of the property attribute. Otherwise, the
@@ -1010,8 +1048,9 @@ available.  They are listed here in alphabetical order.
               """Get the current voltage."""
               return self._voltage
 
-   turns the :meth:`voltage` method into a "getter" for a read-only attribute
-   with the same name.
+   The ``@property`` decorator turns the :meth:`voltage` method into a "getter"
+   for a read-only attribute with the same name, and it sets the docstring for
+   *voltage* to "Get the current voltage."
 
    A property object has :attr:`~property.getter`, :attr:`~property.setter`,
    and :attr:`~property.deleter` methods usable as decorators that create a
@@ -1039,7 +1078,7 @@ available.  They are listed here in alphabetical order.
    additional functions the same name as the original property (``x`` in this
    case.)
 
-   The returned property also has the attributes ``fget``, ``fset``, and
+   The returned property object also has the attributes ``fget``, ``fset``, and
    ``fdel`` corresponding to the constructor arguments.
 
    .. versionadded:: 2.2
@@ -1147,12 +1186,6 @@ available.  They are listed here in alphabetical order.
 
    There are a number of other caveats:
 
-   If a module is syntactically correct but its initialization fails, the first
-   :keyword:`import` statement for it does not bind its name locally, but does
-   store a (partially initialized) module object in ``sys.modules``.  To reload the
-   module you must first :keyword:`import` it again (this will bind the name to the
-   partially initialized module object) before you can :func:`reload` it.
-
    When a module is reloaded, its dictionary (containing the module's global
    variables) is retained.  Redefinitions of names will override the old
    definitions, so this is generally not a problem.  If the new version of a module
@@ -1166,10 +1199,11 @@ available.  They are listed here in alphabetical order.
       except NameError:
           cache = {}
 
-   It is legal though generally not very useful to reload built-in or dynamically
-   loaded modules, except for :mod:`sys`, :mod:`__main__` and :mod:`__builtin__`.
-   In many cases, however, extension modules are not designed to be initialized
-   more than once, and may fail in arbitrary ways when reloaded.
+   It is generally not very useful to reload built-in or dynamically loaded
+   modules.  Reloading :mod:`sys`, :mod:`__main__`, :mod:`builtins` and other
+   key modules is not recommended.  In many cases extension modules are not
+   designed to be initialized more than once, and may fail in arbitrary ways
+   when reloaded.
 
    If a module imports objects from another module using :keyword:`from` ...
    :keyword:`import` ..., calling :func:`reload` for the other module does not
@@ -1215,7 +1249,7 @@ available.  They are listed here in alphabetical order.
    the decimal point.  If *ndigits* is omitted, it defaults to zero. The result
    is a floating point number.  Values are rounded to the closest multiple of
    10 to the power minus *ndigits*; if two multiples are equally close,
-   rounding is done away from 0 (so. for example, ``round(0.5)`` is ``1.0`` and
+   rounding is done away from 0 (so, for example, ``round(0.5)`` is ``1.0`` and
    ``round(-0.5)`` is ``-1.0``).
 
 
@@ -1229,7 +1263,7 @@ available.  They are listed here in alphabetical order.
 
 
 .. _func-set:
-.. function:: set([iterable])
+.. class:: set([iterable])
    :noindex:
 
    Return a new :class:`set` object, optionally with elements taken from
@@ -1252,8 +1286,8 @@ available.  They are listed here in alphabetical order.
    ``x.foobar = 123``.
 
 
-.. function:: slice(stop)
-              slice(start, stop[, step])
+.. class:: slice(stop)
+           slice(start, stop[, step])
 
    .. index:: single: Numerical Python
 
@@ -1295,8 +1329,12 @@ available.  They are listed here in alphabetical order.
    each element only once.  Use :func:`functools.cmp_to_key` to convert an
    old-style *cmp* function to a *key* function.
 
-   For sorting examples and a brief sorting tutorial, see `Sorting HowTo
-   <http://wiki.python.org/moin/HowTo/Sorting/>`_\.
+   The built-in :func:`sorted` function is guaranteed to be stable. A sort is
+   stable if it guarantees not to change the relative order of elements that
+   compare equal --- this is helpful for sorting in multiple passes (for
+   example, sort by department, then by salary grade).
+
+   For sorting examples and a brief sorting tutorial, see :ref:`sortinghowto`.
 
    .. versionadded:: 2.4
 
@@ -1313,18 +1351,17 @@ available.  They are listed here in alphabetical order.
           def f(arg1, arg2, ...):
               ...
 
-   The ``@staticmethod`` form is a function :term:`decorator` -- see the
-   description of function definitions in :ref:`function` for details.
+   The ``@staticmethod`` form is a function :term:`decorator` -- see
+   :ref:`function` for details.
 
-   It can be called either on the class (such as ``C.f()``) or on an instance (such
-   as ``C().f()``).  The instance is ignored except for its class.
+   A static method can be called either on the class (such as ``C.f()``) or on an instance (such
+   as ``C().f()``).
 
    Static methods in Python are similar to those found in Java or C++. Also see
    :func:`classmethod` for a variant that is useful for creating alternate
    class constructors.
 
-   For more information on static methods, consult the documentation on the
-   standard type hierarchy in :ref:`types`.
+   For more information on static methods, see :ref:`types`.
 
    .. versionadded:: 2.2
 
@@ -1332,7 +1369,7 @@ available.  They are listed here in alphabetical order.
       Function decorator syntax added.
 
 
-.. function:: str(object='')
+.. class:: str(object='')
 
    Return a string containing a nicely printable representation of an object.  For
    strings, this returns the string itself.  The difference with ``repr(object)``
@@ -1417,7 +1454,7 @@ available.  They are listed here in alphabetical order.
 
    For practical suggestions on how to design cooperative classes using
    :func:`super`, see `guide to using super()
-   <http://rhettinger.wordpress.com/2011/05/26/super-considered-super/>`_.
+   <https://rhettinger.wordpress.com/2011/05/26/super-considered-super/>`_.
 
    .. versionadded:: 2.2
 
@@ -1436,8 +1473,8 @@ available.  They are listed here in alphabetical order.
    :class:`list`, and :class:`set` classes, and the :mod:`collections` module.
 
 
-.. function:: type(object)
-              type(name, bases, dict)
+.. class:: type(object)
+           type(name, bases, dict)
 
    .. index:: object: type
 
@@ -1447,7 +1484,7 @@ available.  They are listed here in alphabetical order.
 
    With three arguments, return a new type object.  This is essentially a
    dynamic form of the :keyword:`class` statement. The *name* string is the
-   class name and becomes the :attr:`~class.__name__` attribute; the *bases* tuple
+   class name and becomes the :attr:`~definition.__name__` attribute; the *bases* tuple
    itemizes the base classes and becomes the :attr:`~class.__bases__` attribute;
    and the *dict* dictionary is the namespace containing definitions for class
    body and becomes the :attr:`~object.__dict__`  attribute.  For example, the
@@ -1515,11 +1552,11 @@ available.  They are listed here in alphabetical order.
 .. function:: vars([object])
 
    Return the :attr:`~object.__dict__` attribute for a module, class, instance,
-   or any other object with a :attr:`__dict__` attribute.
+   or any other object with a :attr:`~object.__dict__` attribute.
 
-   Objects such as modules and instances have an updateable :attr:`__dict__`
+   Objects such as modules and instances have an updateable :attr:`~object.__dict__`
    attribute; however, other objects may have write restrictions on their
-   :attr:`__dict__` attributes (for example, new-style classes use a
+   :attr:`~object.__dict__` attributes (for example, new-style classes use a
    dictproxy to prevent direct dictionary updates).
 
    Without an argument, :func:`vars` acts like :func:`locals`.  Note, the
@@ -1732,4 +1769,3 @@ bypass these functions without concerns about missing something important.
 .. [#] In the current implementation, local variable bindings cannot normally be
    affected this way, but variables retrieved from other scopes (such as modules)
    can be.  This may change.
-

@@ -101,7 +101,7 @@ Here are two ways to write a table of squares and cubes::
    10 100 1000
 
 (Note that in the first example, one space between each column was added by the
-way :keyword:`print` works: it always adds spaces between its arguments.)
+way :keyword:`print` works: by default it adds spaces between its arguments.)
 
 This example demonstrates the :meth:`str.rjust` method of string
 objects, which right-justifies a string in a field of a given width by padding
@@ -326,10 +326,10 @@ beginning of the file as the reference point. ::
 
    >>> f = open('workfile', 'r+')
    >>> f.write('0123456789abcdef')
-   >>> f.seek(5)     # Go to the 6th byte in the file
+   >>> f.seek(5)      # Go to the 6th byte in the file
    >>> f.read(1)
    '5'
-   >>> f.seek(-3, 2) # Go to the 3rd byte before the end
+   >>> f.seek(-3, 2)  # Go to the 3rd byte before the end
    >>> f.read(1)
    'd'
 
@@ -340,7 +340,7 @@ attempts to use the file object will automatically fail. ::
    >>> f.close()
    >>> f.read()
    Traceback (most recent call last):
-     File "<stdin>", line 1, in ?
+     File "<stdin>", line 1, in <module>
    ValueError: I/O operation on closed file
 
 It is good practice to use the :keyword:`with` keyword when dealing with file
@@ -358,47 +358,65 @@ File objects have some additional methods, such as :meth:`~file.isatty` and
 Reference for a complete guide to file objects.
 
 
-.. _tut-pickle:
+.. _tut-json:
 
-The :mod:`pickle` Module
-------------------------
+Saving structured data with :mod:`json`
+---------------------------------------
 
-.. index:: module: pickle
+.. index:: module: json
 
-Strings can easily be written to and read from a file. Numbers take a bit more
+Strings can easily be written to and read from a file.  Numbers take a bit more
 effort, since the :meth:`read` method only returns strings, which will have to
 be passed to a function like :func:`int`, which takes a string like ``'123'``
-and returns its numeric value 123.  However, when you want to save more complex
-data types like lists, dictionaries, or class instances, things get a lot more
-complicated.
+and returns its numeric value 123.  When you want to save more complex data
+types like nested lists and dictionaries, parsing and serializing by hand
+becomes complicated.
 
-Rather than have users be constantly writing and debugging code to save
-complicated data types, Python provides a standard module called :mod:`pickle`.
-This is an amazing module that can take almost any Python object (even some
-forms of Python code!), and convert it to a string representation; this process
-is called :dfn:`pickling`.  Reconstructing the object from the string
-representation is called :dfn:`unpickling`.  Between pickling and unpickling,
-the string representing the object may have been stored in a file or data, or
+Rather than having users constantly writing and debugging code to save
+complicated data types to files, Python allows you to use the popular data
+interchange format called `JSON (JavaScript Object Notation)
+<http://json.org>`_.  The standard module called :mod:`json` can take Python
+data hierarchies, and convert them to string representations; this process is
+called :dfn:`serializing`.  Reconstructing the data from the string representation
+is called :dfn:`deserializing`.  Between serializing and deserializing, the
+string representing the object may have been stored in a file or data, or
 sent over a network connection to some distant machine.
 
-If you have an object ``x``, and a file object ``f`` that's been opened for
-writing, the simplest way to pickle the object takes only one line of code::
+.. note::
+   The JSON format is commonly used by modern applications to allow for data
+   exchange.  Many programmers are already familiar with it, which makes
+   it a good choice for interoperability.
 
-   pickle.dump(x, f)
+If you have an object ``x``, you can view its JSON string representation with a
+simple line of code::
 
-To unpickle the object again, if ``f`` is a file object which has been opened
-for reading::
+   >>> import json
+   >>> json.dumps([1, 'simple', 'list'])
+   '[1, "simple", "list"]'
 
-   x = pickle.load(f)
+Another variant of the :func:`~json.dumps` function, called :func:`~json.dump`,
+simply serializes the object to a file.  So if ``f`` is a :term:`file object`
+opened for writing, we can do this::
 
-(There are other variants of this, used when pickling many objects or when you
-don't want to write the pickled data to a file; consult the complete
-documentation for :mod:`pickle` in the Python Library Reference.)
+   json.dump(x, f)
 
-:mod:`pickle` is the standard way to make Python objects which can be stored and
-reused by other programs or by a future invocation of the same program; the
-technical term for this is a :dfn:`persistent` object.  Because :mod:`pickle` is
-so widely used, many authors who write Python extensions take care to ensure
-that new data types such as matrices can be properly pickled and unpickled.
+To decode the object again, if ``f`` is a :term:`file object` which has
+been opened for reading::
 
+   x = json.load(f)
+
+This simple serialization technique can handle lists and dictionaries, but
+serializing arbitrary class instances in JSON requires a bit of extra effort.
+The reference for the :mod:`json` module contains an explanation of this.
+
+.. seealso::
+
+   :mod:`pickle` - the pickle module
+
+   Contrary to :ref:`JSON <tut-json>`, *pickle* is a protocol which allows
+   the serialization of arbitrarily complex Python objects.  As such, it is
+   specific to Python and cannot be used to communicate with applications
+   written in other languages.  It is also insecure by default:
+   deserializing pickle data coming from an untrusted source can execute
+   arbitrary code, if the data was crafted by a skilled attacker.
 

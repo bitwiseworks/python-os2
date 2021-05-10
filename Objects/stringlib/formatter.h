@@ -141,7 +141,7 @@ typedef struct {
 
 
 #if 0
-/* Occassionally useful for debugging. Should normally be commented out. */
+/* Occasionally useful for debugging. Should normally be commented out. */
 static void
 DEBUG_PRINT_FORMAT_SPEC(InternalFormatSpec *format)
 {
@@ -180,8 +180,9 @@ parse_internal_render_format_spec(STRINGLIB_CHAR *format_spec,
 
     Py_ssize_t consumed;
     int align_specified = 0;
+    int fill_char_specified = 0;
 
-    format->fill_char = '\0';
+    format->fill_char = ' ';
     format->align = default_align;
     format->alternate = 0;
     format->sign = '\0';
@@ -195,6 +196,7 @@ parse_internal_render_format_spec(STRINGLIB_CHAR *format_spec,
     if (end-ptr >= 2 && is_alignment_token(ptr[1])) {
         format->align = ptr[1];
         format->fill_char = ptr[0];
+        fill_char_specified = 1;
         align_specified = 1;
         ptr += 2;
     }
@@ -218,7 +220,7 @@ parse_internal_render_format_spec(STRINGLIB_CHAR *format_spec,
     }
 
     /* The special case for 0-padding (backwards compat) */
-    if (format->fill_char == '\0' && end-ptr >= 1 && ptr[0] == '0') {
+    if (!fill_char_specified && end-ptr >= 1 && ptr[0] == '0') {
         format->fill_char = '0';
         if (!align_specified) {
             format->align = '=';
@@ -715,8 +717,7 @@ format_string_internal(PyObject *value, const InternalFormatSpec *format)
 
     /* Write into that space. First the padding. */
     p = fill_padding(STRINGLIB_STR(result), len,
-                     format->fill_char=='\0'?' ':format->fill_char,
-                     lpad, rpad);
+                     format->fill_char, lpad, rpad);
 
     /* Then the source string. */
     memcpy(p, STRINGLIB_STR(value), len * sizeof(STRINGLIB_CHAR));
@@ -788,6 +789,7 @@ format_int_or_long_internal(PyObject *value, const InternalFormatSpec *format,
         x = PyLong_AsLong(value);
         if (x == -1 && PyErr_Occurred())
             goto done;
+#if STRINGLIB_IS_UNICODE
 #ifdef Py_UNICODE_WIDE
         if (x < 0 || x > 0x10ffff) {
             PyErr_SetString(PyExc_OverflowError,
@@ -800,6 +802,13 @@ format_int_or_long_internal(PyObject *value, const InternalFormatSpec *format,
             PyErr_SetString(PyExc_OverflowError,
                             "%c arg not in range(0x10000) "
                             "(narrow Python build)");
+            goto done;
+        }
+#endif
+#else
+        if (x < 0 || x > 0xff) {
+            PyErr_SetString(PyExc_OverflowError,
+                            "%c arg not in range(0x100)");
             goto done;
         }
 #endif
@@ -893,8 +902,7 @@ format_int_or_long_internal(PyObject *value, const InternalFormatSpec *format,
 
     /* Populate the memory. */
     fill_number(STRINGLIB_STR(result), &spec, pnumeric_chars, n_digits,
-                prefix, format->fill_char == '\0' ? ' ' : format->fill_char,
-                &locale, format->type == 'X');
+                prefix, format->fill_char, &locale, format->type == 'X');
 
 done:
     Py_XDECREF(tmp);
@@ -987,7 +995,7 @@ format_float_internal(PyObject *value,
     if (precision < 0)
         precision = default_precision;
 
-    /* Cast "type", because if we're in unicode we need to pass a
+    /* Cast "type", because if we're in unicode we need to pass an
        8-bit char. This is safe, because we've restricted what "type"
        can be. */
     buf = PyOS_double_to_string(val, (char)type, precision, flags,
@@ -1048,8 +1056,7 @@ format_float_internal(PyObject *value,
 
     /* Populate the memory. */
     fill_number(STRINGLIB_STR(result), &spec, p, n_digits, NULL,
-                format->fill_char == '\0' ? ' ' : format->fill_char, &locale,
-                0);
+                format->fill_char, &locale, 0);
 
 done:
     PyMem_Free(buf);
@@ -1168,7 +1175,7 @@ format_complex_internal(PyObject *value,
     if (precision < 0)
         precision = default_precision;
 
-    /* Cast "type", because if we're in unicode we need to pass a
+    /* Cast "type", because if we're in unicode we need to pass an
        8-bit char. This is safe, because we've restricted what "type"
        can be. */
     re_buf = PyOS_double_to_string(re, (char)type, precision, flags,
@@ -1265,8 +1272,7 @@ format_complex_internal(PyObject *value,
     /* Populate the memory. First, the padding. */
     p = fill_padding(STRINGLIB_STR(result),
                      n_re_total + n_im_total + 1 + add_parens * 2,
-                     format->fill_char=='\0' ? ' ' : format->fill_char,
-                     lpad, rpad);
+                     format->fill_char, lpad, rpad);
 
     if (add_parens)
         *p++ = '(';

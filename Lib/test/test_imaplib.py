@@ -165,6 +165,20 @@ class BaseThreadedNetworkedTests(unittest.TestCase):
                               self.imap_class, *server.server_address)
 
 
+    def test_linetoolong(self):
+        maxline = 10
+
+        class TooLongHandler(SimpleIMAPHandler):
+            def handle(self):
+                # Send a very long response line
+                self.wfile.write('* OK ' + maxline * 'x' + '\r\n')
+
+        with self.reaped_server(TooLongHandler) as server, \
+                 support.swap_attr(imaplib, '_MAXLINE', maxline):
+            with self.assertRaisesRegexp(imaplib.IMAP4.error,
+                    'got more than 10 bytes'):
+                self.imap_class(*server.server_address)
+
 class ThreadedNetworkedTests(BaseThreadedNetworkedTests):
 
     server_class = SocketServer.TCPServer
@@ -236,5 +250,4 @@ def test_main():
 
 
 if __name__ == "__main__":
-    support.use_resources = ['network']
     test_main()

@@ -74,7 +74,7 @@ sends logging output to a disk file.  It inherits the output functionality from
 
    Returns a new instance of the :class:`FileHandler` class. The specified file is
    opened and used as the stream for logging. If *mode* is not specified,
-   :const:`'a'` is used.  If *encoding* is not *None*, it is used to open the file
+   :const:`'a'` is used.  If *encoding* is not ``None``, it is used to open the file
    with that encoding.  If *delay* is true, then file opening is deferred until the
    first call to :meth:`emit`. By default, the file grows indefinitely.
 
@@ -154,7 +154,7 @@ for this value.
 
    Returns a new instance of the :class:`WatchedFileHandler` class. The specified
    file is opened and used as the stream for logging. If *mode* is not specified,
-   :const:`'a'` is used.  If *encoding* is not *None*, it is used to open the file
+   :const:`'a'` is used.  If *encoding* is not ``None``, it is used to open the file
    with that encoding.  If *delay* is true, then file opening is deferred until the
    first call to :meth:`emit`.  By default, the file grows indefinitely.
 
@@ -178,22 +178,23 @@ module, supports rotation of disk log files.
 
    Returns a new instance of the :class:`RotatingFileHandler` class. The specified
    file is opened and used as the stream for logging. If *mode* is not specified,
-   ``'a'`` is used.  If *encoding* is not *None*, it is used to open the file
+   ``'a'`` is used.  If *encoding* is not ``None``, it is used to open the file
    with that encoding.  If *delay* is true, then file opening is deferred until the
    first call to :meth:`emit`.  By default, the file grows indefinitely.
 
    You can use the *maxBytes* and *backupCount* values to allow the file to
    :dfn:`rollover` at a predetermined size. When the size is about to be exceeded,
    the file is closed and a new file is silently opened for output. Rollover occurs
-   whenever the current log file is nearly *maxBytes* in length; if *maxBytes* is
-   zero, rollover never occurs.  If *backupCount* is non-zero, the system will save
-   old log files by appending the extensions '.1', '.2' etc., to the filename. For
-   example, with a *backupCount* of 5 and a base file name of :file:`app.log`, you
-   would get :file:`app.log`, :file:`app.log.1`, :file:`app.log.2`, up to
-   :file:`app.log.5`. The file being written to is always :file:`app.log`.  When
-   this file is filled, it is closed and renamed to :file:`app.log.1`, and if files
-   :file:`app.log.1`, :file:`app.log.2`, etc.  exist, then they are renamed to
-   :file:`app.log.2`, :file:`app.log.3` etc.  respectively.
+   whenever the current log file is nearly *maxBytes* in length; if either of
+   *maxBytes* or *backupCount* is zero, rollover never occurs.  If *backupCount*
+   is non-zero, the system will save old log files by appending the extensions
+   '.1', '.2' etc., to the filename. For example, with a *backupCount* of 5 and
+   a base file name of :file:`app.log`, you would get :file:`app.log`,
+   :file:`app.log.1`, :file:`app.log.2`, up to :file:`app.log.5`. The file being
+   written to is always :file:`app.log`.  When this file is filled, it is closed
+   and renamed to :file:`app.log.1`, and if files :file:`app.log.1`,
+   :file:`app.log.2`, etc.  exist, then they are renamed to :file:`app.log.2`,
+   :file:`app.log.3` etc.  respectively.
 
    .. versionchanged:: 2.6
       *delay* was added.
@@ -348,7 +349,7 @@ sends logging output to a network socket. The base class uses a TCP socket.
    .. method:: createSocket()
 
       Tries to create a socket; on failure, uses an exponential back-off
-      algorithm.  On intial failure, the handler will drop the message it was
+      algorithm.  On initial failure, the handler will drop the message it was
       trying to send.  When subsequent messages are handled by the same
       instance, it will not try connecting until some time has passed.  The
       default parameters are such that the initial delay is one second, and if
@@ -729,15 +730,29 @@ supports sending logging messages to a Web server, using either ``GET`` or
 
 .. class:: HTTPHandler(host, url, method='GET')
 
-   Returns a new instance of the :class:`HTTPHandler` class. The *host* can be
+   Returns a new instance of the :class:`HTTPHandler` class. The ``host`` can be
    of the form ``host:port``, should you need to use a specific port number.
-   If no *method* is specified, ``GET`` is used.
 
+   .. method:: mapLogRecord(record)
+
+      Provides a dictionary, based on ``record``, which is to be URL-encoded
+      and sent to the web server. The default implementation just returns
+      ``record.__dict__``. This method can be overridden if e.g. only a
+      subset of :class:`~logging.LogRecord` is to be sent to the web server, or
+      if more specific customization of what's sent to the server is required.
 
    .. method:: emit(record)
 
-      Sends the record to the Web server as a percent-encoded dictionary.
+      Sends the record to the Web server as a URL-encoded dictionary. The
+      :meth:`mapLogRecord` method is used to convert the record to the
+      dictionary to be sent.
 
+   .. note:: Since preparing a record for sending it to a Web server is not
+      the same as a generic formatting operation, using :meth:`setFormatter`
+      to specify a :class:`Formatter` for a :class:`HTTPHandler` has no effect.
+      Instead of calling :meth:`format`, this handler calls :meth:`mapLogRecord`
+      and then :func:`urllib.urlencode` to encode the dictionary in a form
+      suitable for sending to a Web server.
 
 .. seealso::
 

@@ -113,11 +113,11 @@ Notes:
 
 (1)
    This is a short-circuit operator, so it only evaluates the second
-   argument if the first one is :const:`False`.
+   argument if the first one is false.
 
 (2)
    This is a short-circuit operator, so it only evaluates the second
-   argument if the first one is :const:`True`.
+   argument if the first one is true.
 
 (3)
    ``not`` has a lower priority than non-Boolean operators, so ``not a == b`` is
@@ -266,9 +266,9 @@ represented as a plain integer, in which case they yield a long integer.
 Integer literals with an ``'L'`` or ``'l'`` suffix yield long integers (``'L'``
 is preferred because ``1l`` looks too much like eleven!).  Numeric literals
 containing a decimal point or an exponent sign yield floating point numbers.
-Appending ``'j'`` or ``'J'`` to a numeric literal yields a complex number with a
-zero real part. A complex numeric literal is the sum of a real and an imaginary
-part.
+Appending ``'j'`` or ``'J'`` to a numeric literal yields an imaginary number
+(a complex number with a zero real part) which you can add to an integer or
+float to get a complex number with real and imaginary parts.
 
 .. index::
    single: arithmetic
@@ -393,19 +393,22 @@ Notes:
 All :class:`numbers.Real` types (:class:`int`, :class:`long`, and
 :class:`float`) also include the following operations:
 
-+--------------------+------------------------------------+--------+
-| Operation          | Result                             | Notes  |
-+====================+====================================+========+
-| ``math.trunc(x)``  | *x* truncated to Integral          |        |
-+--------------------+------------------------------------+--------+
-| ``round(x[, n])``  | *x* rounded to n digits,           |        |
-|                    | rounding half to even. If n is     |        |
-|                    | omitted, it defaults to 0.         |        |
-+--------------------+------------------------------------+--------+
-| ``math.floor(x)``  | the greatest integral float <= *x* |        |
-+--------------------+------------------------------------+--------+
-| ``math.ceil(x)``   | the least integral float >= *x*    |        |
-+--------------------+------------------------------------+--------+
++--------------------+---------------------------------------------+
+| Operation          | Result                                      |
++====================+=============================================+
+| :func:`math.trunc(\| *x* truncated to :class:`~numbers.Integral` |
+| x) <math.trunc>`   |                                             |
++--------------------+---------------------------------------------+
+| :func:`round(x[,   | *x* rounded to *n* digits,                  |
+| n]) <round>`       | rounding ties away from zero. If *n*        |
+|                    | is omitted, it defaults to 0.               |
++--------------------+---------------------------------------------+
+| :func:`math.floor(\| the greatest integer as a float <= *x*      |
+| x) <math.floor>`   |                                             |
++--------------------+---------------------------------------------+
+| :func:`math.ceil(x)| the least integer as a float >= *x*         |
+| <math.ceil>`       |                                             |
++--------------------+---------------------------------------------+
 
 .. XXXJH exceptions: overflow (when? what operations?) zerodivision
 
@@ -420,10 +423,12 @@ Bitwise Operations on Integer Types
    pair: bitwise; operations
    pair: shifting; operations
    pair: masking; operations
+   operator: |
    operator: ^
    operator: &
    operator: <<
    operator: >>
+   operator: ~
 
 Bitwise operations only make sense for integers.  Negative numbers are treated
 as their 2's complement value (this assumes a sufficiently large number of bits
@@ -433,8 +438,7 @@ The priorities of the binary bitwise operations are all lower than the numeric
 operations and higher than the comparisons; the unary operation ``~`` has the
 same priority as the other unary numeric operations (``+`` and ``-``).
 
-This table lists the bitwise operations sorted in ascending priority
-(operations in the same box have the same priority):
+This table lists the bitwise operations sorted in ascending priority:
 
 +------------+--------------------------------+----------+
 | Operation  | Result                         | Notes    |
@@ -652,7 +656,7 @@ specific sequence types, dictionaries, and other more specialized forms.  The
 specific types are not important beyond their implementation of the iterator
 protocol.
 
-The intention of the protocol is that once an iterator's :meth:`next` method
+The intention of the protocol is that once an iterator's :meth:`~iterator.next` method
 raises :exc:`StopIteration`, it will continue to do so on subsequent calls.
 Implementations that do not obey this property are deemed broken.  (This
 constraint was added in Python 2.3; in Python 2.2, various iterators are broken
@@ -667,9 +671,9 @@ Generator Types
 Python's :term:`generator`\s provide a convenient way to implement the iterator
 protocol.  If a container object's :meth:`__iter__` method is implemented as a
 generator, it will automatically return an iterator object (technically, a
-generator object) supplying the :meth:`__iter__` and :meth:`next` methods.  More
-information about generators can be found in :ref:`the documentation for the
-yield expression <yieldexpr>`.
+generator object) supplying the :meth:`~iterator.__iter__` and
+:meth:`~iterator.next` methods.  More information about generators can be found
+in :ref:`the documentation for the yield expression <yieldexpr>`.
 
 
 .. _typesseq:
@@ -722,9 +726,8 @@ operations have the same priorities as the comparison operations.  The ``+`` and
 ``*`` operations have the same priority as the corresponding numeric operations.
 [3]_ Additional methods are provided for :ref:`typesseq-mutable`.
 
-This table lists the sequence operations sorted in ascending priority
-(operations in the same box have the same priority).  In the table, *s* and *t*
-are sequences of the same type; *n*, *i* and *j* are integers:
+This table lists the sequence operations sorted in ascending priority.
+In the table, *s* and *t* are sequences of the same type; *n*, *i* and *j* are integers:
 
 +------------------+--------------------------------+----------+
 | Operation        | Result                         | Notes    |
@@ -738,8 +741,8 @@ are sequences of the same type; *n*, *i* and *j* are integers:
 | ``s + t``        | the concatenation of *s* and   | \(6)     |
 |                  | *t*                            |          |
 +------------------+--------------------------------+----------+
-| ``s * n, n * s`` | *n* shallow copies of *s*      | \(2)     |
-|                  | concatenated                   |          |
+| ``s * n, n * s`` | equivalent to adding *s* to    | \(2)     |
+|                  | itself *n* times               |          |
 +------------------+--------------------------------+----------+
 | ``s[i]``         | *i*\ th item of *s*, origin 0  | \(3)     |
 +------------------+--------------------------------+----------+
@@ -754,11 +757,11 @@ are sequences of the same type; *n*, *i* and *j* are integers:
 +------------------+--------------------------------+----------+
 | ``max(s)``       | largest item of *s*            |          |
 +------------------+--------------------------------+----------+
-| ``s.index(i)``   | index of the first occurrence  |          |
-|                  | of *i* in *s*                  |          |
+| ``s.index(x)``   | index of the first occurrence  |          |
+|                  | of *x* in *s*                  |          |
 +------------------+--------------------------------+----------+
-| ``s.count(i)``   | total number of occurrences of |          |
-|                  | *i* in *s*                     |          |
+| ``s.count(x)``   | total number of occurrences of |          |
+|                  | *x* in *s*                     |          |
 +------------------+--------------------------------+----------+
 
 Sequence types also support comparisons. In particular, tuples and lists
@@ -791,9 +794,9 @@ Notes:
 
 (2)
    Values of *n* less than ``0`` are treated as ``0`` (which yields an empty
-   sequence of the same type as *s*).  Note also that the copies are shallow;
-   nested structures are not copied.  This often haunts new Python programmers;
-   consider:
+   sequence of the same type as *s*).  Note that items in the sequence *s*
+   are not copied; they are referenced multiple times.  This often haunts
+   new Python programmers; consider:
 
       >>> lists = [[]] * 3
       >>> lists
@@ -803,7 +806,7 @@ Notes:
       [[3], [3], [3]]
 
    What has happened is that ``[[]]`` is a one-element list containing an empty
-   list, so all three elements of ``[[]] * 3`` are (pointers to) this single empty
+   list, so all three elements of ``[[]] * 3`` are references to this single empty
    list.  Modifying any of the elements of ``lists`` modifies this single list.
    You can create a list of different lists this way:
 
@@ -814,8 +817,11 @@ Notes:
       >>> lists
       [[3], [5], [7]]
 
+   Further explanation is available in the FAQ entry
+   :ref:`faq-multidimensional-list`.
+
 (3)
-   If *i* or *j* is negative, the index is relative to the end of the string:
+   If *i* or *j* is negative, the index is relative to the end of sequence *s*:
    ``len(s) + i`` or ``len(s) + j`` is substituted.  But note that ``-0`` is still
    ``0``.
 
@@ -830,8 +836,10 @@ Notes:
    The slice of *s* from *i* to *j* with step *k* is defined as the sequence of
    items with index  ``x = i + n*k`` such that ``0 <= n < (j-i)/k``.  In other words,
    the indices are ``i``, ``i+k``, ``i+2*k``, ``i+3*k`` and so on, stopping when
-   *j* is reached (but never including *j*).  If *i* or *j* is greater than
-   ``len(s)``, use ``len(s)``.  If *i* or *j* are omitted or ``None``, they become
+   *j* is reached (but never including *j*).  When *k* is positive,
+   *i* and *j* are reduced to ``len(s)`` if they are greater.
+   When *k* is negative, *i* and *j* are reduced to ``len(s) - 1`` if
+   they are greater.  If *i* or *j* are omitted or ``None``, they become
    "end" values (which end depends on the sign of *k*).  Note, *k* cannot be zero.
    If *k* is ``None``, it is treated like ``1``.
 
@@ -962,10 +970,9 @@ string functions based on regular expressions.
 
 .. method:: str.find(sub[, start[, end]])
 
-   Return the lowest index in the string where substring *sub* is found, such
-   that *sub* is contained in the slice ``s[start:end]``.  Optional arguments
-   *start* and *end* are interpreted as in slice notation.  Return ``-1`` if
-   *sub* is not found.
+   Return the lowest index in the string where substring *sub* is found within
+   the slice ``s[start:end]``.  Optional arguments *start* and *end* are
+   interpreted as in slice notation.  Return ``-1`` if *sub* is not found.
 
    .. note::
 
@@ -1063,8 +1070,10 @@ string functions based on regular expressions.
 
 .. method:: str.join(iterable)
 
-   Return a string which is the concatenation of the strings in the
-   :term:`iterable` *iterable*.  The separator between elements is the string
+   Return a string which is the concatenation of the strings in *iterable*.
+   If there is any Unicode object in *iterable*, return a Unicode instead.
+   A :exc:`TypeError` will be raised if there are any non-string or non Unicode
+   object values in *iterable*.  The separator between elements is the string
    providing this method.
 
 
@@ -1214,13 +1223,68 @@ string functions based on regular expressions.
    Line breaks are not included in the resulting list unless *keepends* is
    given and true.
 
-   For example, ``'ab c\n\nde fg\rkl\r\n'.splitlines()`` returns
-   ``['ab c', '', 'de fg', 'kl']``, while the same call with ``splitlines(True)``
-   returns ``['ab c\n', '\n', 'de fg\r', 'kl\r\n']``.
+   Python recognizes ``"\r"``, ``"\n"``, and ``"\r\n"`` as line boundaries for
+   8-bit strings.
+
+   For example::
+
+      >>> 'ab c\n\nde fg\rkl\r\n'.splitlines()
+      ['ab c', '', 'de fg', 'kl']
+      >>> 'ab c\n\nde fg\rkl\r\n'.splitlines(True)
+      ['ab c\n', '\n', 'de fg\r', 'kl\r\n']
 
    Unlike :meth:`~str.split` when a delimiter string *sep* is given, this
    method returns an empty list for the empty string, and a terminal line
-   break does not result in an extra line.
+   break does not result in an extra line::
+
+      >>> "".splitlines()
+      []
+      >>> "One line\n".splitlines()
+      ['One line']
+
+   For comparison, ``split('\n')`` gives::
+
+      >>> ''.split('\n')
+      ['']
+      >>> 'Two lines\n'.split('\n')
+      ['Two lines', '']
+
+.. method:: unicode.splitlines([keepends])
+
+   Return a list of the lines in the string, like :meth:`str.splitlines`.
+   However, the Unicode method splits on the following line boundaries,
+   which are a superset of the :term:`universal newlines` recognized for
+   8-bit strings.
+
+   +-----------------------+-----------------------------+
+   | Representation        | Description                 |
+   +=======================+=============================+
+   | ``\n``                | Line Feed                   |
+   +-----------------------+-----------------------------+
+   | ``\r``                | Carriage Return             |
+   +-----------------------+-----------------------------+
+   | ``\r\n``              | Carriage Return + Line Feed |
+   +-----------------------+-----------------------------+
+   | ``\v`` or ``\x0b``    | Line Tabulation             |
+   +-----------------------+-----------------------------+
+   | ``\f`` or ``\x0c``    | Form Feed                   |
+   +-----------------------+-----------------------------+
+   | ``\x1c``              | File Separator              |
+   +-----------------------+-----------------------------+
+   | ``\x1d``              | Group Separator             |
+   +-----------------------+-----------------------------+
+   | ``\x1e``              | Record Separator            |
+   +-----------------------+-----------------------------+
+   | ``\x85``              | Next Line (C1 Control Code) |
+   +-----------------------+-----------------------------+
+   | ``\u2028``            | Line Separator              |
+   +-----------------------+-----------------------------+
+   | ``\u2029``            | Paragraph Separator         |
+   +-----------------------+-----------------------------+
+
+   .. versionchanged:: 2.7
+
+      ``\v`` and ``\f`` added to list of line boundaries.
 
 
 .. method:: str.startswith(prefix[, start[, end]])
@@ -1317,7 +1381,7 @@ string functions based on regular expressions.
 .. method:: str.upper()
 
    Return a copy of the string with all the cased characters [4]_ converted to
-   uppercase.  Note that ``str.upper().isupper()`` might be ``False`` if ``s``
+   uppercase.  Note that ``s.upper().isupper()`` might be ``False`` if ``s``
    contains uncased characters or if the Unicode category of the resulting
    character(s) is not "Lu" (Letter, uppercase), but e.g. "Lt" (Letter, titlecase).
 
@@ -1493,9 +1557,7 @@ Notes:
 
 (2)
    The alternate form causes a leading ``'0x'`` or ``'0X'`` (depending on whether
-   the ``'x'`` or ``'X'`` format was used) to be inserted between left-hand padding
-   and the formatting of the number if the leading character of the result is not
-   already a zero.
+   the ``'x'`` or ``'X'`` format was used) to be inserted before the first digit.
 
 (3)
    The alternate form causes the result to always contain a decimal point, even if
@@ -1612,8 +1674,11 @@ an arbitrary object):
 | ``s.append(x)``              | same as ``s[len(s):len(s)] =   | \(2)                |
 |                              | [x]``                          |                     |
 +------------------------------+--------------------------------+---------------------+
-| ``s.extend(x)``              | same as ``s[len(s):len(s)] =   | \(3)                |
-|                              | x``                            |                     |
+| ``s.extend(t)`` or           | for the most part the same as  | \(3)                |
+| ``s += t``                   | ``s[len(s):len(s)] = t``       |                     |
++------------------------------+--------------------------------+---------------------+
+| ``s *= n``                   | updates *s* with its contents  | \(11)               |
+|                              | repeated *n* times             |                     |
 +------------------------------+--------------------------------+---------------------+
 | ``s.count(x)``               | return number of *i*'s for     |                     |
 |                              | which ``s[i] == x``            |                     |
@@ -1647,7 +1712,7 @@ Notes:
    this misfeature has been deprecated since Python 1.4.
 
 (3)
-   *x* can be any iterable object.
+   *t* can be any iterable object.
 
 (4)
    Raises :exc:`ValueError` when *x* is not found in *s*. When a negative index is
@@ -1668,9 +1733,8 @@ Notes:
       Previously, all negative indices were truncated to zero.
 
 (6)
-   The :meth:`pop` method is only supported by the list and array types.  The
-   optional argument *i* defaults to ``-1``, so that by default the last item is
-   removed and returned.
+   The :meth:`pop` method's optional argument *i* defaults to ``-1``, so that
+   by default the last item is removed and returned.
 
 (7)
    The :meth:`sort` and :meth:`reverse` methods modify the list in place for
@@ -1719,6 +1783,12 @@ Notes:
       newer makes the list appear empty for the duration, and raises
       :exc:`ValueError` if it can detect that the list has been mutated during a
       sort.
+
+(11)
+   The value *n* is an integer, or an object implementing
+   :meth:`~object.__index__`.  Zero and negative values of *n* clear
+   the sequence.  Items in the sequence are not copied; they are referenced
+   multiple times, as explained for ``s * n`` under :ref:`typesseq`.
 
 
 .. _types-set:
@@ -1771,7 +1841,7 @@ The constructors for both classes work the same:
 
    .. describe:: len(s)
 
-      Return the cardinality of set *s*.
+      Return the number of elements in set *s* (cardinality of *s*).
 
    .. describe:: x in s
 
@@ -1783,7 +1853,7 @@ The constructors for both classes work the same:
 
    .. method:: isdisjoint(other)
 
-      Return True if the set has no elements in common with *other*.  Sets are
+      Return ``True`` if the set has no elements in common with *other*.  Sets are
       disjoint if and only if their intersection is the empty set.
 
       .. versionadded:: 2.6
@@ -1808,7 +1878,7 @@ The constructors for both classes work the same:
       Test whether the set is a proper superset of *other*, that is, ``set >=
       other and set != other``.
 
-   .. method:: union(other, ...)
+   .. method:: union(*others)
                set | other | ...
 
       Return a new set with elements from the set and all others.
@@ -1816,7 +1886,7 @@ The constructors for both classes work the same:
       .. versionchanged:: 2.6
          Accepts multiple input iterables.
 
-   .. method:: intersection(other, ...)
+   .. method:: intersection(*others)
                set & other & ...
 
       Return a new set with elements common to the set and all others.
@@ -1824,7 +1894,7 @@ The constructors for both classes work the same:
       .. versionchanged:: 2.6
          Accepts multiple input iterables.
 
-   .. method:: difference(other, ...)
+   .. method:: difference(*others)
                set - other - ...
 
       Return a new set with elements in the set that are not in the others.
@@ -1839,7 +1909,7 @@ The constructors for both classes work the same:
 
    .. method:: copy()
 
-      Return a new set with a shallow copy of *s*.
+      Return a shallow copy of the set.
 
 
    Note, the non-operator versions of :meth:`union`, :meth:`intersection`,
@@ -1878,7 +1948,7 @@ The constructors for both classes work the same:
    The following table lists operations available for :class:`set` that do not
    apply to immutable instances of :class:`frozenset`:
 
-   .. method:: update(other, ...)
+   .. method:: update(*others)
                set |= other | ...
 
       Update the set, adding elements from all others.
@@ -1886,7 +1956,7 @@ The constructors for both classes work the same:
       .. versionchanged:: 2.6
          Accepts multiple input iterables.
 
-   .. method:: intersection_update(other, ...)
+   .. method:: intersection_update(*others)
                set &= other & ...
 
       Update the set, keeping only elements found in it and all others.
@@ -1894,7 +1964,7 @@ The constructors for both classes work the same:
       .. versionchanged:: 2.6
          Accepts multiple input iterables.
 
-   .. method:: difference_update(other, ...)
+   .. method:: difference_update(*others)
                set -= other | ...
 
       Update the set, removing elements found in others.
@@ -1937,9 +2007,7 @@ The constructors for both classes work the same:
 
    Note, the *elem* argument to the :meth:`__contains__`, :meth:`remove`, and
    :meth:`discard` methods may be a set.  To support searching for an equivalent
-   frozenset, the *elem* set is temporarily mutated during the search and then
-   restored.  During the search, the *elem* set should not be read or mutated
-   since it does not have a meaningful value.
+   frozenset, a temporary one is created from *elem*.
 
 
 .. seealso::
@@ -1990,8 +2058,8 @@ pairs within braces, for example: ``{'jack': 4098, 'sjoerd': 4127}`` or ``{4098:
    If no positional argument is given, an empty dictionary is created.
    If a positional argument is given and it is a mapping object, a dictionary
    is created with the same key-value pairs as the mapping object.  Otherwise,
-   the positional argument must be an :term:`iterator` object.  Each item in
-   the iterable must itself be an iterator with exactly two objects.  The
+   the positional argument must be an :term:`iterable` object.  Each item in
+   the iterable must itself be an iterable with exactly two objects.  The
    first object of each item becomes a key in the new dictionary, and the
    second object the corresponding value.  If a key occurs more than once, the
    last value for that key becomes the corresponding value in the new
@@ -2034,16 +2102,32 @@ pairs within braces, for example: ``{'jack': 4098, 'sjoerd': 4127}`` or ``{4098:
       Return the item of *d* with key *key*.  Raises a :exc:`KeyError` if *key*
       is not in the map.
 
+      .. index:: __missing__()
+
+      If a subclass of dict defines a method :meth:`__missing__` and *key*
+      is not present, the ``d[key]`` operation calls that method with the key *key*
+      as argument.  The ``d[key]`` operation then returns or raises whatever is
+      returned or raised by the ``__missing__(key)`` call.
+      No other operations or methods invoke :meth:`__missing__`. If
+      :meth:`__missing__` is not defined, :exc:`KeyError` is raised.
+      :meth:`__missing__` must be a method; it cannot be an instance variable::
+
+          >>> class Counter(dict):
+          ...     def __missing__(self, key):
+          ...         return 0
+          >>> c = Counter()
+          >>> c['red']
+          0
+          >>> c['red'] += 1
+          >>> c['red']
+          1
+
+      The example above shows part of the implementation of
+      :class:`collections.Counter`.  A different ``__missing__`` method is used
+      by :class:`collections.defaultdict`.
+
       .. versionadded:: 2.5
-         If a subclass of dict defines a method :meth:`__missing__`, if the key
-         *key* is not present, the ``d[key]`` operation calls that method with
-         the key *key* as argument.  The ``d[key]`` operation then returns or
-         raises whatever is returned or raised by the ``__missing__(key)`` call
-         if the key is not present. No other operations or methods invoke
-         :meth:`__missing__`. If :meth:`__missing__` is not defined,
-         :exc:`KeyError` is raised.  :meth:`__missing__` must be a method; it
-         cannot be an instance variable. For an example, see
-         :class:`collections.defaultdict`.
+         Recognition of __missing__ methods of dict subclasses.
 
    .. describe:: d[key] = value
 
@@ -2216,6 +2300,9 @@ pairs within braces, for example: ``{'jack': 4098, 'sjoerd': 4127}`` or ``{4098:
       view objects.
 
       .. versionadded:: 2.7
+
+   Dictionaries compare equal if and only if they have the same ``(key,
+   value)`` pairs.
 
 
 .. _dict-views:
@@ -2719,7 +2806,7 @@ is generally interpreted as simple bytes.
    .. attribute:: shape
 
       A tuple of integers the length of :attr:`ndim` giving the shape of the
-      memory as a N-dimensional array.
+      memory as an N-dimensional array.
 
    .. attribute:: ndim
 
@@ -2842,9 +2929,10 @@ an (external) *definition* for a module named *foo* somewhere.)
 A special attribute of every module is :attr:`~object.__dict__`. This is the
 dictionary containing the module's symbol table. Modifying this dictionary will
 actually change the module's symbol table, but direct assignment to the
-:attr:`__dict__` attribute is not possible (you can write
+:attr:`~object.__dict__` attribute is not possible (you can write
 ``m.__dict__['a'] = 1``, which defines ``m.a`` to be ``1``, but you can't write
-``m.__dict__ = {}``).  Modifying :attr:`__dict__` directly is not recommended.
+``m.__dict__ = {}``).  Modifying :attr:`~object.__dict__` directly is
+not recommended.
 
 Modules built into the interpreter are written like this: ``<module 'sys'
 (built-in)>``.  If loaded from a file, they are written as ``<module 'os' from
@@ -2923,12 +3011,12 @@ need to explicitly set it on the underlying function object::
 See :ref:`types` for more information.
 
 
+.. index:: object; code, code object
+
 .. _bltin-code-objects:
 
 Code Objects
 ------------
-
-.. index:: object: code
 
 .. index::
    builtin: compile
@@ -3071,9 +3159,10 @@ types, where they are relevant.  Some of these are not reported by the
    The tuple of base classes of a class object.
 
 
-.. attribute:: class.__name__
+.. attribute:: definition.__name__
 
-   The name of the class or type.
+   The name of the class, type, function, method, descriptor, or
+   generator instance.
 
 
 The following attributes are only supported by :term:`new-style class`\ es.

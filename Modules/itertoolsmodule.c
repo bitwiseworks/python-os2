@@ -4,8 +4,6 @@
 
 /* Itertools module written and maintained
    by Raymond D. Hettinger <python@rcn.com>
-   Copyright (c) 2003 Python Software Foundation.
-   All rights reserved.
 */
 
 
@@ -73,10 +71,37 @@ groupby_traverse(groupbyobject *gbo, visitproc visit, void *arg)
     return 0;
 }
 
+Py_LOCAL_INLINE(int)
+groupby_step(groupbyobject *gbo)
+{
+    PyObject *newvalue, *newkey, *oldvalue;
+
+    newvalue = PyIter_Next(gbo->it);
+    if (newvalue == NULL)
+        return -1;
+
+    if (gbo->keyfunc == Py_None) {
+        newkey = newvalue;
+        Py_INCREF(newvalue);
+    } else {
+        newkey = PyObject_CallFunctionObjArgs(gbo->keyfunc, newvalue, NULL);
+        if (newkey == NULL) {
+            Py_DECREF(newvalue);
+            return -1;
+        }
+    }
+
+    oldvalue = gbo->currvalue;
+    gbo->currvalue = newvalue;
+    Py_XSETREF(gbo->currkey, newkey);
+    Py_XDECREF(oldvalue);
+    return 0;
+}
+
 static PyObject *
 groupby_next(groupbyobject *gbo)
 {
-    PyObject *newvalue, *newkey, *r, *grouper, *tmp;
+    PyObject *r, *grouper;
 
     /* skip to next iteration group */
     for (;;) {
@@ -95,35 +120,11 @@ groupby_next(groupbyobject *gbo)
                 break;
         }
 
-        newvalue = PyIter_Next(gbo->it);
-        if (newvalue == NULL)
+        if (groupby_step(gbo) < 0)
             return NULL;
-
-        if (gbo->keyfunc == Py_None) {
-            newkey = newvalue;
-            Py_INCREF(newvalue);
-        } else {
-            newkey = PyObject_CallFunctionObjArgs(gbo->keyfunc,
-                                                  newvalue, NULL);
-            if (newkey == NULL) {
-                Py_DECREF(newvalue);
-                return NULL;
-            }
-        }
-
-        tmp = gbo->currkey;
-        gbo->currkey = newkey;
-        Py_XDECREF(tmp);
-
-        tmp = gbo->currvalue;
-        gbo->currvalue = newvalue;
-        Py_XDECREF(tmp);
     }
-
     Py_INCREF(gbo->currkey);
-    tmp = gbo->tgtkey;
-    gbo->tgtkey = gbo->currkey;
-    Py_XDECREF(tmp);
+    Py_XSETREF(gbo->tgtkey, gbo->currkey);
 
     grouper = _grouper_create(gbo, gbo->tgtkey);
     if (grouper == NULL)
@@ -231,29 +232,12 @@ static PyObject *
 _grouper_next(_grouperobject *igo)
 {
     groupbyobject *gbo = (groupbyobject *)igo->parent;
-    PyObject *newvalue, *newkey, *r;
+    PyObject *r;
     int rcmp;
 
     if (gbo->currvalue == NULL) {
-        newvalue = PyIter_Next(gbo->it);
-        if (newvalue == NULL)
+        if (groupby_step(gbo) < 0)
             return NULL;
-
-        if (gbo->keyfunc == Py_None) {
-            newkey = newvalue;
-            Py_INCREF(newvalue);
-        } else {
-            newkey = PyObject_CallFunctionObjArgs(gbo->keyfunc,
-                                                  newvalue, NULL);
-            if (newkey == NULL) {
-                Py_DECREF(newvalue);
-                return NULL;
-            }
-        }
-
-        assert(gbo->currkey == NULL);
-        gbo->currkey = newkey;
-        gbo->currvalue = newvalue;
     }
 
     assert(gbo->currkey != NULL);
@@ -330,6 +314,7 @@ typedef struct {
     PyObject_HEAD
     PyObject *it;
     int numread;
+    int running;
     PyObject *nextlink;
     PyObject *(values[LINKCELLS]);
 } teedataobject;
@@ -352,6 +337,7 @@ teedataobject_new(PyObject *it)
     if (tdo == NULL)
         return NULL;
 
+    tdo->running = 0;
     tdo->numread = 0;
     tdo->nextlink = NULL;
     Py_INCREF(it);
@@ -380,7 +366,14 @@ teedataobject_getitem(teedataobject *tdo, int i)
     else {
         /* this is the lead iterator, so fetch more data */
         assert(i == tdo->numread);
+        if (tdo->running) {
+            PyErr_SetString(PyExc_RuntimeError,
+                            "cannot re-enter the tee iterator");
+            return NULL;
+        }
+        tdo->running = 1;
         value = PyIter_Next(tdo->it);
+        tdo->running = 0;
         if (value == NULL)
             return NULL;
         tdo->numread++;
@@ -494,8 +487,7 @@ tee_next(teeobject *to)
         link = teedataobject_jumplink(to->dataobj);
         if (link == NULL)
             return NULL;
-        Py_DECREF(to->dataobj);
-        to->dataobj = (teedataobject *)link;
+        Py_SETREF(to->dataobj, (teedataobject *)link);
         to->index = 0;
     }
     value = teedataobject_getitem(to->dataobj, to->index);
@@ -1241,19 +1233,22 @@ islice_next(isliceobject *lz)
     Py_ssize_t oldnext;
     PyObject *(*iternext)(PyObject *);
 
+    if (it == NULL)
+        return NULL;
+
     iternext = *Py_TYPE(it)->tp_iternext;
     while (lz->cnt < lz->next) {
         item = iternext(it);
         if (item == NULL)
-            return NULL;
+            goto empty;
         Py_DECREF(item);
         lz->cnt++;
     }
     if (stop != -1 && lz->cnt >= stop)
-        return NULL;
+        goto empty;
     item = iternext(it);
     if (item == NULL)
-        return NULL;
+        goto empty;
     lz->cnt++;
     oldnext = lz->next;
     /* The (size_t) cast below avoids the danger of undefined
@@ -1262,6 +1257,10 @@ islice_next(isliceobject *lz)
     if (lz->next < oldnext || (stop != -1 && lz->next > stop))
         lz->next = stop;
     return item;
+
+empty:
+    Py_CLEAR(lz->it);
+    return NULL;
 }
 
 PyDoc_STRVAR(islice_doc,
@@ -1403,7 +1402,7 @@ PyDoc_STRVAR(starmap_doc,
 "starmap(function, sequence) --> starmap object\n\
 \n\
 Return an iterator whose values are returned from the function evaluated\n\
-with a argument tuple taken from the given sequence.");
+with an argument tuple taken from the given sequence.");
 
 static PyTypeObject starmap_type = {
     PyVarObject_HEAD_INIT(NULL, 0)
@@ -1704,33 +1703,37 @@ chain_next(chainobject *lz)
 {
     PyObject *item;
 
-    if (lz->source == NULL)
-        return NULL;                                    /* already stopped */
-
-    if (lz->active == NULL) {
-        PyObject *iterable = PyIter_Next(lz->source);
-        if (iterable == NULL) {
-            Py_CLEAR(lz->source);
-            return NULL;                                /* no more input sources */
-        }
-        lz->active = PyObject_GetIter(iterable);
-        Py_DECREF(iterable);
+    /* lz->source is the iterator of iterables. If it's NULL, we've already
+     * consumed them all. lz->active is the current iterator. If it's NULL,
+     * we should grab a new one from lz->source. */
+    while (lz->source != NULL) {
         if (lz->active == NULL) {
-            Py_CLEAR(lz->source);
-            return NULL;                                /* input not iterable */
+            PyObject *iterable = PyIter_Next(lz->source);
+            if (iterable == NULL) {
+                Py_CLEAR(lz->source);
+                return NULL;                  /* no more input sources */
+            }
+            lz->active = PyObject_GetIter(iterable);
+            Py_DECREF(iterable);
+            if (lz->active == NULL) {
+                Py_CLEAR(lz->source);
+                return NULL;                  /* input not iterable */
+            }
         }
+        item = PyIter_Next(lz->active);
+        if (item != NULL)
+            return item;
+        if (PyErr_Occurred()) {
+            if (PyErr_ExceptionMatches(PyExc_StopIteration))
+                PyErr_Clear();
+            else
+                return NULL;                  /* input raised an exception */
+        }
+        /* lz->active is consumed, try with the next iterable. */
+        Py_CLEAR(lz->active);
     }
-    item = PyIter_Next(lz->active);
-    if (item != NULL)
-        return item;
-    if (PyErr_Occurred()) {
-        if (PyErr_ExceptionMatches(PyExc_StopIteration))
-            PyErr_Clear();
-        else
-            return NULL;                                /* input raised an exception */
-    }
-    Py_CLEAR(lz->active);
-    return chain_next(lz);                      /* recurse and use next active */
+    /* Everything had been consumed already. */
+    return NULL;
 }
 
 PyDoc_STRVAR(chain_doc,
@@ -1743,7 +1746,7 @@ iterable, until all of the iterables are exhausted.");
 PyDoc_STRVAR(chain_from_iterable_doc,
 "chain.from_iterable(iterable) --> chain object\n\
 \n\
-Alternate chain() contructor taking a single iterable argument\n\
+Alternate chain() constructor taking a single iterable argument\n\
 that evaluates lazily.");
 
 static PyMethodDef chain_methods[] = {
@@ -1835,11 +1838,19 @@ product_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         }
     }
 
-    assert(PyTuple_Check(args));
-    nargs = (repeat == 0) ? 0 : PyTuple_GET_SIZE(args);
+    assert(PyTuple_CheckExact(args));
+    if (repeat == 0) {
+        nargs = 0;
+    } else {
+        nargs = PyTuple_GET_SIZE(args);
+        if ((size_t)nargs > PY_SSIZE_T_MAX/sizeof(Py_ssize_t)/repeat) {
+            PyErr_SetString(PyExc_OverflowError, "repeat argument too large");
+            return NULL;
+        }
+    }
     npools = nargs * repeat;
 
-    indices = PyMem_Malloc(npools * sizeof(Py_ssize_t));
+    indices = PyMem_New(Py_ssize_t, npools);
     if (indices == NULL) {
         PyErr_NoMemory();
         goto error;
@@ -2086,7 +2097,7 @@ combinations_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         goto error;
     }
 
-    indices = PyMem_Malloc(r * sizeof(Py_ssize_t));
+    indices = PyMem_New(Py_ssize_t, r);
     if (indices == NULL) {
         PyErr_NoMemory();
         goto error;
@@ -2335,7 +2346,7 @@ cwr_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         goto error;
     }
 
-    indices = PyMem_Malloc(r * sizeof(Py_ssize_t));
+    indices = PyMem_New(Py_ssize_t, r);
     if (indices == NULL) {
         PyErr_NoMemory();
         goto error;
@@ -2528,18 +2539,18 @@ def permutations(iterable, r=None):
     cycles = range(n-r+1, n+1)[::-1]
     yield tuple(pool[i] for i in indices[:r])
     while n:
-    for i in reversed(range(r)):
-        cycles[i] -= 1
-        if cycles[i] == 0:
-        indices[i:] = indices[i+1:] + indices[i:i+1]
-        cycles[i] = n - i
+        for i in reversed(range(r)):
+            cycles[i] -= 1
+            if cycles[i] == 0:
+                indices[i:] = indices[i+1:] + indices[i:i+1]
+                cycles[i] = n - i
+            else:
+                j = cycles[i]
+                indices[i], indices[-j] = indices[-j], indices[i]
+                yield tuple(pool[i] for i in indices[:r])
+                break
         else:
-        j = cycles[i]
-        indices[i], indices[-j] = indices[-j], indices[i]
-        yield tuple(pool[i] for i in indices[:r])
-        break
-    else:
-        return
+            return
 */
 
 typedef struct {
@@ -2588,8 +2599,8 @@ permutations_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         goto error;
     }
 
-    indices = PyMem_Malloc(n * sizeof(Py_ssize_t));
-    cycles = PyMem_Malloc(r * sizeof(Py_ssize_t));
+    indices = PyMem_New(Py_ssize_t, n);
+    cycles = PyMem_New(Py_ssize_t, r);
     if (indices == NULL || cycles == NULL) {
         PyErr_NoMemory();
         goto error;
@@ -3319,6 +3330,7 @@ count_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     lz = (countobject *)type->tp_alloc(type, 0);
     if (lz == NULL) {
         Py_XDECREF(long_cnt);
+        Py_DECREF(long_step);
         return NULL;
     }
     lz->cnt = cnt;
@@ -3676,14 +3688,17 @@ repeat_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
     repeatobject *ro;
     PyObject *element;
-    Py_ssize_t cnt = -1;
+    Py_ssize_t cnt = -1, n_kwds = 0;
     static char *kwargs[] = {"object", "times", NULL};
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|n:repeat", kwargs,
                                      &element, &cnt))
         return NULL;
 
-    if (PyTuple_Size(args) == 2 && cnt < 0)
+    if (kwds != NULL)
+        n_kwds = PyDict_Size(kwds);
+    /* Does user supply times argument? */
+    if ((PyTuple_Size(args) + n_kwds == 2) && cnt < 0)
         cnt = 0;
 
     ro = (repeatobject *)type->tp_alloc(type, 0);

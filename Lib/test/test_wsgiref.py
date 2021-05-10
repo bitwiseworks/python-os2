@@ -1,19 +1,19 @@
-from __future__ import nested_scopes    # Backward compat for 2.1
 from unittest import TestCase
 from wsgiref.util import setup_testing_defaults
 from wsgiref.headers import Headers
 from wsgiref.handlers import BaseHandler, BaseCGIHandler
 from wsgiref import util
 from wsgiref.validate import validator
-from wsgiref.simple_server import WSGIServer, WSGIRequestHandler, demo_app
+from wsgiref.simple_server import WSGIServer, WSGIRequestHandler
 from wsgiref.simple_server import make_server
 from StringIO import StringIO
 from SocketServer import BaseServer
+
 import os
 import re
 import sys
 
-from test import test_support
+from test import support
 
 class MockServer(WSGIServer):
     """Non-socket HTTP server"""
@@ -113,6 +113,11 @@ class IntegrationTests(TestCase):
         out, err = run_amock()
         self.check_hello(out)
 
+    def test_request_length(self):
+        out, err = run_amock(data="GET " + ("x" * 65537) + " HTTP/1.0\n\n")
+        self.assertEqual(out.splitlines()[0],
+                         "HTTP/1.0 414 Request-URI Too Long")
+
     def test_validated_hello(self):
         out, err = run_amock(validator(hello_app))
         # the middleware doesn't support len(), so content-length isn't there
@@ -155,7 +160,7 @@ class UtilityTests(TestCase):
         # Check existing value
         env = {key:alt}
         util.setup_testing_defaults(env)
-        self.assertTrue(env[key] is alt)
+        self.assertIs(env[key], alt)
 
     def checkCrossDefault(self,key,value,**kw):
         util.setup_testing_defaults(kw)
@@ -245,6 +250,7 @@ class UtilityTests(TestCase):
     def testAppURIs(self):
         self.checkAppURI("http://127.0.0.1/")
         self.checkAppURI("http://127.0.0.1/spam", SCRIPT_NAME="/spam")
+        self.checkAppURI("http://127.0.0.1/sp%E4m", SCRIPT_NAME="/sp\xe4m")
         self.checkAppURI("http://spam.example.com:2071/",
             HTTP_HOST="spam.example.com:2071", SERVER_PORT="2071")
         self.checkAppURI("http://spam.example.com/",
@@ -258,14 +264,19 @@ class UtilityTests(TestCase):
     def testReqURIs(self):
         self.checkReqURI("http://127.0.0.1/")
         self.checkReqURI("http://127.0.0.1/spam", SCRIPT_NAME="/spam")
+        self.checkReqURI("http://127.0.0.1/sp%E4m", SCRIPT_NAME="/sp\xe4m")
         self.checkReqURI("http://127.0.0.1/spammity/spam",
             SCRIPT_NAME="/spammity", PATH_INFO="/spam")
+        self.checkReqURI("http://127.0.0.1/spammity/sp%E4m",
+            SCRIPT_NAME="/spammity", PATH_INFO="/sp\xe4m")
         self.checkReqURI("http://127.0.0.1/spammity/spam;ham",
             SCRIPT_NAME="/spammity", PATH_INFO="/spam;ham")
         self.checkReqURI("http://127.0.0.1/spammity/spam;cookie=1234,5678",
             SCRIPT_NAME="/spammity", PATH_INFO="/spam;cookie=1234,5678")
         self.checkReqURI("http://127.0.0.1/spammity/spam?say=ni",
             SCRIPT_NAME="/spammity", PATH_INFO="/spam",QUERY_STRING="say=ni")
+        self.checkReqURI("http://127.0.0.1/spammity/spam?s%E4y=ni",
+            SCRIPT_NAME="/spammity", PATH_INFO="/spam",QUERY_STRING="s%E4y=ni")
         self.checkReqURI("http://127.0.0.1/spammity/spam", 0,
             SCRIPT_NAME="/spammity", PATH_INFO="/spam",QUERY_STRING="say=ni")
 
@@ -296,7 +307,7 @@ class HeaderTests(TestCase):
         self.assertEqual(Headers(test[:]).keys(), ['x'])
         self.assertEqual(Headers(test[:]).values(), ['y'])
         self.assertEqual(Headers(test[:]).items(), test)
-        self.assertFalse(Headers(test).items() is test)  # must be copy!
+        self.assertIsNot(Headers(test).items(), test)  # must be copy!
 
         h=Headers([])
         del h['foo']   # should not raise an error
@@ -366,32 +377,62 @@ class TestHandler(ErrorHandler):
 
 
 class HandlerTests(TestCase):
-
-    def checkEnvironAttrs(self, handler):
-        env = handler.environ
-        for attr in [
-            'version','multithread','multiprocess','run_once','file_wrapper'
-        ]:
-            if attr=='file_wrapper' and handler.wsgi_file_wrapper is None:
-                continue
-            self.assertEqual(getattr(handler,'wsgi_'+attr),env['wsgi.'+attr])
-
-    def checkOSEnviron(self,handler):
-        empty = {}; setup_testing_defaults(empty)
-        env = handler.environ
-        from os import environ
-        for k,v in environ.items():
-            if k not in empty:
-                self.assertEqual(env[k],v)
-        for k,v in empty.items():
-            self.assertIn(k, env)
+    # testEnviron() can produce long error message
+    maxDiff = 80 * 50
 
     def testEnviron(self):
-        h = TestHandler(X="Y")
-        h.setup_environ()
-        self.checkEnvironAttrs(h)
-        self.checkOSEnviron(h)
-        self.assertEqual(h.environ["X"],"Y")
+        os_environ = {
+            # very basic environment
+            'HOME': '/my/home',
+            'PATH': '/my/path',
+            'LANG': 'fr_FR.UTF-8',
+
+            # set some WSGI variables
+            'SCRIPT_NAME': 'test_script_name',
+            'SERVER_NAME': 'test_server_name',
+        }
+
+        with support.swap_attr(TestHandler, 'os_environ', os_environ):
+            # override X and HOME variables
+            handler = TestHandler(X="Y", HOME="/override/home")
+            handler.setup_environ()
+
+        # Check that wsgi_xxx attributes are copied to wsgi.xxx variables
+        # of handler.environ
+        for attr in ('version', 'multithread', 'multiprocess', 'run_once',
+                     'file_wrapper'):
+            self.assertEqual(getattr(handler, 'wsgi_' + attr),
+                             handler.environ['wsgi.' + attr])
+
+        # Test handler.environ as a dict
+        expected = {}
+        setup_testing_defaults(expected)
+        # Handler inherits os_environ variables which are not overriden
+        # by SimpleHandler.add_cgi_vars() (SimpleHandler.base_env)
+        for key, value in os_environ.items():
+            if key not in expected:
+                expected[key] = value
+        expected.update({
+            # X doesn't exist in os_environ
+            "X": "Y",
+            # HOME is overriden by TestHandler
+            'HOME': "/override/home",
+
+            # overriden by setup_testing_defaults()
+            "SCRIPT_NAME": "",
+            "SERVER_NAME": "127.0.0.1",
+
+            # set by BaseHandler.setup_environ()
+            'wsgi.input': handler.get_stdin(),
+            'wsgi.errors': handler.get_stderr(),
+            'wsgi.version': (1, 0),
+            'wsgi.run_once': False,
+            'wsgi.url_scheme': 'http',
+            'wsgi.multithread': True,
+            'wsgi.multiprocess': True,
+            'wsgi.file_wrapper': util.FileWrapper,
+        })
+        self.assertDictEqual(handler.environ, expected)
 
     def testCGIEnviron(self):
         h = BaseCGIHandler(None,None,None,{})
@@ -554,7 +595,7 @@ class HandlerTests(TestCase):
 
 
 def test_main():
-    test_support.run_unittest(__name__)
+    support.run_unittest(__name__)
 
 if __name__ == "__main__":
     test_main()

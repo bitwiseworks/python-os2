@@ -1,9 +1,12 @@
+from io import BytesIO
 from test.test_support import run_unittest, check_warnings
 import cgi
 import os
 import sys
 import tempfile
 import unittest
+
+from collections import namedtuple
 
 class HackedSysModule:
     # The regression test will have real values in sys.argv, which
@@ -230,7 +233,15 @@ class CgiTests(unittest.TestCase):
         # if we're not chunking properly, readline is only called twice
         # (by read_binary); if we are chunking properly, it will be called 5 times
         # as long as the chunksize is 1 << 16.
-        self.assertTrue(f.numcalls > 2)
+        self.assertGreater(f.numcalls, 2)
+
+    def test_fieldstorage_invalid(self):
+        fs = cgi.FieldStorage()
+        self.assertFalse(fs)
+        self.assertRaises(TypeError, bool(fs))
+        self.assertEqual(list(fs), list(fs.keys()))
+        fs.list.append(namedtuple('MockFieldStorage', 'name')('fieldvalue'))
+        self.assertTrue(fs)
 
     def test_fieldstorage_multipart(self):
         #Test basic FieldStorage multipart parsing
@@ -305,6 +316,60 @@ Content-Type: text/plain
         }
         v = gen_result(data, environ)
         self.assertEqual(self._qs_result, v)
+
+    def test_max_num_fields(self):
+        # For application/x-www-form-urlencoded
+        data = '&'.join(['a=a']*11)
+        environ = {
+            'CONTENT_LENGTH': str(len(data)),
+            'CONTENT_TYPE': 'application/x-www-form-urlencoded',
+            'REQUEST_METHOD': 'POST',
+        }
+
+        with self.assertRaises(ValueError):
+            cgi.FieldStorage(
+                fp=BytesIO(data.encode()),
+                environ=environ,
+                max_num_fields=10,
+            )
+
+        # For multipart/form-data
+        data = """---123
+Content-Disposition: form-data; name="a"
+
+3
+---123
+Content-Type: application/x-www-form-urlencoded
+
+a=4
+---123
+Content-Type: application/x-www-form-urlencoded
+
+a=5
+---123--
+"""
+        environ = {
+            'CONTENT_LENGTH':   str(len(data)),
+            'CONTENT_TYPE':     'multipart/form-data; boundary=-123',
+            'QUERY_STRING':     'a=1&a=2',
+            'REQUEST_METHOD':   'POST',
+        }
+
+        # 2 GET entities
+        # 1 top level POST entities
+        # 1 entity within the second POST entity
+        # 1 entity within the third POST entity
+        with self.assertRaises(ValueError):
+            cgi.FieldStorage(
+                fp=BytesIO(data.encode()),
+                environ=environ,
+                max_num_fields=4,
+            )
+        cgi.FieldStorage(
+            fp=BytesIO(data.encode()),
+            environ=environ,
+            max_num_fields=5,
+        )
 
     def testQSAndFormData(self):
         data = """

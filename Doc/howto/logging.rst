@@ -103,10 +103,12 @@ A simple example
 A very simple example is::
 
    import logging
-   logging.warning('Watch out!') # will print a message to the console
-   logging.info('I told you so') # will not print anything
+   logging.warning('Watch out!')  # will print a message to the console
+   logging.info('I told you so')  # will not print anything
 
-If you type these lines into a script and run it, you'll see::
+If you type these lines into a script and run it, you'll see:
+
+.. code-block:: none
 
    WARNING:root:Watch out!
 
@@ -122,7 +124,8 @@ Logging to a file
 ^^^^^^^^^^^^^^^^^
 
 A very common situation is that of recording logging events in a file, so let's
-look at that next::
+look at that next. Be sure to try the following in a newly-started Python
+interpreter, and don't just continue from the session described above::
 
    import logging
    logging.basicConfig(filename='example.log',level=logging.DEBUG)
@@ -229,7 +232,9 @@ append the variable data as arguments. For example::
    import logging
    logging.warning('%s before you %s', 'Look', 'leap!')
 
-will display::
+will display:
+
+.. code-block:: none
 
    WARNING:root:Look before you leap!
 
@@ -309,7 +314,7 @@ favourite beverage and carry on.
 If your logging needs are simple, then use the above examples to incorporate
 logging into your own scripts, and if you run into problems or don't
 understand something, please post a question on the comp.lang.python Usenet
-group (available at http://groups.google.com/group/comp.lang.python) and you
+group (available at https://groups.google.com/group/comp.lang.python) and you
 should receive help before too long.
 
 Still here? You can carry on reading the next few sections, which provide a
@@ -459,7 +464,7 @@ ancestor loggers. Because of this, it is unnecessary to define and configure
 handlers for all the loggers an application uses. It is sufficient to
 configure handlers for a top-level logger and create child loggers as needed.
 (You can, however, turn off propagation by setting the *propagate*
-attribute of a logger to *False*.)
+attribute of a logger to ``False``.)
 
 
 .. _handler-basic:
@@ -584,7 +589,9 @@ logger, a console handler, and a simple formatter using Python code::
     logger.error('error message')
     logger.critical('critical message')
 
-Running this module from the command line produces the following output::
+Running this module from the command line produces the following output:
+
+.. code-block:: shell-session
 
     $ python simple_logging_module.py
     2005-03-19 15:10:26,618 - simple_example - DEBUG - debug message
@@ -643,7 +650,9 @@ Here is the logging.conf file::
     format=%(asctime)s - %(name)s - %(levelname)s - %(message)s
     datefmt=
 
-The output is nearly identical to that of the non-config-file-based example::
+The output is nearly identical to that of the non-config-file-based example:
+
+.. code-block:: shell-session
 
     $ python simple_logging_config.py
     2005-03-19 15:38:55,977 - simpleExample - DEBUG - debug message
@@ -728,10 +737,10 @@ circumstances is dependent on the Python version.
 
 For Python 2.x, the behaviour is as follows:
 
-* If *logging.raiseExceptions* is *False* (production mode), the event is
+* If *logging.raiseExceptions* is ``False`` (production mode), the event is
   silently dropped.
 
-* If *logging.raiseExceptions* is *True* (development mode), a message
+* If *logging.raiseExceptions* is ``True`` (development mode), a message
   'No handlers could be found for logger X.Y.Z' is printed once.
 
 .. _library-config:
@@ -995,6 +1004,15 @@ You can write code like this::
 so that if the logger's threshold is set above ``DEBUG``, the calls to
 :func:`expensive_func1` and :func:`expensive_func2` are never made.
 
+.. note:: In some cases, :meth:`~Logger.isEnabledFor` can itself be more
+   expensive than you'd like (e.g. for deeply nested loggers where an explicit
+   level is only set high up in the logger hierarchy). In such cases (or if you
+   want to avoid calling a method in tight loops), you can cache the result of a
+   call to :meth:`~Logger.isEnabledFor` in a local or instance variable, and use
+   that instead of calling the method each time. Such a cached value would only
+   need to be recomputed when the logging configuration changes dynamically
+   while the application is running (which is not all that common).
+
 There are other optimizations which can be made for specific applications which
 need more precise control over what logging information is collected. Here's a
 list of things you can do to avoid processing during logging which you don't
@@ -1004,6 +1022,11 @@ need:
 | What you don't want to collect                | How to avoid collecting it             |
 +===============================================+========================================+
 | Information about where calls were made from. | Set ``logging._srcfile`` to ``None``.  |
+|                                               | This avoids calling                    |
+|                                               | :func:`sys._getframe`, which may help  |
+|                                               | to speed up your code in environments  |
+|                                               | like PyPy (which can't speed up code   |
+|                                               | that uses :func:`sys._getframe`).      |
 +-----------------------------------------------+----------------------------------------+
 | Threading information.                        | Set ``logging.logThreads`` to ``0``.   |
 +-----------------------------------------------+----------------------------------------+
@@ -1026,4 +1049,3 @@ take up any memory.
       Useful handlers included with the logging module.
 
    :ref:`A logging cookbook <logging-cookbook>`
-

@@ -37,14 +37,6 @@
 #include "windows.h"
 #endif
 
-#ifndef Py_REF_DEBUG
-#define PRINT_TOTAL_REFS()
-#else /* Py_REF_DEBUG */
-#define PRINT_TOTAL_REFS() fprintf(stderr,                              \
-                   "[%" PY_FORMAT_SIZE_T "d refs]\n",                   \
-                   _Py_GetRefTotal())
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -78,7 +70,7 @@ int Py_VerboseFlag; /* Needed by import.c */
 int Py_InteractiveFlag; /* Needed by Py_FdIsInteractive() below */
 int Py_InspectFlag; /* Needed to determine whether to exit at SystemExit */
 int Py_NoSiteFlag; /* Suppress 'import site' */
-int Py_BytesWarningFlag; /* Warn on str(bytes) and str(buffer) */
+int Py_BytesWarningFlag; /* Warn on comparison between bytearray and unicode */
 int Py_DontWriteBytecodeFlag; /* Suppress writing bytecode files (*.py[co]) */
 int Py_UseClassExceptionsFlag = 1; /* Needed by bltinmodule.c: deprecated */
 int Py_FrozenFlag; /* Needed by getpath.c */
@@ -102,6 +94,21 @@ PyObject *
 PyModule_GetWarningsModule(void)
 {
     return PyImport_ImportModule("warnings");
+}
+
+static void
+_PyDebug_PrintTotalRefs(void)
+{
+#ifdef Py_REF_DEBUG
+    Py_ssize_t total;
+
+    if (!Py_GETENV("PYTHONSHOWREFCOUNT")) {
+        return;
+    }
+
+    total = _Py_GetRefTotal();
+    fprintf(stderr, "[%" PY_FORMAT_SIZE_T "d refs]\n", total);
+#endif
 }
 
 static int initialized = 0;
@@ -137,6 +144,20 @@ add_flag(int flag, const char *envs)
     return flag;
 }
 
+static int
+isatty_no_error(PyObject *sys_stream)
+{
+    PyObject *sys_isatty = PyObject_CallMethod(sys_stream, "isatty", "");
+    if (sys_isatty) {
+        int isatty = PyObject_IsTrue(sys_isatty);
+        Py_DECREF(sys_isatty);
+        if (isatty >= 0)
+            return isatty;
+    }
+    PyErr_Clear();
+    return 0;
+}
+
 void
 Py_InitializeEx(int install_sigs)
 {
@@ -150,7 +171,7 @@ Py_InitializeEx(int install_sigs)
     char *errors = NULL;
     int free_codeset = 0;
     int overridden = 0;
-    PyObject *sys_stream, *sys_isatty;
+    PyObject *sys_stream;
 #if defined(Py_USING_UNICODE) && defined(HAVE_LANGINFO_H) && defined(CODESET)
     char *saved_locale, *loc_codeset;
 #endif
@@ -336,40 +357,25 @@ Py_InitializeEx(int install_sigs)
 
     if (codeset) {
         sys_stream = PySys_GetObject("stdin");
-        sys_isatty = PyObject_CallMethod(sys_stream, "isatty", "");
-        if (!sys_isatty)
-            PyErr_Clear();
-        if ((overridden ||
-             (sys_isatty && PyObject_IsTrue(sys_isatty))) &&
-           PyFile_Check(sys_stream)) {
+        if ((overridden || isatty_no_error(sys_stream)) &&
+            PyFile_Check(sys_stream)) {
             if (!PyFile_SetEncodingAndErrors(sys_stream, icodeset, errors))
                 Py_FatalError("Cannot set codeset of stdin");
         }
-        Py_XDECREF(sys_isatty);
 
         sys_stream = PySys_GetObject("stdout");
-        sys_isatty = PyObject_CallMethod(sys_stream, "isatty", "");
-        if (!sys_isatty)
-            PyErr_Clear();
-        if ((overridden ||
-             (sys_isatty && PyObject_IsTrue(sys_isatty))) &&
-           PyFile_Check(sys_stream)) {
+        if ((overridden || isatty_no_error(sys_stream)) &&
+            PyFile_Check(sys_stream)) {
             if (!PyFile_SetEncodingAndErrors(sys_stream, codeset, errors))
                 Py_FatalError("Cannot set codeset of stdout");
         }
-        Py_XDECREF(sys_isatty);
 
         sys_stream = PySys_GetObject("stderr");
-        sys_isatty = PyObject_CallMethod(sys_stream, "isatty", "");
-        if (!sys_isatty)
-            PyErr_Clear();
-        if((overridden ||
-            (sys_isatty && PyObject_IsTrue(sys_isatty))) &&
-           PyFile_Check(sys_stream)) {
+        if ((overridden || isatty_no_error(sys_stream)) &&
+            PyFile_Check(sys_stream)) {
             if (!PyFile_SetEncodingAndErrors(sys_stream, codeset, errors))
                 Py_FatalError("Cannot set codeset of stderr");
         }
-        Py_XDECREF(sys_isatty);
 
         if (free_codeset)
             free(codeset);
@@ -482,10 +488,12 @@ Py_Finalize(void)
 
     /* Debugging stuff */
 #ifdef COUNT_ALLOCS
-    dump_counts(stdout);
+    if (Py_GETENV("PYTHONSHOWALLOCCOUNT")) {
+        dump_counts(stderr);
+    }
 #endif
 
-    PRINT_TOTAL_REFS();
+    _PyDebug_PrintTotalRefs();
 
 #ifdef Py_TRACE_REFS
     /* Display all objects still alive -- this can invoke arbitrary
@@ -529,6 +537,7 @@ Py_Finalize(void)
     PyInt_Fini();
     PyFloat_Fini();
     PyDict_Fini();
+    _PyRandom_Fini();
 
 #ifdef Py_USING_UNICODE
     /* Cleanup Unicode implementation */
@@ -775,7 +784,7 @@ PyRun_InteractiveLoopFlags(FILE *fp, const char *filename, PyCompilerFlags *flag
     }
     for (;;) {
         ret = PyRun_InteractiveOneFlags(fp, filename, flags);
-        PRINT_TOTAL_REFS();
+        _PyDebug_PrintTotalRefs();
         if (ret == E_EOF)
             return 0;
         /*
@@ -1127,7 +1136,7 @@ handle_system_exit(void)
         /* If we failed to dig out the 'code' attribute,
            just let the else clause below print the error. */
     }
-    if (PyInt_Check(value))
+    if (_PyAnyInt_Check(value))
         exitcode = (int)PyInt_AsLong(value);
     else {
         PyObject *sys_stderr = PySys_GetObject("stderr");
@@ -1299,8 +1308,11 @@ PyErr_Display(PyObject *exception, PyObject *value, PyObject *tb)
             /* only print colon if the str() of the
                object is not the empty string
             */
-            if (s == NULL)
+            if (s == NULL) {
+                PyErr_Clear();
                 err = -1;
+                PyFile_WriteString(": <exception str() failed>", f);
+            }
             else if (!PyString_Check(s) ||
                      PyString_GET_SIZE(s) != 0)
                 err = PyFile_WriteString(": ", f);
@@ -1309,6 +1321,9 @@ PyErr_Display(PyObject *exception, PyObject *value, PyObject *tb)
             Py_XDECREF(s);
         }
         /* try to write a newline in any case */
+        if (err < 0) {
+            PyErr_Clear();
+        }
         err += PyFile_WriteString("\n", f);
     }
     Py_DECREF(value);
@@ -1575,7 +1590,7 @@ err_input(perrdetail *err)
     errtype = PyExc_SyntaxError;
     switch (err->error) {
     case E_ERROR:
-        return;
+        goto cleanup;
     case E_SYNTAX:
         errtype = PyExc_IndentationError;
         if (err->expected == INDENT)
@@ -1639,6 +1654,9 @@ err_input(perrdetail *err)
         Py_XDECREF(tb);
         break;
     }
+    case E_IO:
+        msg = "I/O error while reading";
+        break;
     case E_LINECONT:
         msg = "unexpected character after line continuation character";
         break;
@@ -1913,7 +1931,7 @@ PyOS_setsig(int sig, PyOS_sighandler_t handler)
 #endif
 }
 
-/* Deprecated C API functions still provided for binary compatiblity */
+/* Deprecated C API functions still provided for binary compatibility */
 
 #undef PyParser_SimpleParseFile
 PyAPI_FUNC(node *)

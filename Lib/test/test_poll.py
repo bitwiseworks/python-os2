@@ -3,14 +3,13 @@
 import os
 import random
 import select
-import _testcapi
 try:
     import threading
 except ImportError:
     threading = None
 import time
 import unittest
-from test.test_support import TESTFN, run_unittest, reap_threads
+from test.test_support import TESTFN, run_unittest, reap_threads, cpython_only
 
 try:
     select.poll
@@ -159,14 +158,23 @@ class PollTests(unittest.TestCase):
         if x != 5:
             self.fail('Overflow must have occurred')
 
+        # Issues #15989, #17919
+        self.assertRaises(OverflowError, pollster.register, 0, -1)
+        self.assertRaises(OverflowError, pollster.register, 0, 1 << 64)
+        self.assertRaises(OverflowError, pollster.modify, 1, -1)
+        self.assertRaises(OverflowError, pollster.modify, 1, 1 << 64)
+
+    @cpython_only
+    def test_poll_c_limits(self):
+        from _testcapi import USHRT_MAX, INT_MAX, UINT_MAX
         pollster = select.poll()
-        # Issue 15989
-        self.assertRaises(OverflowError, pollster.register, 0,
-                          _testcapi.SHRT_MAX + 1)
-        self.assertRaises(OverflowError, pollster.register, 0,
-                          _testcapi.USHRT_MAX + 1)
-        self.assertRaises(OverflowError, pollster.poll, _testcapi.INT_MAX + 1)
-        self.assertRaises(OverflowError, pollster.poll, _testcapi.UINT_MAX + 1)
+        pollster.register(1)
+
+        # Issues #15989, #17919
+        self.assertRaises(OverflowError, pollster.register, 0, USHRT_MAX + 1)
+        self.assertRaises(OverflowError, pollster.modify, 1, USHRT_MAX + 1)
+        self.assertRaises(OverflowError, pollster.poll, INT_MAX + 1)
+        self.assertRaises(OverflowError, pollster.poll, UINT_MAX + 1)
 
     @unittest.skipUnless(threading, 'Threading required for this test.')
     @reap_threads
@@ -196,6 +204,28 @@ class PollTests(unittest.TestCase):
             # and make the call to poll() from the thread return
             os.write(w, b'spam')
             t.join()
+
+    @unittest.skipUnless(threading, 'Threading required for this test.')
+    @reap_threads
+    def test_poll_blocks_with_negative_ms(self):
+        for timeout_ms in [None, -1000, -1, -1.0]:
+            # Create two file descriptors. This will be used to unlock
+            # the blocking call to poll.poll inside the thread
+            r, w = os.pipe()
+            pollster = select.poll()
+            pollster.register(r, select.POLLIN)
+
+            poll_thread = threading.Thread(target=pollster.poll, args=(timeout_ms,))
+            poll_thread.start()
+            poll_thread.join(timeout=0.1)
+            self.assertTrue(poll_thread.is_alive())
+
+            # Write to the pipe so pollster.poll unblocks and the thread ends.
+            os.write(w, b'spam')
+            poll_thread.join()
+            self.assertFalse(poll_thread.is_alive())
+            os.close(r)
+            os.close(w)
 
 
 def test_main():

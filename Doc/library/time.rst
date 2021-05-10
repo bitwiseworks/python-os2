@@ -47,8 +47,6 @@ An explanation of some terminology and conventions is in order.
   years for all year input.  When 2-digit years are accepted, they are converted
   according to the POSIX or X/Open standard: values 69-99 are mapped to 1969-1999,
   and values 0--68 are mapped to 2000--2068. Values 100--1899 are always illegal.
-  Note that this is new as of Python 1.5.2(a2); earlier versions, up to Python
-  1.5.1 and 1.5.2a1, would add 1900 to year values below 1900.
 
 .. index::
    single: UTC
@@ -222,12 +220,13 @@ The module defines the following functions and data items:
 
 .. function:: sleep(secs)
 
-   Suspend execution for the given number of seconds.  The argument may be a
-   floating point number to indicate a more precise sleep time. The actual
-   suspension time may be less than that requested because any caught signal will
-   terminate the :func:`sleep` following execution of that signal's catching
-   routine.  Also, the suspension time may be longer than requested by an arbitrary
-   amount because of the scheduling of other activity in the system.
+   Suspend execution of the current thread for the given number of seconds.
+   The argument may be a floating point number to indicate a more precise sleep
+   time. The actual suspension time may be less than that requested because any
+   caught signal will terminate the :func:`sleep` following execution of that
+   signal's catching routine.  Also, the suspension time may be longer than
+   requested by an arbitrary amount because of the scheduling of other activity
+   in the system.
 
 
 .. function:: strftime(format[, t])
@@ -236,7 +235,9 @@ The module defines the following functions and data items:
    :func:`gmtime` or :func:`localtime` to a string as specified by the *format*
    argument.  If *t* is not provided, the current time as returned by
    :func:`localtime` is used.  *format* must be a string.  :exc:`ValueError` is
-   raised if any field in *t* is outside of the allowed range.
+   raised if any field in *t* is outside of the allowed range. :func:`strftime`
+   returns a locale dependent byte string; the result may be converted to unicode
+   by doing ``strftime(<myformat>).decode(locale.getlocale()[1])``.
 
    .. versionchanged:: 2.1
       Allowed *t* to be omitted.
@@ -246,7 +247,7 @@ The module defines the following functions and data items:
 
    .. versionchanged:: 2.5
       0 is now a legal argument for any position in the time tuple; if it is normally
-      illegal the value is forced to a correct one..
+      illegal the value is forced to a correct one.
 
    The following directives can be embedded in the *format* string. They are shown
    without the optional field width and precision specification, and are replaced
@@ -426,9 +427,12 @@ The module defines the following functions and data items:
 
    Note that unlike the C structure, the month value is a range of [1, 12], not
    [0, 11].  A year value will be handled as described under :ref:`Year 2000
-   (Y2K) issues <time-y2kissues>` above.  A ``-1`` argument as the daylight
-   savings flag, passed to :func:`mktime` will usually result in the correct
-   daylight savings state to be filled in.
+   (Y2K) issues <time-y2kissues>` above.
+
+   In calls to :func:`mktime`, :attr:`tm_isdst` may be set to 1 when daylight
+   savings time is in effect, and 0 when it is not.  A value of -1 indicates
+   that this is not known, and will usually result in the correct state being
+   filled in.
 
    When a tuple with an incorrect length is passed to a function expecting a
    :class:`struct_time`, or having elements of the wrong type, a
@@ -460,8 +464,13 @@ The module defines the following functions and data items:
 
 .. function:: tzset()
 
-   Resets the time conversion rules used by the library routines. The environment
-   variable :envvar:`TZ` specifies how this is done.
+   Reset the time conversion rules used by the library routines. The environment
+   variable :envvar:`TZ` specifies how this is done. It will also set the variables
+   ``tzname`` (from the :envvar:`TZ` environment variable), ``timezone`` (non-DST
+   seconds West of UTC), ``altzone`` (DST seconds west of UTC) and ``daylight``
+   (to 0 if this timezone does not have any daylight saving time rules, or to
+   nonzero if there is a time, past, present or future when daylight saving time
+   applies).
 
    .. versionadded:: 2.3
 

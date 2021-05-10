@@ -35,6 +35,16 @@ IMAP4_PORT = 143
 IMAP4_SSL_PORT = 993
 AllowedVersions = ('IMAP4REV1', 'IMAP4')        # Most recent first
 
+# Maximal line length when calling readline(). This is to prevent
+# reading arbitrary length lines. RFC 3501 and 2060 (IMAP 4rev1)
+# don't specify a line length. RFC 2683 suggests limiting client
+# command lines to 1000 octets and that servers should be prepared
+# to accept command lines up to 8000 octets, so we used to use 10K here.
+# In the modern world (eg: gmail) the response to, for example, a
+# search command can be quite large, so we now use 1M.
+_MAXLINE = 1000000
+
+
 #       Commands
 
 Commands = {
@@ -60,6 +70,7 @@ Commands = {
         'LOGIN':        ('NONAUTH',),
         'LOGOUT':       ('NONAUTH', 'AUTH', 'SELECTED', 'LOGOUT'),
         'LSUB':         ('AUTH', 'SELECTED'),
+        'MOVE':         ('SELECTED',),
         'NAMESPACE':    ('AUTH', 'SELECTED'),
         'NOOP':         ('NONAUTH', 'AUTH', 'SELECTED', 'LOGOUT'),
         'PARTIAL':      ('SELECTED',),                                  # NB: obsolete
@@ -237,7 +248,10 @@ class IMAP4:
 
     def readline(self):
         """Read line from remote."""
-        return self.file.readline()
+        line = self.file.readline(_MAXLINE + 1)
+        if len(line) > _MAXLINE:
+            raise self.error("got more than %d bytes" % _MAXLINE)
+        return line
 
 
     def send(self, data):
@@ -251,8 +265,10 @@ class IMAP4:
         try:
             self.sock.shutdown(socket.SHUT_RDWR)
         except socket.error as e:
-            # The server might already have closed the connection
-            if e.errno != errno.ENOTCONN:
+            # The server might already have closed the connection.
+            # On Windows, this may result in WSAEINVAL (error 10022):
+            # An invalid operation was attempted.
+            if e.errno not in (errno.ENOTCONN, 10022):
                 raise
         finally:
             self.sock.close()
@@ -990,6 +1006,11 @@ class IMAP4:
                 del self.tagged_commands[tag]
                 return result
 
+            # If we've seen a BYE at this point, the socket will be
+            # closed, so report the BYE now.
+
+            self._check_bye()
+
             # Some have reported "unexpected response" exceptions.
             # Note that ignoring them here causes loops.
             # Instead, send me details of the unexpected response and
@@ -1159,16 +1180,6 @@ else:
             self.sock = socket.create_connection((host, port))
             self.sslobj = ssl.wrap_socket(self.sock, self.keyfile, self.certfile)
             self.file = self.sslobj.makefile('rb')
-
-
-        def read(self, size):
-            """Read 'size' bytes from remote."""
-            return self.file.read(size)
-
-
-        def readline(self):
-            """Read line from remote."""
-            return self.file.readline()
 
 
         def send(self, data):
@@ -1391,7 +1402,7 @@ def Time2Internaldate(date_time):
     be in the correct format.
     """
 
-    if isinstance(date_time, (int, float)):
+    if isinstance(date_time, (int, long, float)):
         tt = time.localtime(date_time)
     elif isinstance(date_time, (tuple, time.struct_time)):
         tt = date_time

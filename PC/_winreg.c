@@ -301,7 +301,7 @@ PyDoc_STRVAR(SetValueEx_doc,
 "  REG_EXPAND_SZ -- A null-terminated string that contains unexpanded references\n"
 "                   to environment variables (for example, %PATH%).\n"
 "  REG_LINK -- A Unicode symbolic link.\n"
-"  REG_MULTI_SZ -- An sequence of null-terminated strings, terminated by\n"
+"  REG_MULTI_SZ -- A sequence of null-terminated strings, terminated by\n"
 "                  two null characters.  Note that Python handles this\n"
 "                  termination automatically.\n"
 "  REG_NONE -- No defined value type.\n"
@@ -322,19 +322,19 @@ PyDoc_STRVAR(SetValueEx_doc,
 
 PyDoc_STRVAR(DisableReflectionKey_doc,
 "Disables registry reflection for 32-bit processes running on a 64-bit\n"
-"Operating System.  Will generally raise NotImplemented if executed on\n"
+"Operating System.  Will generally raise NotImplementedError if executed on\n"
 "a 32-bit Operating System.\n"
 "If the key is not on the reflection list, the function succeeds but has no effect.\n"
 "Disabling reflection for a key does not affect reflection of any subkeys.");
 
 PyDoc_STRVAR(EnableReflectionKey_doc,
 "Restores registry reflection for the specified disabled key.\n"
-"Will generally raise NotImplemented if executed on a 32-bit Operating System.\n"
+"Will generally raise NotImplementedError if executed on a 32-bit Operating System.\n"
 "Restoring reflection for a key does not affect reflection of any subkeys.");
 
 PyDoc_STRVAR(QueryReflectionKey_doc,
 "bool = QueryReflectionKey(hkey) - Determines the reflection state for the specified key.\n"
-"Will generally raise NotImplemented if executed on a 32-bit Operating System.\n");
+"Will generally raise NotImplementedError if executed on a 32-bit Operating System.\n");
 
 /* PyHKEY docstrings */
 PyDoc_STRVAR(PyHKEY_doc,
@@ -641,7 +641,7 @@ PyHKEY_AsHKEY(PyObject *ob, HKEY *pHANDLE, BOOL bNoneOK)
         PyHKEYObject *pH = (PyHKEYObject *)ob;
         *pHANDLE = pH->hkey;
     }
-    else if (PyInt_Check(ob) || PyLong_Check(ob)) {
+    else if (_PyAnyInt_Check(ob)) {
         /* We also support integers */
         PyErr_Clear();
         *pHANDLE = (HKEY)PyLong_AsVoidPtr(ob);
@@ -727,7 +727,7 @@ fixupMultiSZ(char **str, char *data, int len)
     Q = data + len;
     for (P = data, i = 0; P < Q && *P != '\0'; P++, i++) {
         str[i] = P;
-        for(; *P != '\0'; P++)
+        for (; P < Q && *P != '\0'; P++)
             ;
     }
 }
@@ -753,8 +753,7 @@ Py2Reg(PyObject *value, DWORD typ, BYTE **retDataBuf, DWORD *retDataSize)
     Py_ssize_t i,j;
     switch (typ) {
         case REG_DWORD:
-            if (value != Py_None &&
-                !(PyInt_Check(value) || PyLong_Check(value)))
+            if (value != Py_None && !_PyAnyInt_Check(value))
                 return FALSE;
             *retDataBuf = (BYTE *)PyMem_NEW(DWORD, 1);
             if (*retDataBuf==NULL){
@@ -883,12 +882,14 @@ Py2Reg(PyObject *value, DWORD typ, BYTE **retDataBuf, DWORD *retDataSize)
         /* ALSO handle ALL unknown data types here.  Even if we can't
            support it natively, we should handle the bits. */
         default:
-            if (value == Py_None)
+            if (value == Py_None) {
                 *retDataSize = 0;
+                *retDataBuf = NULL;
+            }
             else {
                 void *src_buf;
                 PyBufferProcs *pb = value->ob_type->tp_as_buffer;
-                if (pb==NULL) {
+                if (pb == NULL || pb->bf_getreadbuffer == NULL) {
                     PyErr_Format(PyExc_TypeError,
                         "Objects of type '%s' can not "
                         "be used as binary registry values",
@@ -896,9 +897,11 @@ Py2Reg(PyObject *value, DWORD typ, BYTE **retDataBuf, DWORD *retDataSize)
                     return FALSE;
                 }
                 *retDataSize = (*pb->bf_getreadbuffer)(value, 0, &src_buf);
-                *retDataBuf = (BYTE *)PyMem_NEW(char,
-                                                *retDataSize);
-                if (*retDataBuf==NULL){
+                if (*retDataSize < 0) {
+                    return FALSE;
+                }
+                *retDataBuf = (BYTE *)PyMem_NEW(char, *retDataSize);
+                if (*retDataBuf == NULL){
                     PyErr_NoMemory();
                     return FALSE;
                 }
@@ -948,8 +951,10 @@ Reg2Py(char *retDataBuf, DWORD retDataSize, DWORD typ)
 
                 fixupMultiSZ(str, retDataBuf, retDataSize);
                 obData = PyList_New(s);
-                if (obData == NULL)
+                if (obData == NULL) {
+                    free(str);
                     return NULL;
+                }
                 for (index = 0; index < s; index++)
                 {
                     size_t len = _mbstrlen(str[index]);
@@ -957,6 +962,7 @@ Reg2Py(char *retDataBuf, DWORD retDataSize, DWORD typ)
                         PyErr_SetString(PyExc_OverflowError,
                             "registry string is too long for a Python string");
                         Py_DECREF(obData);
+                        free(str);
                         return NULL;
                     }
                     PyList_SetItem(obData,

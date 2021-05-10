@@ -12,6 +12,7 @@ import string
 from distutils.core import Command
 from distutils.debug import DEBUG
 from distutils.file_util import write_file
+from distutils.sysconfig import get_python_version
 from distutils.errors import (DistutilsOptionError, DistutilsPlatformError,
                               DistutilsFileError, DistutilsExecError)
 from distutils import log
@@ -62,7 +63,7 @@ class bdist_rpm (Command):
          "RPM \"vendor\" (eg. \"Joe Blow <joe@example.com>\") "
          "[default: maintainer or author from setup script]"),
         ('packager=', None,
-         "RPM packager (eg. \"Jane Doe <jane@example.net>\")"
+         "RPM packager (eg. \"Jane Doe <jane@example.net>\") "
          "[default: vendor]"),
         ('doc-files=', None,
          "list of documentation files (space or comma-separated)"),

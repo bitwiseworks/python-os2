@@ -1,5 +1,7 @@
+import functools
 import unittest
 from ctypes import *
+from ctypes.test import need_symbol
 import _ctypes_test
 
 class Callbacks(unittest.TestCase):
@@ -94,9 +96,10 @@ class Callbacks(unittest.TestCase):
     # disabled: would now (correctly) raise a RuntimeWarning about
     # a memory leak.  A callback function cannot return a non-integral
     # C type without causing a memory leak.
-##    def test_char_p(self):
-##        self.check_type(c_char_p, "abc")
-##        self.check_type(c_char_p, "def")
+    @unittest.skip('test disabled')
+    def test_char_p(self):
+        self.check_type(c_char_p, "abc")
+        self.check_type(c_char_p, "def")
 
     def test_pyobject(self):
         o = ()
@@ -148,13 +151,12 @@ class Callbacks(unittest.TestCase):
         CFUNCTYPE(None)(lambda x=Nasty(): None)
 
 
-try:
-    WINFUNCTYPE
-except NameError:
-    pass
-else:
-    class StdcallCallbacks(Callbacks):
+@need_symbol('WINFUNCTYPE')
+class StdcallCallbacks(Callbacks):
+    try:
         functype = WINFUNCTYPE
+    except NameError:
+        pass
 
 ################################################################
 
@@ -184,7 +186,7 @@ class SampleCallbacksTestCase(unittest.TestCase):
         from ctypes.util import find_library
         libc_path = find_library("c")
         if not libc_path:
-            return # cannot test
+            self.skipTest('could not find libc')
         libc = CDLL(libc_path)
 
         @CFUNCTYPE(c_int, POINTER(c_int), POINTER(c_int))
@@ -196,23 +198,19 @@ class SampleCallbacksTestCase(unittest.TestCase):
         libc.qsort(array, len(array), sizeof(c_int), cmp_func)
         self.assertEqual(array[:], [1, 5, 7, 33, 99])
 
-    try:
-        WINFUNCTYPE
-    except NameError:
-        pass
-    else:
-        def test_issue_8959_b(self):
-            from ctypes.wintypes import BOOL, HWND, LPARAM
+    @need_symbol('WINFUNCTYPE')
+    def test_issue_8959_b(self):
+        from ctypes.wintypes import BOOL, HWND, LPARAM
+        global windowCount
+        windowCount = 0
+
+        @WINFUNCTYPE(BOOL, HWND, LPARAM)
+        def EnumWindowsCallbackFunc(hwnd, lParam):
             global windowCount
-            windowCount = 0
+            windowCount += 1
+            return True #Allow windows to keep enumerating
 
-            @WINFUNCTYPE(BOOL, HWND, LPARAM)
-            def EnumWindowsCallbackFunc(hwnd, lParam):
-                global windowCount
-                windowCount += 1
-                return True #Allow windows to keep enumerating
-
-            windll.user32.EnumWindows(EnumWindowsCallbackFunc, 0)
+        windll.user32.EnumWindows(EnumWindowsCallbackFunc, 0)
 
     def test_callback_register_int(self):
         # Issue #8275: buggy handling of callback args under Win64
@@ -249,6 +247,51 @@ class SampleCallbacksTestCase(unittest.TestCase):
         self.assertEqual(result,
                          callback(1.1*1.1, 2.2*2.2, 3.3*3.3, 4.4*4.4, 5.5*5.5))
 
+    def test_callback_large_struct(self):
+        class Check: pass
+
+        # This should mirror the structure in Modules/_ctypes/_ctypes_test.c
+        class X(Structure):
+            _fields_ = [
+                ('first', c_ulong),
+                ('second', c_ulong),
+                ('third', c_ulong),
+            ]
+
+        def callback(check, s):
+            check.first = s.first
+            check.second = s.second
+            check.third = s.third
+            # See issue #29565.
+            # The structure should be passed by value, so
+            # any changes to it should not be reflected in
+            # the value passed
+            s.first = s.second = s.third = 0x0badf00d
+
+        check = Check()
+        s = X()
+        s.first = 0xdeadbeef
+        s.second = 0xcafebabe
+        s.third = 0x0bad1dea
+
+        CALLBACK = CFUNCTYPE(None, X)
+        dll = CDLL(_ctypes_test.__file__)
+        func = dll._testfunc_cbk_large_struct
+        func.argtypes = (X, CALLBACK)
+        func.restype = None
+        # the function just calls the callback with the passed structure
+        func(s, CALLBACK(functools.partial(callback, check)))
+        self.assertEqual(check.first, s.first)
+        self.assertEqual(check.second, s.second)
+        self.assertEqual(check.third, s.third)
+        self.assertEqual(check.first, 0xdeadbeef)
+        self.assertEqual(check.second, 0xcafebabe)
+        self.assertEqual(check.third, 0x0bad1dea)
+        # See issue #29565.
+        # Ensure that the original struct is unchanged.
+        self.assertEqual(s.first, check.first)
+        self.assertEqual(s.second, check.second)
+        self.assertEqual(s.third, check.third)
 
 ################################################################
 

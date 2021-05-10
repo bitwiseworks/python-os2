@@ -207,7 +207,7 @@ You can experiment with the iteration interface manually:
     3
     >>> it.next()
     Traceback (most recent call last):
-      File "<stdin>", line 1, in ?
+      File "<stdin>", line 1, in <module>
     StopIteration
     >>>
 
@@ -331,7 +331,7 @@ substring.
 
 List comprehensions and generator expressions (short form: "listcomps" and
 "genexps") are a concise notation for such operations, borrowed from the
-functional programming language Haskell (http://www.haskell.org/).  You can strip
+functional programming language Haskell (https://www.haskell.org/).  You can strip
 all the whitespace from a stream of strings with the following code::
 
     line_list = ['  line 1\n', 'line 2  \n', ...]
@@ -394,14 +394,14 @@ equivalent to the following Python code::
             continue   # Skip this element
         for expr2 in sequence2:
             if not (condition2):
-                continue    # Skip this element
+                continue   # Skip this element
             ...
             for exprN in sequenceN:
-                 if not (conditionN):
-                     continue   # Skip this element
+                if not (conditionN):
+                    continue   # Skip this element
 
-                 # Output the value of
-                 # the expression.
+                # Output the value of
+                # the expression.
 
 This means that when there are multiple ``for...in`` clauses but no ``if``
 clauses, the length of the resulting output will be equal to the product of the
@@ -477,7 +477,7 @@ Here's a sample usage of the ``generate_ints()`` generator:
     2
     >>> gen.next()
     Traceback (most recent call last):
-      File "stdin", line 1, in ?
+      File "stdin", line 1, in <module>
       File "stdin", line 2, in generate_ints
     StopIteration
 
@@ -581,13 +581,14 @@ And here's an example of changing the counter:
     9
     >>> print it.next()
     Traceback (most recent call last):
-      File "t.py", line 15, in ?
+      File "t.py", line 15, in <module>
         print it.next()
     StopIteration
 
 Because ``yield`` will often be returning ``None``, you should always check for
 this case.  Don't just use its value in expressions unless you're sure that the
-``send()`` method will be the only method used resume your generator function.
+``send()`` method will be the only method used to resume your generator
+function.
 
 In addition to ``send()``, there are two other new methods on generators:
 
@@ -740,11 +741,11 @@ the constructed list's ``.sort()`` method. ::
     [9878, 9828, 8442, 7953, 6431, 6213, 2207, 769]
 
 (For a more detailed discussion of sorting, see the Sorting mini-HOWTO in the
-Python wiki at http://wiki.python.org/moin/HowTo/Sorting.)
+Python wiki at https://wiki.python.org/moin/HowTo/Sorting.)
 
 The ``any(iter)`` and ``all(iter)`` built-ins look at the truth values of an
-iterable's contents.  :func:`any` returns True if any element in the iterable is
-a true value, and :func:`all` returns True if all of the elements are true
+iterable's contents.  :func:`any` returns ``True`` if any element in the iterable is
+a true value, and :func:`all` returns ``True`` if all of the elements are true
 values:
 
     >>> any([0,1,0])
@@ -1143,7 +1144,7 @@ General
 
 **Structure and Interpretation of Computer Programs**, by Harold Abelson and
 Gerald Jay Sussman with Julie Sussman.  Full text at
-http://mitpress.mit.edu/sicp/.  In this classic textbook of computer science,
+https://mitpress.mit.edu/sicp/.  In this classic textbook of computer science,
 chapters 2 and 3 discuss the use of sequences and streams to organize the data
 flow inside a program.  The book uses Scheme for its examples, but many of the
 design approaches described in these chapters are applicable to functional-style
@@ -1152,12 +1153,12 @@ Python code.
 http://www.defmacro.org/ramblings/fp.html: A general introduction to functional
 programming that uses Java examples and has a lengthy historical introduction.
 
-http://en.wikipedia.org/wiki/Functional_programming: General Wikipedia entry
+https://en.wikipedia.org/wiki/Functional_programming: General Wikipedia entry
 describing functional programming.
 
-http://en.wikipedia.org/wiki/Coroutine: Entry for coroutines.
+https://en.wikipedia.org/wiki/Coroutine: Entry for coroutines.
 
-http://en.wikipedia.org/wiki/Currying: Entry for the concept of currying.
+https://en.wikipedia.org/wiki/Currying: Entry for the concept of currying.
 
 Python-specific
 ---------------
@@ -1170,9 +1171,9 @@ Text Processing".
 Mertz also wrote a 3-part series of articles on functional programming
 for IBM's DeveloperWorks site; see
 
-`part 1 <http://www.ibm.com/developerworks/linux/library/l-prog/index.html>`__,
-`part 2 <http://www.ibm.com/developerworks/linux/library/l-prog2/index.html>`__, and
-`part 3 <http://www.ibm.com/developerworks/linux/library/l-prog3/index.html>`__,
+`part 1 <https://www.ibm.com/developerworks/linux/library/l-prog/index.html>`__,
+`part 2 <https://www.ibm.com/developerworks/linux/library/l-prog2/index.html>`__, and
+`part 3 <https://www.ibm.com/developerworks/linux/library/l-prog3/index.html>`__,
 
 
 Python documentation

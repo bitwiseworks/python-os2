@@ -9,9 +9,9 @@
 --------------
 
 The :mod:`dis` module supports the analysis of CPython :term:`bytecode` by
-disassembling it. The CPython bytecode which this module takes as an
-input is defined in the file :file:`Include/opcode.h` and used by the compiler
-and the interpreter.
+disassembling it. The CPython bytecode which this module takes as an input is
+defined in the file :file:`Include/opcode.h` and used by the compiler and the
+interpreter.
 
 .. impl-detail::
 
@@ -40,17 +40,18 @@ The :mod:`dis` module defines the following functions and constants:
 
 .. function:: dis([bytesource])
 
-   Disassemble the *bytesource* object. *bytesource* can denote either a module, a
-   class, a method, a function, or a code object.   For a module, it disassembles
-   all functions.  For a class, it disassembles all methods.  For a single code
-   sequence, it prints one line per bytecode instruction.  If no object is
-   provided, it disassembles the last traceback.
+   Disassemble the *bytesource* object. *bytesource* can denote either a module,
+   a class, a method, a function, or a code object.  For a module, it
+   disassembles all functions.  For a class, it disassembles all methods.  For a
+   single code sequence, it prints one line per bytecode instruction.  If no
+   object is provided, it disassembles the last traceback.
 
 
 .. function:: distb([tb])
 
-   Disassembles the top-of-stack function of a traceback, using the last traceback
-   if none was passed.  The instruction causing the exception is indicated.
+   Disassembles the top-of-stack function of a traceback, using the last
+   traceback if none was passed.  The instruction causing the exception is
+   indicated.
 
 
 .. function:: disassemble(code[, lasti])
@@ -106,7 +107,7 @@ The :mod:`dis` module defines the following functions and constants:
 
 .. data:: hasconst
 
-   Sequence of bytecodes that have a constant parameter.
+   Sequence of bytecodes that access a constant.
 
 
 .. data:: hasfree
@@ -233,8 +234,8 @@ result back on the stack.
 
 .. opcode:: BINARY_DIVIDE ()
 
-   Implements ``TOS = TOS1 / TOS`` when ``from __future__ import division`` is not
-   in effect.
+   Implements ``TOS = TOS1 / TOS`` when ``from __future__ import division`` is
+   not in effect.
 
 
 .. opcode:: BINARY_FLOOR_DIVIDE ()
@@ -244,8 +245,8 @@ result back on the stack.
 
 .. opcode:: BINARY_TRUE_DIVIDE ()
 
-   Implements ``TOS = TOS1 / TOS`` when ``from __future__ import division`` is in
-   effect.
+   Implements ``TOS = TOS1 / TOS`` when ``from __future__ import division`` is
+   in effect.
 
 
 .. opcode:: BINARY_MODULO ()
@@ -445,32 +446,32 @@ Miscellaneous opcodes.
 .. opcode:: PRINT_EXPR ()
 
    Implements the expression statement for the interactive mode.  TOS is removed
-   from the stack and printed.  In non-interactive mode, an expression statement is
-   terminated with ``POP_STACK``.
+   from the stack and printed.  In non-interactive mode, an expression statement
+   is terminated with :opcode:`POP_TOP`.
 
 
 .. opcode:: PRINT_ITEM ()
 
-   Prints TOS to the file-like object bound to ``sys.stdout``.  There is one such
-   instruction for each item in the :keyword:`print` statement.
+   Prints TOS to the file-like object bound to ``sys.stdout``.  There is one
+   such instruction for each item in the :keyword:`print` statement.
 
 
 .. opcode:: PRINT_ITEM_TO ()
 
-   Like ``PRINT_ITEM``, but prints the item second from TOS to the file-like object
-   at TOS.  This is used by the extended print statement.
+   Like ``PRINT_ITEM``, but prints the item second from TOS to the file-like
+   object at TOS.  This is used by the extended print statement.
 
 
 .. opcode:: PRINT_NEWLINE ()
 
-   Prints a new line on ``sys.stdout``.  This is generated as the last operation of
-   a :keyword:`print` statement, unless the statement ends with a comma.
+   Prints a new line on ``sys.stdout``.  This is generated as the last operation
+   of a :keyword:`print` statement, unless the statement ends with a comma.
 
 
 .. opcode:: PRINT_NEWLINE_TO ()
 
-   Like ``PRINT_NEWLINE``, but prints the new line on the file-like object on the
-   TOS.  This is used by the extended print statement.
+   Like ``PRINT_NEWLINE``, but prints the new line on the file-like object on
+   the TOS.  This is used by the extended print statement.
 
 
 .. opcode:: BREAK_LOOP ()
@@ -481,21 +482,21 @@ Miscellaneous opcodes.
 .. opcode:: CONTINUE_LOOP (target)
 
    Continues a loop due to a :keyword:`continue` statement.  *target* is the
-   address to jump to (which should be a ``FOR_ITER`` instruction).
+   address to jump to (which should be a :opcode:`FOR_ITER` instruction).
 
 
 .. opcode:: LIST_APPEND (i)
 
    Calls ``list.append(TOS[-i], TOS)``.  Used to implement list comprehensions.
-   While the appended value is popped off, the list object remains on the
-   stack so that it is available for further iterations of the loop.
+   While the appended value is popped off, the list object remains on the stack
+   so that it is available for further iterations of the loop.
 
 
 .. opcode:: LOAD_LOCALS ()
 
-   Pushes a reference to the locals of the current scope on the stack. This is used
-   in the code for a class definition: After the class body is evaluated, the
-   locals are passed to the class definition.
+   Pushes a reference to the locals of the current scope on the stack. This is
+   used in the code for a class definition: After the class body is evaluated,
+   the locals are passed to the class definition.
 
 
 .. opcode:: RETURN_VALUE ()
@@ -510,9 +511,9 @@ Miscellaneous opcodes.
 
 .. opcode:: IMPORT_STAR ()
 
-   Loads all symbols not starting with ``'_'`` directly from the module TOS to the
-   local namespace. The module is popped after loading all names. This opcode
-   implements ``from module import *``.
+   Loads all symbols not starting with ``'_'`` directly from the module TOS to
+   the local namespace. The module is popped after loading all names. This
+   opcode implements ``from module import *``.
 
 
 .. opcode:: EXEC_STMT ()
@@ -523,8 +524,8 @@ Miscellaneous opcodes.
 
 .. opcode:: POP_BLOCK ()
 
-   Removes one block from the block stack.  Per frame, there is a  stack of blocks,
-   denoting nested loops, try statements, and such.
+   Removes one block from the block stack.  Per frame, there is a stack of
+   blocks, denoting nested loops, try statements, and such.
 
 
 .. opcode:: END_FINALLY ()
@@ -600,8 +601,8 @@ the more significant byte last.
 
 .. opcode:: DUP_TOPX (count)
 
-   Duplicate *count* items, keeping them in the same order. Due to implementation
-   limits, *count* should be between 1 and 5 inclusive.
+   Duplicate *count* items, keeping them in the same order. Due to
+   implementation limits, *count* should be between 1 and 5 inclusive.
 
 
 .. opcode:: STORE_ATTR (namei)
@@ -637,13 +638,20 @@ the more significant byte last.
 
 .. opcode:: BUILD_TUPLE (count)
 
-   Creates a tuple consuming *count* items from the stack, and pushes the resulting
-   tuple onto the stack.
+   Creates a tuple consuming *count* items from the stack, and pushes the
+   resulting tuple onto the stack.
 
 
 .. opcode:: BUILD_LIST (count)
 
    Works as ``BUILD_TUPLE``, but creates a list.
+
+
+.. opcode:: BUILD_SET (count)
+
+   Works as ``BUILD_TUPLE``, but creates a set.
+
+   .. versionadded:: 2.7
 
 
 .. opcode:: BUILD_MAP (count)
@@ -667,9 +675,9 @@ the more significant byte last.
 
    Imports the module ``co_names[namei]``.  TOS and TOS1 are popped and provide
    the *fromlist* and *level* arguments of :func:`__import__`.  The module
-   object is pushed onto the stack.  The current namespace is not affected:
-   for a proper import statement, a subsequent ``STORE_FAST`` instruction
-   modifies the namespace.
+   object is pushed onto the stack.  The current namespace is not affected: for
+   a proper import statement, a subsequent ``STORE_FAST`` instruction modifies
+   the namespace.
 
 
 .. opcode:: IMPORT_FROM (namei)
@@ -696,14 +704,14 @@ the more significant byte last.
 
 .. opcode:: JUMP_IF_TRUE_OR_POP (target)
 
-   If TOS is true, sets the bytecode counter to *target* and leaves TOS
-   on the stack.  Otherwise (TOS is false), TOS is popped.
+   If TOS is true, sets the bytecode counter to *target* and leaves TOS on the
+   stack.  Otherwise (TOS is false), TOS is popped.
 
 
 .. opcode:: JUMP_IF_FALSE_OR_POP (target)
 
-   If TOS is false, sets the bytecode counter to *target* and leaves
-   TOS on the stack.  Otherwise (TOS is true), TOS is popped.
+   If TOS is false, sets the bytecode counter to *target* and leaves TOS on the
+   stack.  Otherwise (TOS is true), TOS is popped.
 
 
 .. opcode:: JUMP_ABSOLUTE (target)
@@ -732,19 +740,19 @@ the more significant byte last.
 
 .. opcode:: SETUP_EXCEPT (delta)
 
-   Pushes a try block from a try-except clause onto the block stack. *delta* points
-   to the first except block.
+   Pushes a try block from a try-except clause onto the block stack. *delta*
+   points to the first except block.
 
 
 .. opcode:: SETUP_FINALLY (delta)
 
-   Pushes a try block from a try-except clause onto the block stack. *delta* points
-   to the finally block.
+   Pushes a try block from a try-except clause onto the block stack. *delta*
+   points to the finally block.
 
 .. opcode:: STORE_MAP ()
 
-   Store a key and value pair in a dictionary.  Pops the key and value while leaving
-   the dictionary on the stack.
+   Store a key and value pair in a dictionary.  Pops the key and value while
+   leaving the dictionary on the stack.
 
 .. opcode:: LOAD_FAST (var_num)
 
@@ -764,8 +772,8 @@ the more significant byte last.
 .. opcode:: LOAD_CLOSURE (i)
 
    Pushes a reference to the cell contained in slot *i* of the cell and free
-   variable storage.  The name of the variable is  ``co_cellvars[i]`` if *i* is
-   less than the length of *co_cellvars*.  Otherwise it is  ``co_freevars[i -
+   variable storage.  The name of the variable is ``co_cellvars[i]`` if *i* is
+   less than the length of *co_cellvars*.  Otherwise it is ``co_freevars[i -
    len(co_cellvars)]``.
 
 
@@ -788,27 +796,32 @@ the more significant byte last.
 
 .. opcode:: RAISE_VARARGS (argc)
 
-   Raises an exception. *argc* indicates the number of parameters to the raise
+   Raises an exception. *argc* indicates the number of arguments to the raise
    statement, ranging from 0 to 3.  The handler will find the traceback as TOS2,
    the parameter as TOS1, and the exception as TOS.
 
 
 .. opcode:: CALL_FUNCTION (argc)
 
-   Calls a function.  The low byte of *argc* indicates the number of positional
-   parameters, the high byte the number of keyword parameters. On the stack, the
-   opcode finds the keyword parameters first.  For each keyword argument, the value
-   is on top of the key.  Below the keyword parameters, the positional parameters
-   are on the stack, with the right-most parameter on top.  Below the parameters,
-   the function object to call is on the stack.  Pops all function arguments, and
-   the function itself off the stack, and pushes the return value.
+   Calls a callable object.  The low byte of *argc* indicates the number of
+   positional arguments, the high byte the number of keyword arguments.
+   The stack contains keyword arguments on top (if any), then the positional
+   arguments below that (if any), then the callable object to call below that.
+   Each keyword argument is represented with two values on the stack:
+   the argument's name, and its value, with the argument's value above the
+   name on the stack.
+   The positional arguments are pushed in the order that they are passed in
+   to the callable object, with the right-most positional argument on top.
+   ``CALL_FUNCTION`` pops all arguments and the callable object off the stack,
+   calls the callable object with those arguments, and pushes the return value
+   returned by the callable object.
 
 
 .. opcode:: MAKE_FUNCTION (argc)
 
-   Pushes a new function object on the stack.  TOS is the code associated with the
-   function.  The function object is defined to have *argc* default parameters,
-   which are found below TOS.
+   Pushes a new function object on the stack.  TOS is the code associated with
+   the function.  The function object is defined to have *argc* default
+   parameters, which are found below TOS.
 
 
 .. opcode:: MAKE_CLOSURE (argc)
@@ -832,34 +845,63 @@ the more significant byte last.
 
    Prefixes any opcode which has an argument too big to fit into the default two
    bytes.  *ext* holds two additional bytes which, taken together with the
-   subsequent opcode's argument, comprise a four-byte argument, *ext* being the two
-   most-significant bytes.
+   subsequent opcode's argument, comprise a four-byte argument, *ext* being the
+   two most-significant bytes.
 
 
 .. opcode:: CALL_FUNCTION_VAR (argc)
 
-   Calls a function. *argc* is interpreted as in ``CALL_FUNCTION``. The top element
-   on the stack contains the variable argument list, followed by keyword and
-   positional arguments.
+   Calls a callable object, similarly to :opcode:`CALL_FUNCTION`.
+   *argc* represents the number of keyword and positional
+   arguments, identically to :opcode:`CALL_FUNCTION`.
+   The top of the stack contains an iterable object containing
+   additional positional arguments.
+   Below that are keyword arguments (if any), positional arguments (if any)
+   and a callable object, identically to :opcode:`CALL_FUNCTION`.
+   Before the callable object is called, the iterable object
+   is "unpacked" and its contents are appended to the positional
+   arguments passed in.
+   The iterable object is ignored when computing
+   the value of ``argc``.
 
 
 .. opcode:: CALL_FUNCTION_KW (argc)
 
-   Calls a function. *argc* is interpreted as in ``CALL_FUNCTION``. The top element
-   on the stack contains the keyword arguments dictionary,  followed by explicit
-   keyword and positional arguments.
+   Calls a callable object, similarly to :opcode:`CALL_FUNCTION`.
+   *argc* represents the number of keyword and positional
+   arguments, identically to :opcode:`CALL_FUNCTION`.
+   The top of the stack contains a mapping object containing additional keyword
+   arguments.
+   Below that are keyword arguments (if any), positional arguments (if any)
+   and a callable object, identically to :opcode:`CALL_FUNCTION`.
+   Before the callable is called, the mapping object at the top of the stack is
+   "unpacked" and its contents are appended to the keyword arguments passed in.
+   The mapping object at the top of the stack is ignored when computing
+   the value of ``argc``.
 
 
 .. opcode:: CALL_FUNCTION_VAR_KW (argc)
 
-   Calls a function. *argc* is interpreted as in ``CALL_FUNCTION``.  The top
-   element on the stack contains the keyword arguments dictionary, followed by the
-   variable-arguments tuple, followed by explicit keyword and positional arguments.
+   Calls a callable object, similarly to :opcode:`CALL_FUNCTION_VAR` and
+   :opcode:`CALL_FUNCTION_KW`.
+   *argc* represents the number of keyword and positional
+   arguments, identically to :opcode:`CALL_FUNCTION`.
+   The top of the stack contains a mapping object, as per
+   :opcode:`CALL_FUNCTION_KW`.
+   Below that is an iterable object, as per
+   :opcode:`CALL_FUNCTION_VAR`.
+   Below that are keyword arguments (if any), positional arguments (if any)
+   and a callable object, identically to :opcode:`CALL_FUNCTION`.
+   Before the callable is called, the mapping object and iterable object
+   are each "unpacked" and their contents passed in as keyword and
+   positional arguments respectively,
+   identically to :opcode:`CALL_FUNCTION_VAR` and :opcode:`CALL_FUNCTION_KW`.
+   The mapping object and iterable object are both ignored when computing
+   the value of ``argc``.
 
 
 .. opcode:: HAVE_ARGUMENT ()
 
-   This is not really an opcode.  It identifies the dividing line between opcodes
-   which don't take arguments ``< HAVE_ARGUMENT`` and those which do ``>=
-   HAVE_ARGUMENT``.
-
+   This is not really an opcode.  It identifies the dividing line between
+   opcodes which don't take arguments ``< HAVE_ARGUMENT`` and those which do
+   ``>= HAVE_ARGUMENT``.

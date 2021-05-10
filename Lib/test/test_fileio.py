@@ -10,10 +10,9 @@ from array import array
 from weakref import proxy
 from functools import wraps
 from UserList import UserList
-import _testcapi
 
 from test.test_support import TESTFN, check_warnings, run_unittest, make_bad_fd
-from test.test_support import py3k_bytes as bytes
+from test.test_support import py3k_bytes as bytes, cpython_only, check_py3k_warnings
 from test.script_helper import run_python
 
 from _io import FileIO as _FileIO
@@ -102,6 +101,10 @@ class AutoFileTests(unittest.TestCase):
         self.assertEqual(self.f.readline(None), b"hi\n")
         self.assertEqual(self.f.readlines(None), [b"bye\n", b"abc"])
 
+    def testWriteUnicode(self):
+        with check_py3k_warnings():
+            self.f.write(u'')
+
     def testRepr(self):
         self.assertEqual(repr(self.f), "<_io.FileIO name=%r mode='%s'>"
                                        % (self.f.name, self.f.mode))
@@ -113,22 +116,22 @@ class AutoFileTests(unittest.TestCase):
 
     def testErrors(self):
         f = self.f
-        self.assertTrue(not f.isatty())
-        self.assertTrue(not f.closed)
+        self.assertFalse(f.isatty())
+        self.assertFalse(f.closed)
         #self.assertEqual(f.name, TESTFN)
         self.assertRaises(ValueError, f.read, 10) # Open for reading
         f.close()
         self.assertTrue(f.closed)
         f = _FileIO(TESTFN, 'r')
         self.assertRaises(TypeError, f.readinto, "")
-        self.assertTrue(not f.closed)
+        self.assertFalse(f.closed)
         f.close()
         self.assertTrue(f.closed)
 
     def testMethods(self):
-        methods = ['fileno', 'isatty', 'read', 'readinto',
-                   'seek', 'tell', 'truncate', 'write', 'seekable',
-                   'readable', 'writable']
+        methods = ['fileno', 'isatty', 'seekable', 'readable', 'writable',
+                   'read', 'readall', 'readline', 'readlines',
+                   'tell', 'truncate', 'flush']
         if sys.platform.startswith('atheos'):
             methods.remove('truncate')
 
@@ -139,6 +142,15 @@ class AutoFileTests(unittest.TestCase):
             method = getattr(self.f, methodname)
             # should raise on closed file
             self.assertRaises(ValueError, method)
+
+        self.assertRaises(ValueError, self.f.readinto) # XXX should be TypeError?
+        self.assertRaises(ValueError, self.f.readinto, bytearray(1))
+        self.assertRaises(ValueError, self.f.seek)
+        self.assertRaises(ValueError, self.f.seek, 0)
+        self.assertRaises(ValueError, self.f.write)
+        self.assertRaises(ValueError, self.f.write, b'')
+        self.assertRaises(TypeError, self.f.writelines)
+        self.assertRaises(ValueError, self.f.writelines, b'')
 
     def testOpendir(self):
         # Issue 3703: opening a directory should fill the errno
@@ -202,7 +214,7 @@ class AutoFileTests(unittest.TestCase):
 
     @ClosedFDRaises
     def testErrnoOnClosedWrite(self, f):
-        f.write('a')
+        f.write(b'a')
 
     @ClosedFDRaises
     def testErrnoOnClosedSeek(self, f):
@@ -283,27 +295,28 @@ class OtherFileTests(unittest.TestCase):
             self.assertEqual(f.seekable(), True)
             self.assertEqual(f.isatty(), False)
             f.close()
-
-            if sys.platform != "win32":
-                try:
-                    f = _FileIO("/dev/tty", "a")
-                except EnvironmentError:
-                    # When run in a cron job there just aren't any
-                    # ttys, so skip the test.  This also handles other
-                    # OS'es that don't support /dev/tty.
-                    pass
-                else:
-                    self.assertEqual(f.readable(), False)
-                    self.assertEqual(f.writable(), True)
-                    if sys.platform != "darwin" and \
-                       'bsd' not in sys.platform and \
-                       not sys.platform.startswith('sunos'):
-                        # Somehow /dev/tty appears seekable on some BSDs
-                        self.assertEqual(f.seekable(), False)
-                    self.assertEqual(f.isatty(), True)
-                    f.close()
         finally:
             os.unlink(TESTFN)
+
+    @unittest.skipIf(sys.platform == 'win32', 'no ttys on Windows')
+    def testAblesOnTTY(self):
+        try:
+            f = _FileIO("/dev/tty", "a")
+        except EnvironmentError:
+            # When run in a cron job there just aren't any
+            # ttys, so skip the test.  This also handles other
+            # OS'es that don't support /dev/tty.
+            self.skipTest('need /dev/tty')
+        else:
+            self.assertEqual(f.readable(), False)
+            self.assertEqual(f.writable(), True)
+            if sys.platform != "darwin" and \
+               'bsd' not in sys.platform and \
+               not sys.platform.startswith(('sunos', 'aix')):
+                # Somehow /dev/tty appears seekable on some BSDs
+                self.assertEqual(f.seekable(), False)
+            self.assertEqual(f.isatty(), True)
+            f.close()
 
     def testInvalidModeStrings(self):
         # check invalid mode strings
@@ -342,8 +355,7 @@ class OtherFileTests(unittest.TestCase):
         try:
             fn = TESTFN.encode("ascii")
         except UnicodeEncodeError:
-            # Skip test
-            return
+            self.skipTest('could not encode %r to ascii' % TESTFN)
         f = _FileIO(fn, "w")
         try:
             f.write(b"abc")
@@ -353,13 +365,22 @@ class OtherFileTests(unittest.TestCase):
         finally:
             os.unlink(TESTFN)
 
+    def testConstructorHandlesNULChars(self):
+        fn_with_NUL = 'foo\0bar'
+        self.assertRaises(TypeError, _FileIO, fn_with_NUL, 'w')
+        self.assertRaises(TypeError, _FileIO, fn_with_NUL.encode('ascii'), 'w')
+
     def testInvalidFd(self):
         self.assertRaises(ValueError, _FileIO, -10)
         self.assertRaises(OSError, _FileIO, make_bad_fd())
         if sys.platform == 'win32':
             import msvcrt
             self.assertRaises(IOError, msvcrt.get_osfhandle, make_bad_fd())
+
+    @cpython_only
+    def testInvalidFd_overflow(self):
         # Issue 15989
+        import _testcapi
         self.assertRaises(TypeError, _FileIO, _testcapi.INT_MAX + 1)
         self.assertRaises(TypeError, _FileIO, _testcapi.INT_MIN - 1)
 

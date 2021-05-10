@@ -10,6 +10,7 @@
 --------------
 
 .. note::
+
    The :mod:`getopt` module is a parser for command line options whose API is
    designed to be familiar to users of the C :c:func:`getopt` function. Users who
    are unfamiliar with the C :c:func:`getopt` function or who would like to write
@@ -128,7 +129,7 @@ In a script, typical usage is something like this::
            opts, args = getopt.getopt(sys.argv[1:], "ho:v", ["help", "output="])
        except getopt.GetoptError as err:
            # print help information and exit:
-           print str(err) # will print something like "option -a not recognized"
+           print str(err)  # will print something like "option -a not recognized"
            usage()
            sys.exit(2)
        output = None

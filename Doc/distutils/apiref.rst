@@ -78,7 +78,7 @@ setup script). Indirectly provides the  :class:`distutils.dist.Distribution` and
    |                    | be built                       | :class:`distutils.core.Extension`                           |
    +--------------------+--------------------------------+-------------------------------------------------------------+
    | *classifiers*      | A list of categories for the   | a list of strings; valid classifiers are listed on `PyPI    |
-   |                    | package                        | <http://pypi.python.org/pypi?:action=list_classifiers>`_.   |
+   |                    | package                        | <https://pypi.org/classifiers>`_.                           |
    +--------------------+--------------------------------+-------------------------------------------------------------+
    | *distclass*        | the :class:`Distribution`      | a subclass of                                               |
    |                    | class to use                   | :class:`distutils.core.Distribution`                        |
@@ -166,7 +166,7 @@ the full reference.
 
 .. class:: Extension
 
-   The Extension class describes a single C or C++extension module in a setup
+   The Extension class describes a single C or C++ extension module in a setup
    script. It accepts the following keyword arguments in its constructor
 
    .. tabularcolumns:: |l|L|l|
@@ -205,7 +205,7 @@ the full reference.
    |                        | to or ``None`` to define it    |                           |
    |                        | without a particular value     |                           |
    |                        | (equivalent of ``#define FOO`` |                           |
-   |                        | in source or :option:`-DFOO`   |                           |
+   |                        | in source or :option:`!-DFOO`  |                           |
    |                        | on Unix C compiler command     |                           |
    |                        | line)                          |                           |
    +------------------------+--------------------------------+---------------------------+
@@ -314,12 +314,12 @@ This module provides the following functions.
 
 .. function:: gen_preprocess_options(macros, include_dirs)
 
-   Generate C pre-processor options (:option:`-D`, :option:`-U`, :option:`-I`) as
+   Generate C pre-processor options (:option:`!-D`, :option:`!-U`, :option:`!-I`) as
    used by at least two types of compilers: the typical Unix compiler and Visual
    C++. *macros* is the usual thing, a list of 1- or 2-tuples, where ``(name,)``
-   means undefine (:option:`-U`) macro *name*, and ``(name, value)`` means define
-   (:option:`-D`) macro *name* to *value*.  *include_dirs* is just a list of
-   directory names to be added to the header file search path (:option:`-I`).
+   means undefine (:option:`!-U`) macro *name*, and ``(name, value)`` means define
+   (:option:`!-D`) macro *name* to *value*.  *include_dirs* is just a list of
+   directory names to be added to the header file search path (:option:`!-I`).
    Returns a list of command-line options suitable for either Unix compilers or
    Visual C++.
 
@@ -354,7 +354,7 @@ This module provides the following functions.
 
 .. function:: show_compilers()
 
-   Print list of available compilers (used by the :option:`--help-compiler` options
+   Print list of available compilers (used by the :option:`!--help-compiler` options
    to :command:`build`, :command:`build_ext`, :command:`build_clib`).
 
 
@@ -516,7 +516,7 @@ This module provides the following functions.
 
    .. method:: CCompiler.library_option(lib)
 
-      Return the compiler option to add *dir* to the list of libraries linked into the
+      Return the compiler option to add *lib* to the list of libraries linked into the
       shared library or executable.
 
 
@@ -784,23 +784,23 @@ This module provides the following functions.
 This module provides the :class:`UnixCCompiler` class, a subclass of
 :class:`CCompiler` that handles the typical Unix-style command-line  C compiler:
 
-* macros defined with :option:`-Dname[=value]`
+* macros defined with :option:`!-Dname[=value]`
 
-* macros undefined with :option:`-Uname`
+* macros undefined with :option:`!-Uname`
 
-* include search directories specified with :option:`-Idir`
+* include search directories specified with :option:`!-Idir`
 
-* libraries specified with :option:`-llib`
+* libraries specified with :option:`!-llib`
 
-* library search directories specified with :option:`-Ldir`
+* library search directories specified with :option:`!-Ldir`
 
-* compile handled by :program:`cc` (or similar) executable with :option:`-c`
+* compile handled by :program:`cc` (or similar) executable with :option:`!-c`
   option: compiles :file:`.c` to :file:`.o`
 
 * link static library handled by :program:`ar` command (possibly with
   :program:`ranlib`)
 
-* link shared library handled by :program:`cc` :option:`-shared`
+* link shared library handled by :program:`cc` :option:`!-shared`
 
 
 :mod:`distutils.msvccompiler` --- Microsoft Compiler
@@ -832,7 +832,7 @@ selection by :class:`MSVCCompiler`.
 .. module:: distutils.bcppcompiler
 
 
-This module provides :class:`BorlandCCompiler`, an subclass of the abstract
+This module provides :class:`BorlandCCompiler`, a subclass of the abstract
 :class:`CCompiler` class for the Borland C++ compiler.
 
 
@@ -926,7 +926,7 @@ timestamp dependency analysis.
 
    Walk two filename lists in parallel, testing if each source is newer than its
    corresponding target.  Return a pair of lists (*sources*, *targets*) where
-   source is newer than target, according to the semantics of :func:`newer`
+   source is newer than target, according to the semantics of :func:`newer`.
 
    .. % % equivalent to a listcomp...
 
@@ -934,7 +934,7 @@ timestamp dependency analysis.
 .. function:: newer_group(sources, target[, missing='error'])
 
    Return true if *target* is out-of-date with respect to any file listed in
-   *sources*  In other words, if *target* exists and is newer than every file in
+   *sources*.  In other words, if *target* exists and is newer than every file in
    *sources*, return false; otherwise return true. *missing* controls what we do
    when a source file is missing; the default (``'error'``) is to blow up with an
    :exc:`OSError` from  inside :func:`os.stat`; if it is ``'ignore'``, we silently
@@ -970,7 +970,7 @@ directories.
 .. function:: create_tree(base_dir, files[, mode=0777, verbose=0, dry_run=0])
 
    Create all the empty directories under *base_dir* needed to put *files* there.
-   *base_dir* is just the a name of a directory which doesn't necessarily exist
+   *base_dir* is just the name of a directory which doesn't necessarily exist
    yet; *files* is a list of filenames to be interpreted relative to *base_dir*.
    *base_dir* + the directory portion of every file in *files* will be created if
    it doesn't already exist.  *mode*, *verbose* and *dry_run* flags  are as for
@@ -1106,13 +1106,13 @@ other utility module.
    during the build of Python), not the OS version of the current system.
 
    For universal binary builds on Mac OS X the architecture value reflects
-   the univeral binary status instead of the architecture of the current
+   the universal binary status instead of the architecture of the current
    processor. For 32-bit universal binaries the architecture is ``fat``,
    for 64-bit universal binaries the architecture is ``fat64``, and
    for 4-way universal binaries the architecture is ``universal``. Starting
    from Python 2.7 and Python 3.2 the architecture ``fat3`` is used for
    a 3-way universal build (ppc, i386, x86_64) and ``intel`` is used for
-   a univeral build with the i386 and x86_64 architectures
+   a universal build with the i386 and x86_64 architectures
 
    Examples of returned values on Mac OS X:
 
@@ -1166,15 +1166,6 @@ other utility module.
    ``$variable`` can consist only of upper and lower case letters, numbers and an
    underscore. No { } or ( ) style quoting is available.
 
-
-.. function:: grok_environment_error(exc[, prefix='error: '])
-
-   Generate a useful error message from an :exc:`EnvironmentError`  (:exc:`IOError`
-   or :exc:`OSError`) exception object.   Handles Python 1.5.1 and later styles,
-   and does what it can to deal with  exception objects that don't have a filename
-   (which happens when the error  is due to a two-file operation, such as
-   :func:`~os.rename` or  :func:`~os.link`).  Returns the error message as a
-   string prefixed  with *prefix*.
 
 
 .. function:: split_quoted(s)
@@ -1319,8 +1310,8 @@ provides the following additional features:
 
 * options set attributes of a passed-in object
 
-* boolean options can have "negative aliases" --- eg. if :option:`--quiet` is
-  the "negative alias" of :option:`--verbose`, then :option:`--quiet` on the
+* boolean options can have "negative aliases" --- eg. if :option:`!--quiet` is
+  the "negative alias" of :option:`!--verbose`, then :option:`!--quiet` on the
   command line sets *verbose* to false.
 
 
@@ -1825,7 +1816,7 @@ Subclasses of :class:`Command` must define the following methods.
 
    Builds a `Windows Installer`_ (.msi) binary package.
 
-   .. _Windows Installer: http://msdn.microsoft.com/en-us/library/cc185688(VS.85).aspx
+   .. _Windows Installer: https://msdn.microsoft.com/en-us/library/cc185688(VS.85).aspx
 
    In most cases, the ``bdist_msi`` installer is a better choice than the
    ``bdist_wininst`` installer, because it provides better support for
@@ -1916,8 +1907,12 @@ Subclasses of :class:`Command` must define the following methods.
 .. module:: distutils.command.clean
    :synopsis: Clean a package build area
 
+This command removes the temporary files created by :command:`build`
+and its subcommands, like intermediary compiled object files.  With
+the ``--all`` option, the complete build directory will be removed.
 
-.. % todo
+Extension modules built :ref:`in place <distutils-build-ext-inplace>`
+will not be cleaned, as they are not in the build directory.
 
 
 :mod:`distutils.command.config` --- Perform package configuration

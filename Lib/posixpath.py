@@ -16,14 +16,7 @@ import stat
 import genericpath
 import warnings
 from genericpath import *
-
-try:
-    _unicode = unicode
-except NameError:
-    # If Python is built without Unicode support, the unicode type
-    # will not exist. Fake one.
-    class _unicode(object):
-        pass
+from genericpath import _unicode
 
 __all__ = ["normcase","isabs","join","splitdrive","split","splitext",
            "basename","dirname","commonprefix","getsize","getmtime",
@@ -193,7 +186,7 @@ def ismount(path):
         return False
     try:
         s1 = os.lstat(path)
-        s2 = os.lstat(join(path, '..'))
+        s2 = os.lstat(realpath(join(path, '..')))
     except os.error:
         return False # It doesn't exist -- so not a mount point :-)
     dev1 = s1.st_dev
@@ -266,7 +259,12 @@ def expanduser(path):
     if i == 1:
         if 'HOME' not in os.environ:
             import pwd
-            userhome = pwd.getpwuid(os.getuid()).pw_dir
+            try:
+                userhome = pwd.getpwuid(os.getuid()).pw_dir
+            except KeyError:
+                # bpo-10496: if the current user identifier doesn't exist in the
+                # password database, return the path unchanged
+                return path
         else:
             userhome = os.environ['HOME']
     else:
@@ -274,6 +272,8 @@ def expanduser(path):
         try:
             pwent = pwd.getpwnam(path[1:i])
         except KeyError:
+            # bpo-10496: if the user name from the path doesn't exist in the
+            # password database, return the path unchanged
             return path
         userhome = pwent.pw_dir
     userhome = userhome.rstrip('/')
@@ -285,28 +285,43 @@ def expanduser(path):
 # Non-existent variables are left unchanged.
 
 _varprog = None
+_uvarprog = None
 
 def expandvars(path):
     """Expand shell variables of form $var and ${var}.  Unknown variables
     are left unchanged."""
-    global _varprog
+    global _varprog, _uvarprog
     if '$' not in path:
         return path
-    if not _varprog:
-        import re
-        _varprog = re.compile(r'\$(\w+|\{[^}]*\})')
+    if isinstance(path, _unicode):
+        if not _uvarprog:
+            import re
+            _uvarprog = re.compile(ur'\$(\w+|\{[^}]*\})', re.UNICODE)
+        varprog = _uvarprog
+        encoding = sys.getfilesystemencoding()
+    else:
+        if not _varprog:
+            import re
+            _varprog = re.compile(r'\$(\w+|\{[^}]*\})')
+        varprog = _varprog
+        encoding = None
     i = 0
     while True:
-        m = _varprog.search(path, i)
+        m = varprog.search(path, i)
         if not m:
             break
         i, j = m.span(0)
         name = m.group(1)
         if name.startswith('{') and name.endswith('}'):
             name = name[1:-1]
+        if encoding:
+            name = name.encode(encoding)
         if name in os.environ:
             tail = path[j:]
-            path = path[:i] + os.environ[name]
+            value = os.environ[name]
+            if encoding:
+                value = value.decode(encoding)
+            path = path[:i] + value
             i = len(path)
             path += tail
         else:
@@ -367,7 +382,7 @@ symbolic links encountered in the path."""
     path, ok = _joinrealpath('', filename, {})
     return abspath(path)
 
-# Join two paths, normalizing ang eliminating any symbolic links
+# Join two paths, normalizing and eliminating any symbolic links
 # encountered in the second path.
 def _joinrealpath(path, rest, seen):
     if isabs(rest):

@@ -185,7 +185,7 @@ effect of Pascal's ``for i := a to b do``; e.g., ``range(3)`` returns the list
       single: mutable sequence; loop over
 
    There is a subtlety when the sequence is being modified by the loop (this can
-   only occur for mutable sequences, i.e. lists). An internal counter is used to
+   only occur for mutable sequences, e.g. lists). An internal counter is used to
    keep track of which item is used next, and this is incremented on each
    iteration.  When this counter has reached the length of the sequence the loop
    terminates.  This means that if the suite deletes the current (or a previous)
@@ -218,7 +218,7 @@ for a group of statements:
 .. productionlist::
    try_stmt: try1_stmt | try2_stmt
    try1_stmt: "try" ":" `suite`
-            : ("except" [`expression` [("as" | ",") `target`]] ":" `suite`)+
+            : ("except" [`expression` [("as" | ",") `identifier`]] ":" `suite`)+
             : ["else" ":" `suite`]
             : ["finally" ":" `suite`]
    try2_stmt: "try" ":" `suite`
@@ -281,9 +281,11 @@ function that handled an exception.
    statement: break
    statement: continue
 
-The optional :keyword:`else` clause is executed if and when control flows off
-the end of the :keyword:`try` clause. [#]_ Exceptions in the :keyword:`else`
-clause are not handled by the preceding :keyword:`except` clauses.
+The optional :keyword:`else` clause is executed if the control flow leaves the
+:keyword:`try` suite, no exception was raised, and no :keyword:`return`,
+:keyword:`continue`, or :keyword:`break` statement was executed.  Exceptions in
+the :keyword:`else` clause are not handled by the preceding :keyword:`except`
+clauses.
 
 .. index:: keyword: finally
 
@@ -296,14 +298,14 @@ is executed.  If there is a saved exception, it is re-raised at the end of the
 exception or executes a :keyword:`return` or :keyword:`break` statement, the
 saved exception is discarded::
 
-    def f():
-        try:
-            1/0
-        finally:
-            return 42
-
-    >>> f()
-    42
+   >>> def f():
+   ...     try:
+   ...         1/0
+   ...     finally:
+   ...         return 42
+   ...
+   >>> f()
+   42
 
 The exception information is not available to the program during execution of
 the :keyword:`finally` clause.
@@ -320,6 +322,20 @@ statement, the :keyword:`finally` clause is also executed 'on the way out.' A
 reason is a problem with the current implementation --- this restriction may be
 lifted in the future).
 
+The return value of a function is determined by the last :keyword:`return`
+statement executed.  Since the :keyword:`finally` clause always executes, a
+:keyword:`return` statement executed in the :keyword:`finally` clause will
+always be the last one executed::
+
+   >>> def foo():
+   ...     try:
+   ...         return 'try'
+   ...     finally:
+   ...         return 'finally'
+   ...
+   >>> foo()
+   'finally'
+
 Additional information on exceptions can be found in section :ref:`exceptions`,
 and information on using the :keyword:`raise` statement to generate exceptions
 may be found in section :ref:`raise`.
@@ -331,7 +347,9 @@ may be found in section :ref:`raise`.
 The :keyword:`with` statement
 =============================
 
-.. index:: statement: with
+.. index::
+    statement: with
+    single: as; with statement
 
 .. versionadded:: 2.5
 
@@ -402,7 +420,7 @@ is equivalent to ::
 
 .. seealso::
 
-   :pep:`0343` - The "with" statement
+   :pep:`343` - The "with" statement
       The specification, background, and examples for the Python :keyword:`with`
       statement.
 
@@ -579,10 +597,6 @@ which is then bound to the class name.
 .. [#] The exception is propagated to the invocation stack unless
    there is a :keyword:`finally` clause which happens to raise another
    exception. That new exception causes the old one to be lost.
-
-.. [#] Currently, control "flows off the end" except in the case of an exception or the
-   execution of a :keyword:`return`, :keyword:`continue`, or :keyword:`break`
-   statement.
 
 .. [#] A string literal appearing as the first statement in the function body is
    transformed into the function's ``__doc__`` attribute and therefore the

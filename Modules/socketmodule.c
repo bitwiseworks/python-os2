@@ -82,6 +82,11 @@ Local naming conventions:
 */
 
 #ifdef __APPLE__
+#include <AvailabilityMacros.h>
+/* for getaddrinfo thread safety test on old versions of OS X */
+#ifndef MAC_OS_X_VERSION_10_5
+#define MAC_OS_X_VERSION_10_5 1050
+#endif
   /*
    * inet_aton is not available on OSX 10.3, yet we want to use a binary
    * that was build on 10.4 or later to work on that release, weak linking
@@ -93,6 +98,10 @@ Local naming conventions:
 #include "Python.h"
 #include "structmember.h"
 #include "timefuncs.h"
+
+#ifndef INVALID_SOCKET /* MS defines this */
+#define INVALID_SOCKET (-1)
+#endif
 
 #undef MAX
 #define MAX(x, y) ((x) < (y) ? (y) : (x))
@@ -158,12 +167,14 @@ shutdown(how) -- shut down traffic in one or both directions\n\
 #endif
 
 #ifdef HAVE_GETHOSTBYNAME_R
-# if defined(_AIX) || defined(__osf__)
+# if defined(_AIX) && !defined(_LINUX_SOURCE_COMPAT) || defined(__osf__)
 #  define HAVE_GETHOSTBYNAME_R_3_ARG
 # elif defined(__sun) || defined(__sgi)
 #  define HAVE_GETHOSTBYNAME_R_5_ARG
 # elif defined(linux)
 /* Rely on the configure script */
+# elif defined(_LINUX_SOURCE_COMPAT) /* Linux compatibility on AIX */
+#  define HAVE_GETHOSTBYNAME_R_6_ARG
 # else
 #  undef HAVE_GETHOSTBYNAME_R
 # endif
@@ -174,15 +185,32 @@ shutdown(how) -- shut down traffic in one or both directions\n\
 # define USE_GETHOSTBYNAME_LOCK
 #endif
 
-/* To use __FreeBSD_version */
+/* To use __FreeBSD_version, __OpenBSD__, and __NetBSD_Version__ */
 #ifdef HAVE_SYS_PARAM_H
 #include <sys/param.h>
 #endif
 /* On systems on which getaddrinfo() is believed to not be thread-safe,
-   (this includes the getaddrinfo emulation) protect access with a lock. */
-#if defined(WITH_THREAD) && (defined(__APPLE__) || \
+   (this includes the getaddrinfo emulation) protect access with a lock.
+
+   getaddrinfo is thread-safe on Mac OS X 10.5 and later. Originally it was
+   a mix of code including an unsafe implementation from an old BSD's
+   libresolv. In 10.5 Apple reimplemented it as a safe IPC call to the
+   mDNSResponder process. 10.5 is the first be UNIX '03 certified, which
+   includes the requirement that getaddrinfo be thread-safe. See issue #25924.
+
+   It's thread-safe in OpenBSD starting with 5.4, released Nov 2013:
+   http://www.openbsd.org/plus54.html
+
+   It's thread-safe in NetBSD starting with 4.0, released Dec 2007:
+
+http://cvsweb.netbsd.org/bsdweb.cgi/src/lib/libc/net/getaddrinfo.c.diff?r1=1.82&r2=1.83
+*/
+#if defined(WITH_THREAD) && ( \
+    (defined(__APPLE__) && \
+        MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_5) || \
     (defined(__FreeBSD__) && __FreeBSD_version+0 < 503000) || \
-    defined(__OpenBSD__) || defined(__NetBSD__) || \
+    (defined(__OpenBSD__) && OpenBSD+0 < 201311) || \
+    (defined(__NetBSD__) && __NetBSD_Version__+0 < 400000000) || \
     defined(__VMS) || !defined(HAVE_GETADDRINFO))
 #define USE_GETADDRINFO_LOCK
 #endif
@@ -597,16 +625,16 @@ set_gaierror(int error)
 
 #ifdef __VMS
 /* Function to send in segments */
-static int
-sendsegmented(int sock_fd, char *buf, int len, int flags)
+static Py_ssize_t
+sendsegmented(int sock_fd, char *buf, Py_ssize_t len, int flags)
 {
     int n = 0;
-    int remaining = len;
+    Py_ssize_t remaining = len;
 
     while (remaining > 0) {
         unsigned int segment;
 
-        segment = (remaining >= SEGMENT_SIZE ? SEGMENT_SIZE : remaining);
+        segment = ((size_t)remaining >= SEGMENT_SIZE ? SEGMENT_SIZE : (unsigned int) remaining);
         n = send(sock_fd, buf, segment, flags);
         if (n < 0) {
             return n;
@@ -754,7 +782,7 @@ internal_select(PySocketSockObject *s, int writing)
 */
 #define BEGIN_SELECT_LOOP(s) \
     { \
-        double deadline, interval = s->sock_timeout; \
+        double deadline = 0, interval = s->sock_timeout; \
         int has_timeout = s->sock_timeout > 0.0; \
         if (has_timeout) { \
             deadline = _PyTime_FloatTime() + s->sock_timeout; \
@@ -977,7 +1005,7 @@ makeipaddr(struct sockaddr *addr, int addrlen)
    an error occurred. */
 
 static int
-setbdaddr(char *name, bdaddr_t *bdaddr)
+setbdaddr(const char *name, bdaddr_t *bdaddr)
 {
     unsigned int b0, b1, b2, b3, b4, b5;
     char ch;
@@ -1034,7 +1062,7 @@ makesockaddr(int sockfd, struct sockaddr *addr, int addrlen, int proto)
 #ifdef __BEOS__
     /* XXX: BeOS version of accept() doesn't set family correctly */
     addr->sa_family = AF_INET;
-#endif
+#endif /* __BEOS__ */
 
     switch (addr->sa_family) {
 
@@ -1095,7 +1123,7 @@ makesockaddr(int sockfd, struct sockaddr *addr, int addrlen, int proto)
         }
         return ret;
     }
-#endif
+#endif /* ENABLE_IPV6 */
 
 #ifdef USE_BLUETOOTH
     case AF_BLUETOOTH:
@@ -1134,11 +1162,11 @@ makesockaddr(int sockfd, struct sockaddr *addr, int addrlen, int proto)
             struct sockaddr_hci *a = (struct sockaddr_hci *) addr;
 #if defined(__NetBSD__) || defined(__DragonFly__)
             return makebdaddr(&_BT_HCI_MEMB(a, bdaddr));
-#else
+#else /* __NetBSD__ || __DragonFly__ */
             PyObject *ret = NULL;
             ret = Py_BuildValue("i", _BT_HCI_MEMB(a, dev));
             return ret;
-#endif
+#endif /* !(__NetBSD__ || __DragonFly__) */
         }
 
 #if !defined(__FreeBSD__)
@@ -1147,20 +1175,20 @@ makesockaddr(int sockfd, struct sockaddr *addr, int addrlen, int proto)
             struct sockaddr_sco *a = (struct sockaddr_sco *) addr;
             return makebdaddr(&_BT_SCO_MEMB(a, bdaddr));
         }
-#endif
+#endif /* !__FreeBSD__ */
 
         default:
             PyErr_SetString(PyExc_ValueError,
                             "Unknown Bluetooth protocol");
             return NULL;
         }
-#endif
+#endif /* USE_BLUETOOTH */
 
 #if defined(HAVE_NETPACKET_PACKET_H) && defined(SIOCGIFNAME)
     case AF_PACKET:
     {
         struct sockaddr_ll *a = (struct sockaddr_ll *)addr;
-        char *ifname = "";
+        const char *ifname = "";
         struct ifreq ifr;
         /* need to look up interface name give index */
         if (a->sll_ifindex) {
@@ -1176,7 +1204,7 @@ makesockaddr(int sockfd, struct sockaddr *addr, int addrlen, int proto)
                              a->sll_addr,
                              a->sll_halen);
     }
-#endif
+#endif /* HAVE_NETPACKET_PACKET_H && SIOCGIFNAME */
 
 #ifdef HAVE_LINUX_TIPC_H
     case AF_TIPC:
@@ -1209,7 +1237,7 @@ makesockaddr(int sockfd, struct sockaddr *addr, int addrlen, int proto)
             return NULL;
         }
     }
-#endif
+#endif /* HAVE_LINUX_TIPC_H */
 
     /* More cases here... */
 
@@ -1270,9 +1298,9 @@ getsockaddrarg(PySocketSockObject *s, PyObject *args,
         memcpy(addr->sun_path, path, len);
 #if defined(PYOS_OS2)
         *len_ret = sizeof(*addr);
-#else
+#else /* PYOS_OS2 */
         *len_ret = len + offsetof(struct sockaddr_un, sun_path);
-#endif
+#endif /* !PYOS_OS2 */
         return 1;
     }
 #endif /* AF_UNIX */
@@ -1299,7 +1327,7 @@ getsockaddrarg(PySocketSockObject *s, PyObject *args,
         *len_ret = sizeof(*addr);
         return 1;
     }
-#endif
+#endif /* AF_NETLINK */
 
     case AF_INET:
     {
@@ -1381,7 +1409,7 @@ getsockaddrarg(PySocketSockObject *s, PyObject *args,
         *len_ret = sizeof *addr;
         return 1;
     }
-#endif
+#endif /* ENABLE_IPV6 */
 
 #ifdef USE_BLUETOOTH
     case AF_BLUETOOTH:
@@ -1390,7 +1418,7 @@ getsockaddrarg(PySocketSockObject *s, PyObject *args,
         case BTPROTO_L2CAP:
         {
             struct sockaddr_l2 *addr;
-            char *straddr;
+            const char *straddr;
 
             addr = (struct sockaddr_l2 *)addr_ret;
             memset(addr, 0, sizeof(struct sockaddr_l2));
@@ -1410,7 +1438,7 @@ getsockaddrarg(PySocketSockObject *s, PyObject *args,
         case BTPROTO_RFCOMM:
         {
             struct sockaddr_rc *addr;
-            char *straddr;
+            const char *straddr;
 
             addr = (struct sockaddr_rc *)addr_ret;
             _BT_RC_MEMB(addr, family) = AF_BLUETOOTH;
@@ -1430,24 +1458,24 @@ getsockaddrarg(PySocketSockObject *s, PyObject *args,
         {
             struct sockaddr_hci *addr = (struct sockaddr_hci *)addr_ret;
 #if defined(__NetBSD__) || defined(__DragonFly__)
-			char *straddr = PyBytes_AS_STRING(args);
-
-			_BT_HCI_MEMB(addr, family) = AF_BLUETOOTH;
-            if (straddr == NULL) {
-                PyErr_SetString(socket_error, "getsockaddrarg: "
+            const char *straddr;
+            _BT_HCI_MEMB(addr, family) = AF_BLUETOOTH;
+            if (!PyBytes_Check(args)) {
+                PyErr_SetString(PyExc_OSError, "getsockaddrarg: "
                     "wrong format");
                 return 0;
             }
+            straddr = PyBytes_AS_STRING(args);
             if (setbdaddr(straddr, &_BT_HCI_MEMB(addr, bdaddr)) < 0)
                 return 0;
-#else
+#else  /* __NetBSD__ || __DragonFly__ */
             _BT_HCI_MEMB(addr, family) = AF_BLUETOOTH;
             if (!PyArg_ParseTuple(args, "i", &_BT_HCI_MEMB(addr, dev))) {
                 PyErr_SetString(socket_error, "getsockaddrarg: "
                                 "wrong format");
                 return 0;
             }
-#endif
+#endif /* !(__NetBSD__ || __DragonFly__) */
             *len_ret = sizeof *addr;
             return 1;
         }
@@ -1455,7 +1483,7 @@ getsockaddrarg(PySocketSockObject *s, PyObject *args,
         case BTPROTO_SCO:
         {
             struct sockaddr_sco *addr;
-            char *straddr;
+            const char *straddr;
 
             addr = (struct sockaddr_sco *)addr_ret;
             _BT_SCO_MEMB(addr, family) = AF_BLUETOOTH;
@@ -1471,20 +1499,20 @@ getsockaddrarg(PySocketSockObject *s, PyObject *args,
             *len_ret = sizeof *addr;
             return 1;
         }
-#endif
+#endif /* !__FreeBSD__ */
         default:
             PyErr_SetString(socket_error, "getsockaddrarg: unknown Bluetooth protocol");
             return 0;
         }
     }
-#endif
+#endif /* USE_BLUETOOTH */
 
 #if defined(HAVE_NETPACKET_PACKET_H) && defined(SIOCGIFINDEX)
     case AF_PACKET:
     {
         struct sockaddr_ll* addr;
         struct ifreq ifr;
-        char *interfaceName;
+        const char *interfaceName;
         int protoNumber;
         int hatype = 0;
         int pkttype = 0;
@@ -1533,7 +1561,7 @@ getsockaddrarg(PySocketSockObject *s, PyObject *args,
         *len_ret = sizeof *addr;
         return 1;
     }
-#endif
+#endif /* HAVE_NETPACKET_PACKET_H && SIOCGIFINDEX */
 
 #ifdef HAVE_LINUX_TIPC_H
     case AF_TIPC:
@@ -1583,7 +1611,7 @@ getsockaddrarg(PySocketSockObject *s, PyObject *args,
 
         return 1;
     }
-#endif
+#endif /* HAVE_LINUX_TIPC_H */
 
     /* More cases here... */
 
@@ -1611,13 +1639,14 @@ getsockaddrlen(PySocketSockObject *s, socklen_t *len_ret)
         return 1;
     }
 #endif /* AF_UNIX */
+
 #if defined(AF_NETLINK)
-       case AF_NETLINK:
-       {
-           *len_ret = sizeof (struct sockaddr_nl);
-           return 1;
-       }
-#endif
+    case AF_NETLINK:
+    {
+        *len_ret = sizeof (struct sockaddr_nl);
+        return 1;
+    }
+#endif /* AF_NETLINK */
 
     case AF_INET:
     {
@@ -1631,7 +1660,7 @@ getsockaddrlen(PySocketSockObject *s, socklen_t *len_ret)
         *len_ret = sizeof (struct sockaddr_in6);
         return 1;
     }
-#endif
+#endif /* ENABLE_IPV6 */
 
 #ifdef USE_BLUETOOTH
     case AF_BLUETOOTH:
@@ -1652,7 +1681,7 @@ getsockaddrlen(PySocketSockObject *s, socklen_t *len_ret)
         case BTPROTO_SCO:
             *len_ret = sizeof (struct sockaddr_sco);
             return 1;
-#endif
+#endif /* !__FreeBSD__ */
         default:
             PyErr_SetString(socket_error, "getsockaddrlen: "
                             "unknown BT protocol");
@@ -1660,7 +1689,7 @@ getsockaddrlen(PySocketSockObject *s, socklen_t *len_ret)
 
         }
     }
-#endif
+#endif /* USE_BLUETOOTH */
 
 #ifdef HAVE_NETPACKET_PACKET_H
     case AF_PACKET:
@@ -1668,7 +1697,7 @@ getsockaddrlen(PySocketSockObject *s, socklen_t *len_ret)
         *len_ret = sizeof (struct sockaddr_ll);
         return 1;
     }
-#endif
+#endif /* HAVE_NETPACKET_PACKET_H */
 
 #ifdef HAVE_LINUX_TIPC_H
     case AF_TIPC:
@@ -1676,7 +1705,7 @@ getsockaddrlen(PySocketSockObject *s, socklen_t *len_ret)
         *len_ret = sizeof (struct sockaddr_tipc);
         return 1;
     }
-#endif
+#endif /* HAVE_LINUX_TIPC_H */
 
     /* More cases here... */
 
@@ -1705,11 +1734,7 @@ sock_accept(PySocketSockObject *s)
         return NULL;
     memset(&addrbuf, 0, addrlen);
 
-#ifdef MS_WINDOWS
     newfd = INVALID_SOCKET;
-#else
-    newfd = -1;
-#endif
 
     if (!IS_SELECTABLE(s))
         return select_error();
@@ -1727,11 +1752,7 @@ sock_accept(PySocketSockObject *s)
     }
     END_SELECT_LOOP(s)
 
-#ifdef MS_WINDOWS
     if (newfd == INVALID_SOCKET)
-#else
-    if (newfd < 0)
-#endif
         return s->errorhandler();
 
     /* Create the new object with unspecified family,
@@ -2732,7 +2753,6 @@ sock_recvfrom_into(PySocketSockObject *s, PyObject *args, PyObject* kwds)
                                      &recvlen, &flags))
         return NULL;
     buflen = buf.len;
-    assert(buf.buf != 0 && buflen > 0);
 
     if (recvlen < 0) {
         PyErr_SetString(PyExc_ValueError,
@@ -2742,6 +2762,10 @@ sock_recvfrom_into(PySocketSockObject *s, PyObject *args, PyObject* kwds)
     if (recvlen == 0) {
         /* If nbytes was not specified, use the buffer's length */
         recvlen = buflen;
+    } else if (recvlen > buflen) {
+        PyErr_SetString(PyExc_ValueError,
+                        "nbytes is greater than the length of the buffer");
+        goto error;
     }
 
     readlen = sock_recvfrom_guts(s, buf.buf, recvlen, flags, &addr);
@@ -2773,7 +2797,8 @@ static PyObject *
 sock_send(PySocketSockObject *s, PyObject *args)
 {
     char *buf;
-    int len, n = -1, flags = 0, timeout;
+    int flags = 0, timeout;
+    Py_ssize_t len, n = -1;
     Py_buffer pbuf;
 
     if (!PyArg_ParseTuple(args, "s*|i:send", &pbuf, &flags))
@@ -2789,12 +2814,18 @@ sock_send(PySocketSockObject *s, PyObject *args)
     BEGIN_SELECT_LOOP(s)
     Py_BEGIN_ALLOW_THREADS
     timeout = internal_select_ex(s, 1, interval);
-    if (!timeout)
+    if (!timeout) {
 #ifdef __VMS
         n = sendsegmented(s->sock_fd, buf, len, flags);
+#elif defined(MS_WINDOWS)
+        if (len > INT_MAX) {
+            len = INT_MAX;
+        }
+        n = send(s->sock_fd, buf, (int)len, flags);
 #else
         n = send(s->sock_fd, buf, len, flags);
 #endif
+    }
     Py_END_ALLOW_THREADS
     if (timeout == 1) {
         PyBuffer_Release(&pbuf);
@@ -2806,7 +2837,7 @@ sock_send(PySocketSockObject *s, PyObject *args)
     PyBuffer_Release(&pbuf);
     if (n < 0)
         return s->errorhandler();
-    return PyInt_FromLong((long)n);
+    return PyInt_FromSsize_t(n);
 }
 
 PyDoc_STRVAR(send_doc,
@@ -2823,7 +2854,8 @@ static PyObject *
 sock_sendall(PySocketSockObject *s, PyObject *args)
 {
     char *buf;
-    int len, n = -1, flags = 0, timeout, saved_errno;
+    int flags = 0, timeout, saved_errno;
+    Py_ssize_t len, n = -1;
     Py_buffer pbuf;
 
     if (!PyArg_ParseTuple(args, "s*|i:sendall", &pbuf, &flags))
@@ -2844,6 +2876,11 @@ sock_sendall(PySocketSockObject *s, PyObject *args)
         if (!timeout) {
 #ifdef __VMS
             n = sendsegmented(s->sock_fd, buf, len, flags);
+#elif defined(MS_WINDOWS)
+            if (len > INT_MAX) {
+                len = INT_MAX;
+            }
+            n = send(s->sock_fd, buf, (int)len, flags);
 #else
             n = send(s->sock_fd, buf, len, flags);
 #endif
@@ -2902,7 +2939,8 @@ sock_sendto(PySocketSockObject *s, PyObject *args)
     char *buf;
     Py_ssize_t len;
     sock_addr_t addrbuf;
-    int addrlen, n = -1, flags, timeout;
+    int addrlen, flags, timeout;
+    long n = -1;
     int arglen;
 
     flags = 0;
@@ -3116,6 +3154,8 @@ sock_dealloc(PySocketSockObject *s)
 {
     if (s->sock_fd != -1)
         (void) SOCKETCLOSE(s->sock_fd);
+    if (s->weakreflist != NULL)
+        PyObject_ClearWeakRefs((PyObject *)s);
     Py_TYPE(s)->tp_free((PyObject *)s);
 }
 
@@ -3124,8 +3164,13 @@ static PyObject *
 sock_repr(PySocketSockObject *s)
 {
     char buf[512];
+    long sock_fd;
+    /* On Windows, this test is needed because SOCKET_T is unsigned */
+    if (s->sock_fd == INVALID_SOCKET) {
+        sock_fd = -1;
+    }
 #if SIZEOF_SOCKET_T > SIZEOF_LONG
-    if (s->sock_fd > LONG_MAX) {
+    else if (s->sock_fd > LONG_MAX) {
         /* this can occur on Win64, and actually there is a special
            ugly printf formatter for decimal pointer length integer
            printing, only bother if necessary*/
@@ -3135,10 +3180,12 @@ sock_repr(PySocketSockObject *s)
         return NULL;
     }
 #endif
+    else
+        sock_fd = (long)s->sock_fd;
     PyOS_snprintf(
         buf, sizeof(buf),
         "<socket object, fd=%ld, family=%d, type=%d, protocol=%d>",
-        (long)s->sock_fd, s->sock_family,
+        sock_fd, s->sock_family,
         s->sock_type,
         s->sock_proto);
     return PyString_FromString(buf);
@@ -3157,6 +3204,7 @@ sock_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         ((PySocketSockObject *)new)->sock_fd = -1;
         ((PySocketSockObject *)new)->sock_timeout = -1.0;
         ((PySocketSockObject *)new)->errorhandler = &set_error;
+        ((PySocketSockObject *)new)->weakreflist = NULL;
     }
     return new;
 }
@@ -3182,12 +3230,7 @@ sock_initobj(PyObject *self, PyObject *args, PyObject *kwds)
     fd = socket(family, type, proto);
     Py_END_ALLOW_THREADS
 
-#ifdef MS_WINDOWS
-    if (fd == INVALID_SOCKET)
-#else
-    if (fd < 0)
-#endif
-    {
+    if (fd == INVALID_SOCKET) {
         set_error();
         return -1;
     }
@@ -3225,7 +3268,7 @@ static PyTypeObject sock_type = {
     0,                                          /* tp_traverse */
     0,                                          /* tp_clear */
     0,                                          /* tp_richcompare */
-    0,                                          /* tp_weaklistoffset */
+    offsetof(PySocketSockObject, weakreflist),  /* tp_weaklistoffset */
     0,                                          /* tp_iter */
     0,                                          /* tp_iternext */
     sock_methods,                               /* tp_methods */
@@ -3444,7 +3487,7 @@ socket_gethostbyname_ex(PyObject *self, PyObject *args)
     int buf_len = (sizeof buf) - 1;
     int errnop;
 #endif
-#if defined(HAVE_GETHOSTBYNAME_R_3_ARG) || defined(HAVE_GETHOSTBYNAME_R_6_ARG)
+#ifdef HAVE_GETHOSTBYNAME_R_3_ARG
     int result;
 #endif
 #endif /* HAVE_GETHOSTBYNAME_R */
@@ -3456,7 +3499,7 @@ socket_gethostbyname_ex(PyObject *self, PyObject *args)
     Py_BEGIN_ALLOW_THREADS
 #ifdef HAVE_GETHOSTBYNAME_R
 #if   defined(HAVE_GETHOSTBYNAME_R_6_ARG)
-    result = gethostbyname_r(name, &hp_allocated, buf, buf_len,
+    gethostbyname_r(name, &hp_allocated, buf, buf_len,
                              &h, &errnop);
 #elif defined(HAVE_GETHOSTBYNAME_R_5_ARG)
     h = gethostbyname_r(name, &hp_allocated, buf, buf_len, &errnop);
@@ -3520,11 +3563,11 @@ socket_gethostbyaddr(PyObject *self, PyObject *args)
     int buf_len = (sizeof buf) - 1;
     int errnop;
 #endif
-#if defined(HAVE_GETHOSTBYNAME_R_3_ARG) || defined(HAVE_GETHOSTBYNAME_R_6_ARG)
+#ifdef HAVE_GETHOSTBYNAME_R_3_ARG
     int result;
 #endif
 #endif /* HAVE_GETHOSTBYNAME_R */
-    char *ap;
+    const char *ap;
     int al;
     int af;
 
@@ -3553,7 +3596,7 @@ socket_gethostbyaddr(PyObject *self, PyObject *args)
     Py_BEGIN_ALLOW_THREADS
 #ifdef HAVE_GETHOSTBYNAME_R
 #if   defined(HAVE_GETHOSTBYNAME_R_6_ARG)
-    result = gethostbyaddr_r(ap, al, af,
+    gethostbyaddr_r(ap, al, af,
         &hp_allocated, buf, buf_len,
         &h, &errnop);
 #elif defined(HAVE_GETHOSTBYNAME_R_5_ARG)
@@ -3593,7 +3636,7 @@ for a host.  The host argument is a string giving a host name or IP number.");
 static PyObject *
 socket_getservbyname(PyObject *self, PyObject *args)
 {
-    char *name, *proto=NULL;
+    const char *name, *proto=NULL;
     struct servent *sp;
     if (!PyArg_ParseTuple(args, "s|s:getservbyname", &name, &proto))
         return NULL;
@@ -3624,7 +3667,7 @@ static PyObject *
 socket_getservbyport(PyObject *self, PyObject *args)
 {
     int port;
-    char *proto=NULL;
+    const char *proto=NULL;
     struct servent *sp;
     if (!PyArg_ParseTuple(args, "i|s:getservbyport", &port, &proto))
         return NULL;
@@ -3659,7 +3702,7 @@ otherwise any protocol will match.");
 static PyObject *
 socket_getprotobyname(PyObject *self, PyObject *args)
 {
-    char *name;
+    const char *name;
     struct protoent *sp;
 #ifdef __BEOS__
 /* Not available in BeOS yet. - [cjh] */
@@ -3934,7 +3977,7 @@ socket_inet_aton(PyObject *self, PyObject *args)
     /* Have to use inet_addr() instead */
     unsigned int packed_addr;
 #endif
-    char *ip_addr;
+    const char *ip_addr;
 
     if (!PyArg_ParseTuple(args, "s:inet_aton", &ip_addr))
         return NULL;
@@ -4024,7 +4067,7 @@ static PyObject *
 socket_inet_pton(PyObject *self, PyObject *args)
 {
     int af;
-    char* ip;
+    const char* ip;
     int retval;
 #ifdef ENABLE_IPV6
     char packed[MAX(sizeof(struct in_addr), sizeof(struct in6_addr))];
@@ -4153,7 +4196,7 @@ socket_getaddrinfo(PyObject *self, PyObject *args)
     if (hobj == Py_None) {
         hptr = NULL;
     } else if (PyUnicode_Check(hobj)) {
-        idna = PyObject_CallMethod(hobj, "encode", "s", "idna");
+        idna = PyUnicode_AsEncodedString(hobj, "idna", NULL);
         if (!idna)
             return NULL;
         hptr = PyString_AsString(idna);
@@ -4164,7 +4207,7 @@ socket_getaddrinfo(PyObject *self, PyObject *args)
                         "getaddrinfo() argument 1 must be string or None");
         return NULL;
     }
-    if (PyInt_Check(pobj) || PyLong_Check(pobj)) {
+    if (_PyAnyInt_Check(pobj)) {
         long value = PyLong_AsLong(pobj);
         if (value == -1 && PyErr_Occurred())
             return NULL;
@@ -4203,7 +4246,8 @@ socket_getaddrinfo(PyObject *self, PyObject *args)
         goto err;
     }
 
-    if ((all = PyList_New(0)) == NULL)
+    all = PyList_New(0);
+    if (all == NULL)
         goto err;
     for (res = res0; res; res = res->ai_next) {
         PyObject *addr =
@@ -4218,9 +4262,11 @@ socket_getaddrinfo(PyObject *self, PyObject *args)
         if (single == NULL)
             goto err;
 
-        if (PyList_Append(all, single))
+        if (PyList_Append(all, single)) {
+            Py_DECREF(single);
             goto err;
-        Py_XDECREF(single);
+        }
+        Py_DECREF(single);
     }
     Py_XDECREF(idna);
     if (res0)
@@ -4249,7 +4295,7 @@ socket_getnameinfo(PyObject *self, PyObject *args)
 {
     PyObject *sa = (PyObject *)NULL;
     int flags;
-    char *hostp;
+    const char *hostp;
     int port;
     unsigned int flowinfo, scope_id;
     char hbuf[NI_MAXHOST], pbuf[NI_MAXSERV];

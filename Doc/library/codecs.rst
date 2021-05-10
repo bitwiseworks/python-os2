@@ -23,6 +23,31 @@ manages the codec and error handling lookup process.
 
 It defines the following functions:
 
+.. function:: encode(obj, [encoding[, errors]])
+
+   Encodes *obj* using the codec registered for *encoding*. The default
+   encoding is ``'ascii'``.
+
+   *Errors* may be given to set the desired error handling scheme. The
+   default error handler is ``'strict'`` meaning that encoding errors raise
+   :exc:`ValueError` (or a more codec specific subclass, such as
+   :exc:`UnicodeEncodeError`). Refer to :ref:`codec-base-classes` for more
+   information on codec error handling.
+
+   .. versionadded:: 2.4
+
+.. function:: decode(obj, [encoding[, errors]])
+
+   Decodes *obj* using the codec registered for *encoding*. The default
+   encoding is ``'ascii'``.
+
+   *Errors* may be given to set the desired error handling scheme. The
+   default error handler is ``'strict'`` meaning that decoding errors raise
+   :exc:`ValueError` (or a more codec specific subclass, such as
+   :exc:`UnicodeDecodeError`). Refer to :ref:`codec-base-classes` for more
+   information on codec error handling.
+
+   .. versionadded:: 2.4
 
 .. function:: register(search_function)
 
@@ -367,8 +392,8 @@ interfaces of the stateless encoder and decoder:
    handling.
 
    The method may not store state in the :class:`Codec` instance. Use
-   :class:`StreamCodec` for codecs which have to keep state in order to make
-   encoding/decoding efficient.
+   :class:`StreamWriter` for codecs which have to keep state in order to make
+   encoding efficient.
 
    The encoder must be able to handle zero length input and return an empty object
    of the output object type in this situation.
@@ -388,8 +413,8 @@ interfaces of the stateless encoder and decoder:
    handling.
 
    The method may not store state in the :class:`Codec` instance. Use
-   :class:`StreamCodec` for codecs which have to keep state in order to make
-   encoding/decoding efficient.
+   :class:`StreamReader` for codecs which have to keep state in order to make
+   decoding efficient.
 
    The decoder must be able to handle zero length input and return an empty object
    of the output object type in this situation.
@@ -762,7 +787,7 @@ methods and attributes from the underlying stream.
 Encodings and Unicode
 ---------------------
 
-Unicode strings are stored internally as sequences of codepoints (to be precise
+Unicode strings are stored internally as sequences of code points (to be precise
 as :c:type:`Py_UNICODE` arrays). Depending on the way Python is compiled (either
 via ``--enable-unicode=ucs2`` or ``--enable-unicode=ucs4``, with the
 former being the default) :c:type:`Py_UNICODE` is either a 16-bit or 32-bit data
@@ -771,24 +796,24 @@ and how these arrays are stored as bytes become an issue.  Transforming a
 unicode object into a sequence of bytes is called encoding and recreating the
 unicode object from the sequence of bytes is known as decoding.  There are many
 different methods for how this transformation can be done (these methods are
-also called encodings). The simplest method is to map the codepoints 0-255 to
-the bytes ``0x0``-``0xff``. This means that a unicode object that contains
-codepoints above ``U+00FF`` can't be encoded with this method (which is called
+also called encodings). The simplest method is to map the code points 0--255 to
+the bytes ``0x0``--``0xff``. This means that a unicode object that contains
+code points above ``U+00FF`` can't be encoded with this method (which is called
 ``'latin-1'`` or ``'iso-8859-1'``). :func:`unicode.encode` will raise a
 :exc:`UnicodeEncodeError` that looks like this: ``UnicodeEncodeError: 'latin-1'
 codec can't encode character u'\u1234' in position 3: ordinal not in
 range(256)``.
 
 There's another group of encodings (the so called charmap encodings) that choose
-a different subset of all unicode code points and how these codepoints are
-mapped to the bytes ``0x0``-``0xff``. To see how this is done simply open
+a different subset of all unicode code points and how these code points are
+mapped to the bytes ``0x0``--``0xff``. To see how this is done simply open
 e.g. :file:`encodings/cp1252.py` (which is an encoding that is used primarily on
 Windows). There's a string constant with 256 characters that shows you which
 character is mapped to which byte value.
 
-All of these encodings can only encode 256 of the 1114112 codepoints
+All of these encodings can only encode 256 of the 1114112 code points
 defined in unicode. A simple and straightforward way that can store each Unicode
-code point, is to store each codepoint as four consecutive bytes. There are two
+code point, is to store each code point as four consecutive bytes. There are two
 possibilities: store the bytes in big endian or in little endian order. These
 two encodings are called ``UTF-32-BE`` and ``UTF-32-LE`` respectively. Their
 disadvantage is that if e.g. you use ``UTF-32-BE`` on a little endian machine you
@@ -884,7 +909,7 @@ particular, the following variants typically exist:
 
 * an ISO 8859 codeset
 
-* a Microsoft Windows code page, which is typically derived from a 8859 codeset,
+* a Microsoft Windows code page, which is typically derived from an 8859 codeset,
   but replaces control characters with additional graphic characters
 
 * an IBM EBCDIC code page
@@ -1042,6 +1067,8 @@ particular, the following variants typically exist:
 +-----------------+--------------------------------+--------------------------------+
 | iso8859_10      | iso-8859-10, latin6, L6        | Nordic languages               |
 +-----------------+--------------------------------+--------------------------------+
+| iso8859_11      | iso-8859-11, thai              | Thai languages                 |
++-----------------+--------------------------------+--------------------------------+
 | iso8859_13      | iso-8859-13, latin7, L7        | Baltic languages               |
 +-----------------+--------------------------------+--------------------------------+
 | iso8859_14      | iso-8859-14, latin8, L8        | Celtic languages               |
@@ -1168,21 +1195,22 @@ The following codecs provide str-to-str encoding and decoding
 +--------------------+---------------------------+---------------------------+------------------------------+
 | Codec              | Aliases                   | Purpose                   | Encoder/decoder              |
 +====================+===========================+===========================+==============================+
-| base64_codec       | base64, base-64           | Convert operand to MIME   | :meth:`base64.b64encode`,    |
-|                    |                           | base64 (the result always | :meth:`base64.b64decode`     |
-|                    |                           | includes a trailing       |                              |
-|                    |                           | ``'\n'``)                 |                              |
+| base64_codec       | base64, base-64           | Convert operand to        | :meth:`base64.encodestring`, |
+|                    |                           | multiline MIME base64 (the| :meth:`base64.decodestring`  |
+|                    |                           | result always includes a  |                              |
+|                    |                           | trailing ``'\n'``)        |                              |
 +--------------------+---------------------------+---------------------------+------------------------------+
 | bz2_codec          | bz2                       | Compress the operand      | :meth:`bz2.compress`,        |
 |                    |                           | using bz2                 | :meth:`bz2.decompress`       |
 +--------------------+---------------------------+---------------------------+------------------------------+
-| hex_codec          | hex                       | Convert operand to        | :meth:`base64.b16encode`,    |
-|                    |                           | hexadecimal               | :meth:`base64.b16decode`     |
+| hex_codec          | hex                       | Convert operand to        | :meth:`binascii.b2a_hex`,    |
+|                    |                           | hexadecimal               | :meth:`binascii.a2b_hex`     |
 |                    |                           | representation, with two  |                              |
 |                    |                           | digits per byte           |                              |
 +--------------------+---------------------------+---------------------------+------------------------------+
-| quopri_codec       | quopri, quoted-printable, | Convert operand to MIME   | :meth:`quopri.encodestring`, |
-|                    | quotedprintable           | quoted printable          | :meth:`quopri.decodestring`  |
+| quopri_codec       | quopri, quoted-printable, | Convert operand to MIME   | :meth:`quopri.encode` with   |
+|                    | quotedprintable           | quoted printable          | ``quotetabs=True``,          |
+|                    |                           |                           | :meth:`quopri.decode`        |
 +--------------------+---------------------------+---------------------------+------------------------------+
 | string_escape      |                           | Produce a string that is  |                              |
 |                    |                           | suitable as string        |                              |
@@ -1245,7 +1273,7 @@ parameters, such as :mod:`httplib` and :mod:`ftplib`, accept Unicode host names
 (:mod:`httplib` then also transparently sends an IDNA hostname in the
 :mailheader:`Host` field if it sends that field at all).
 
-.. _section 3.1: http://tools.ietf.org/html/rfc3490#section-3.1
+.. _section 3.1: https://tools.ietf.org/html/rfc3490#section-3.1
 
 When receiving host names from the wire (such as in reverse name lookup), no
 automatic conversion to Unicode is performed: Applications wishing to present

@@ -1,7 +1,3 @@
-/*****************************************************************
-  This file should be kept compatible with Python 2.3, see PEP 291.
- *****************************************************************/
-
 #include "Python.h"
 #include <ffi.h>
 #ifdef MS_WIN32
@@ -80,14 +76,18 @@ PyCStgDict_clone(StgDictObject *dst, StgDictObject *src)
 
     if (src->format) {
         dst->format = PyMem_Malloc(strlen(src->format) + 1);
-        if (dst->format == NULL)
+        if (dst->format == NULL) {
+            PyErr_NoMemory();
             return -1;
+        }
         strcpy(dst->format, src->format);
     }
     if (src->shape) {
         dst->shape = PyMem_Malloc(sizeof(Py_ssize_t) * src->ndim);
-        if (dst->shape == NULL)
+        if (dst->shape == NULL) {
+            PyErr_NoMemory();
             return -1;
+        }
         memcpy(dst->shape, src->shape,
                sizeof(Py_ssize_t) * src->ndim);
     }
@@ -286,7 +286,15 @@ MakeAnonFields(PyObject *type)
             Py_DECREF(anon_names);
             return -1;
         }
-        assert(Py_TYPE(descr) == &PyCField_Type);
+        if (Py_TYPE(descr) != &PyCField_Type) {
+            PyErr_Format(PyExc_AttributeError,
+                         "an item in _anonymous_ (index %zd) is not "
+                         "specified in _fields_",
+                         i);
+            Py_DECREF(anon_names);
+            Py_DECREF(descr);
+            return -1;
+        }
         descr->anonymous = 1;
 
         /* descr is in the field descriptor. */
@@ -388,16 +396,18 @@ PyCStructUnionType_update_stgdict(PyObject *type, PyObject *fields, int isStruct
         union_size = 0;
         total_align = align ? align : 1;
         stgdict->ffi_type_pointer.type = FFI_TYPE_STRUCT;
-        stgdict->ffi_type_pointer.elements = PyMem_Malloc(sizeof(ffi_type *) * (basedict->length + len + 1));
+        stgdict->ffi_type_pointer.elements = PyMem_New(ffi_type *, basedict->length + len + 1);
         if (stgdict->ffi_type_pointer.elements == NULL) {
             PyErr_NoMemory();
             return -1;
         }
         memset(stgdict->ffi_type_pointer.elements, 0,
                sizeof(ffi_type *) * (basedict->length + len + 1));
-        memcpy(stgdict->ffi_type_pointer.elements,
-               basedict->ffi_type_pointer.elements,
-               sizeof(ffi_type *) * (basedict->length));
+        if (basedict->length > 0) {
+            memcpy(stgdict->ffi_type_pointer.elements,
+                   basedict->ffi_type_pointer.elements,
+                   sizeof(ffi_type *) * (basedict->length));
+        }
         ffi_ofs = basedict->length;
     } else {
         offset = 0;
@@ -406,7 +416,7 @@ PyCStructUnionType_update_stgdict(PyObject *type, PyObject *fields, int isStruct
         union_size = 0;
         total_align = 1;
         stgdict->ffi_type_pointer.type = FFI_TYPE_STRUCT;
-        stgdict->ffi_type_pointer.elements = PyMem_Malloc(sizeof(ffi_type *) * (len + 1));
+        stgdict->ffi_type_pointer.elements = PyMem_New(ffi_type *, len + 1);
         if (stgdict->ffi_type_pointer.elements == NULL) {
             PyErr_NoMemory();
             return -1;
@@ -445,6 +455,7 @@ PyCStructUnionType_update_stgdict(PyObject *type, PyObject *fields, int isStruct
             Py_DECREF(pair);
             PyErr_Format(PyExc_TypeError,
 #if (PY_VERSION_HEX < 0x02050000)
+                         /* Compatibility no longer strictly required */
                          "second item in _fields_ tuple (index %d) must be a C type",
 #else
                          "second item in _fields_ tuple (index %zd) must be a C type",
@@ -518,7 +529,12 @@ PyCStructUnionType_update_stgdict(PyObject *type, PyObject *fields, int isStruct
             sprintf(buf, "%s:%s:", fieldfmt, fieldname);
 
             ptr = stgdict->format;
-            stgdict->format = _ctypes_alloc_format_string(stgdict->format, buf);
+            if (dict->shape != NULL) {
+                stgdict->format = _ctypes_alloc_format_string_with_shape(
+                    dict->ndim, dict->shape, stgdict->format, buf);
+            } else {
+                stgdict->format = _ctypes_alloc_format_string(stgdict->format, buf);
+            }
             PyMem_Free(ptr);
             PyMem_Free(buf);
 

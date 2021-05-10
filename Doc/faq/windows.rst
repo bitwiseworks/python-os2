@@ -17,18 +17,6 @@ This is not necessarily a straightforward question. If you are already familiar
 with running programs from the Windows command line then everything will seem
 obvious; otherwise, you might need a little more guidance.
 
-.. sidebar:: |Python Development on XP|_
-   :subtitle: `Python Development on XP`_
-
-   This series of screencasts aims to get you up and running with Python on
-   Windows XP.  The knowledge is distilled into 1.5 hours and will get you up
-   and running with the right Python distribution, coding in your choice of IDE,
-   and debugging and writing solid code with unit-tests.
-
-.. |Python Development on XP| image:: python-video-icon.png
-.. _`Python Development on XP`:
-   http://www.showmedo.com/videos/series?name=pythonOzsvaldPyNewbieSeries
-
 Unless you use some sort of integrated development environment, you will end up
 *typing* Windows commands into what is variously referred to as a "DOS window"
 or "Command prompt window".  Usually you can create such a window from your
@@ -74,35 +62,23 @@ by entering a few expressions of your choice and seeing the results::
     >>> print "Hello"
     Hello
     >>> "Hello" * 3
-    HelloHelloHello
+    'HelloHelloHello'
 
 Many people use the interactive mode as a convenient yet highly programmable
-calculator.  When you want to end your interactive Python session, hold the Ctrl
-key down while you enter a Z, then hit the "Enter" key to get back to your
+calculator.  When you want to end your interactive Python session, hold the :kbd:`Ctrl`
+key down while you enter a :kbd:`Z`, then hit the ":kbd:`Enter`" key to get back to your
 Windows command prompt.
 
 You may also find that you have a Start-menu entry such as :menuselection:`Start
 --> Programs --> Python 2.7 --> Python (command line)` that results in you
 seeing the ``>>>`` prompt in a new window.  If so, the window will disappear
-after you enter the Ctrl-Z character; Windows is running a single "python"
+after you enter the :kbd:`Ctrl-Z` character; Windows is running a single "python"
 command in the window, and closes it when you terminate the interpreter.
 
 If the ``python`` command, instead of displaying the interpreter prompt ``>>>``,
 gives you a message like::
 
    'python' is not recognized as an internal or external command, operable program or batch file.
-
-.. sidebar:: |Adding Python to DOS Path|_
-   :subtitle: `Adding Python to DOS Path`_
-
-   Python is not added to the DOS path by default.  This screencast will walk
-   you through the steps to add the correct entry to the `System Path`, allowing
-   Python to be executed from the command-line by all users.
-
-.. |Adding Python to DOS Path| image:: python-video-icon.png
-.. _`Adding Python to DOS Path`:
-   http://showmedo.com/videos/video?name=960000&fromSeriesID=96
-
 
 or::
 
@@ -127,8 +103,8 @@ you should make sure that entering the command ::
 
    c:\Python27\python
 
-starts up the interpreter as above (and don't forget you'll need a "CTRL-Z" and
-an "Enter" to get out of it). Once you have verified the directory, you can
+starts up the interpreter as above (and don't forget you'll need a ":kbd:`Ctrl-Z`" and
+an ":kbd:`Enter`" to get out of it). Once you have verified the directory, you can
 add it to the system path to make it easier to start Python by just running
 the ``python`` command. This is currently an option in the installer as of
 CPython 2.7.
@@ -243,7 +219,7 @@ Embedding the Python interpreter in a Windows app can be summarized as follows:
       ...
       Py_Initialize();  // Initialize Python.
       initmyAppc();  // Initialize (import) the helper class.
-      PyRun_SimpleString("import myApp") ;  // Import the shadow class.
+      PyRun_SimpleString("import myApp");  // Import the shadow class.
 
 5. There are two problems with Python's C API which will become apparent if you
    use a compiler other than MSVC, the compiler used to build pythonNN.dll.
@@ -295,7 +271,7 @@ this respect, and is easily configured to use spaces: Take :menuselection:`Tools
 size" to 4, and select the "Insert spaces" radio button.
 
 If you suspect mixed tabs and spaces are causing problems in leading whitespace,
-run Python with the :option:`-t` switch or run ``Tools/Scripts/tabnanny.py`` to
+run Python with the :option:`-t` switch or run the :mod:`tabnanny` module to
 check a directory tree in batch mode.
 
 
@@ -321,7 +297,7 @@ Prior to Python 2.7 and 3.2, to terminate a process, you can use :mod:`ctypes`::
        return (0 != kernel32.TerminateProcess(handle, 0))
 
 In 2.7 and 3.2, :func:`os.kill` is implemented similar to the above function,
-with the additional feature of being able to send CTRL+C and CTRL+BREAK
+with the additional feature of being able to send :kbd:`Ctrl+C` and :kbd:`Ctrl+Break`
 to console subprocesses which are designed to handle those signals. See
 :func:`os.kill` for further details.
 
@@ -334,5 +310,5 @@ This is a mistake; the extension should be .TGZ.
 
 Simply rename the downloaded file to have the .TGZ extension, and WinZip will be
 able to handle it.  (If your copy of WinZip doesn't, get a newer one from
-http://www.winzip.com.)
+https://www.winzip.com.)
 

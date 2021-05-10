@@ -34,6 +34,8 @@ in the C interface: as with :meth:`read` and :meth:`write` operations on Python
 files, buffer allocation on receive operations is automatic, and buffer length
 is implicit on send operations.
 
+.. _host_port:
+
 Socket addresses are represented as follows: A single string is used for the
 :const:`AF_UNIX` address family. A pair ``(host, port)`` is used for the
 :const:`AF_INET` address family, where *host* is a string representing either a
@@ -262,12 +264,12 @@ The module :mod:`socket` exports the following constants and functions:
    method.
 
    The following example fetches address information for a hypothetical TCP
-   connection to ``www.python.org`` on port 80 (results may differ on your
+   connection to ``example.org`` on port 80 (results may differ on your
    system if IPv6 isn't enabled)::
 
-      >>> socket.getaddrinfo("www.python.org", 80, 0, 0, socket.SOL_TCP)
-      [(2, 1, 6, '', ('82.94.164.162', 80)),
-       (10, 1, 6, '', ('2001:888:2000:d::a2', 80, 0, 0))]
+      >>> socket.getaddrinfo("example.org", 80, 0, 0, socket.IPPROTO_TCP)
+      [(10, 1, 6, '', ('2606:2800:220:1:248:1893:25c8:1946', 80, 0, 0)),
+       (2, 1, 6, '', ('93.184.216.34', 80))]
 
    .. versionadded:: 2.2
 
@@ -562,6 +564,7 @@ correspond to Unix system calls applicable to sockets.
    automatically closed when they are garbage-collected.
 
    .. note::
+
       :meth:`close()` releases the resource associated with a connection but
       does not necessarily close the connection immediately.  If you want
       to close the connection in a timely fashion, call :meth:`shutdown()`
@@ -639,7 +642,7 @@ correspond to Unix system calls applicable to sockets.
 
    The :meth:`ioctl` method is a limited interface to the WSAIoctl system
    interface.  Please refer to the `Win32 documentation
-   <http://msdn.microsoft.com/en-us/library/ms741621%28VS.85%29.aspx>`_ for more
+   <https://msdn.microsoft.com/en-us/library/ms741621%28VS.85%29.aspx>`_ for more
    information.
 
    On other platforms, the generic :func:`fcntl.fcntl` and :func:`fcntl.ioctl`
@@ -660,9 +663,11 @@ correspond to Unix system calls applicable to sockets.
    .. index:: single: I/O control; buffering
 
    Return a :dfn:`file object` associated with the socket.  (File objects are
-   described in :ref:`bltin-file-objects`.) The file object
-   references a :c:func:`dup`\ ped version of the socket file descriptor, so the
-   file object and socket object may be closed or garbage-collected independently.
+   described in :ref:`bltin-file-objects`.) The file object does not close the
+   socket explicitly when its :meth:`close` method is called, but only removes
+   its reference to the socket object, so that the socket will be closed if it
+   is not referenced from anywhere else.
+
    The socket must be in blocking mode (it can not have a timeout). The optional
    *mode* and *bufsize* arguments are interpreted the same way as by the built-in
    :func:`file` function.
@@ -754,7 +759,7 @@ correspond to Unix system calls applicable to sockets.
    Set blocking or non-blocking mode of the socket: if *flag* is 0, the socket is
    set to non-blocking, else to blocking mode.  Initially all sockets are in
    blocking mode.  In non-blocking mode, if a :meth:`recv` call doesn't find any
-   data, or if a :meth:`send` call can't immediately dispose of the data, a
+   data, or if a :meth:`send` call can't immediately dispose of the data, an
    :exc:`error` exception is raised; in blocking mode, the calls block until they
    can proceed. ``s.setblocking(0)`` is equivalent to ``s.settimeout(0.0)``;
    ``s.setblocking(1)`` is equivalent to ``s.settimeout(None)``.
@@ -830,7 +835,7 @@ Note that there are no methods :meth:`read` or :meth:`write`; use
 :meth:`~socket.recv` and :meth:`~socket.send` without *flags* argument instead.
 
 Socket objects also have these (read-only) attributes that correspond to the
-values given to the :class:`socket` constructor.
+values given to the :class:`~socket.socket` constructor.
 
 
 .. attribute:: socket.family

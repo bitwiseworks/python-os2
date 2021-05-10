@@ -279,8 +279,7 @@ capture_dealloc(captureobject *self)
             (void)svUnlockCaptureData(self->ob_svideo->ob_svideo,
                                       self->ob_capture);
         self->ob_capture = NULL;
-        Py_DECREF(self->ob_svideo);
-        self->ob_svideo = NULL;
+        Py_CLEAR(self->ob_svideo);
     }
     PyObject_Del(self);
 }
@@ -687,7 +686,7 @@ sv_LoadMap(svobject *self, PyObject *args)
             if (!cell)
                 goto finally;
 
-            if (!PyInt_Check(cell)) {
+            if (!_PyAnyInt_Check(cell)) {
                 PyErr_BadArgument();
                 goto finally;
             }
@@ -758,7 +757,7 @@ doParams(svobject *self, PyObject *args,
         if (!v)
             goto finally;
 
-        if (!PyInt_Check(v)) {
+        if (!_PyAnyInt_Check(v)) {
             PyErr_BadArgument();
             goto finally;
         }

@@ -254,12 +254,13 @@ class Telnet:
 
     def close(self):
         """Close the connection."""
-        if self.sock:
-            self.sock.close()
+        sock = self.sock
         self.sock = 0
         self.eof = 1
         self.iacseq = ''
         self.sb = 0
+        if sock:
+            sock.close()
 
     def get_socket(self):
         """Return the socket object used internally."""
@@ -312,9 +313,11 @@ class Telnet:
             poller.register(self, poll_in_or_priority_flags)
             while i < 0 and not self.eof:
                 try:
-                    ready = poller.poll(call_timeout)
+                    # Poll takes its timeout in milliseconds.
+                    ready = poller.poll(None if timeout is None
+                                        else 1000 * call_timeout)
                 except select.error as e:
-                    if e.errno == errno.EINTR:
+                    if e[0] == errno.EINTR:
                         if timeout is not None:
                             elapsed = time() - time_start
                             call_timeout = timeout-elapsed
@@ -682,9 +685,10 @@ class Telnet:
             poller.register(self, poll_in_or_priority_flags)
             while not m and not self.eof:
                 try:
-                    ready = poller.poll(call_timeout)
+                    ready = poller.poll(None if timeout is None
+                                        else 1000 * call_timeout)
                 except select.error as e:
-                    if e.errno == errno.EINTR:
+                    if e[0] == errno.EINTR:
                         if timeout is not None:
                             elapsed = time() - time_start
                             call_timeout = timeout-elapsed

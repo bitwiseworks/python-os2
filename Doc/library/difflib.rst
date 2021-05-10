@@ -94,9 +94,9 @@ diffs. For comparing directories and files, see also, the :mod:`filecmp` module.
       *wrapcolumn* is an optional keyword to specify column number where lines are
       broken and wrapped, defaults to ``None`` where lines are not wrapped.
 
-      *linejunk* and *charjunk* are optional keyword arguments passed into ``ndiff()``
+      *linejunk* and *charjunk* are optional keyword arguments passed into :func:`ndiff`
       (used by :class:`HtmlDiff` to generate the side by side HTML differences).  See
-      ``ndiff()`` documentation for argument default values and descriptions.
+      :func:`ndiff` documentation for argument default values and descriptions.
 
    The following methods are public:
 
@@ -276,7 +276,7 @@ diffs. For comparing directories and files, see also, the :mod:`filecmp` module.
    generating the delta lines) in unified diff format.
 
    Unified diffs are a compact way of showing just the lines that have changed plus
-   a few lines of context.  The changes are shown in a inline style (instead of
+   a few lines of context.  The changes are shown in an inline style (instead of
    separate before/after blocks).  The number of context lines is set by *n* which
    defaults to three.
 
@@ -331,9 +331,9 @@ diffs. For comparing directories and files, see also, the :mod:`filecmp` module.
 
 .. seealso::
 
-   `Pattern Matching: The Gestalt Approach <http://www.ddj.com/184407970?pgno=5>`_
+   `Pattern Matching: The Gestalt Approach <http://www.drdobbs.com/database/pattern-matching-the-gestalt-approach/184407970>`_
       Discussion of a similar algorithm by John W. Ratcliff and D. E. Metzener. This
-      was published in `Dr. Dobb's Journal <http://www.ddj.com/>`_ in July, 1988.
+      was published in `Dr. Dobb's Journal <http://www.drdobbs.com/>`_ in July, 1988.
 
 
 .. _sequence-matcher:
@@ -431,14 +431,15 @@ The :class:`SequenceMatcher` class has this constructor:
 
    .. method:: get_matching_blocks()
 
-      Return list of triples describing matching subsequences. Each triple is of
-      the form ``(i, j, n)``, and means that ``a[i:i+n] == b[j:j+n]``.  The
+      Return list of triples describing non-overlapping matching subsequences.
+      Each triple is of the form ``(i, j, n)``,
+      and means that ``a[i:i+n] == b[j:j+n]``.  The
       triples are monotonically increasing in *i* and *j*.
 
       The last triple is a dummy, and has the value ``(len(a), len(b), 0)``.  It
       is the only triple with ``n == 0``.  If ``(i, j, n)`` and ``(i', j', n')``
       are adjacent triples in the list, and the second is not the last triple in
-      the list, then ``i+n != i'`` or ``j+n != j'``; in other words, adjacent
+      the list, then ``i+n < i'`` or ``j+n < j'``; in other words, adjacent
       triples always describe non-adjacent equal blocks.
 
       .. XXX Explain why a dummy is used!
@@ -594,7 +595,7 @@ If you want to know how to change the first sequence into the second, use
      work.
 
    * `Simple version control recipe
-     <http://code.activestate.com/recipes/576729/>`_ for a small application
+     <https://code.activestate.com/recipes/576729/>`_ for a small application
      built with :class:`SequenceMatcher`.
 
 
@@ -757,8 +758,10 @@ It is also contained in the Python source distribution, as
        # we're passing these as arguments to the diff function
        fromdate = time.ctime(os.stat(fromfile).st_mtime)
        todate = time.ctime(os.stat(tofile).st_mtime)
-       fromlines = open(fromfile, 'U').readlines()
-       tolines = open(tofile, 'U').readlines()
+       with open(fromfile, 'U') as f:
+           fromlines = f.readlines()
+       with open(tofile, 'U') as f:
+           tolines = f.readlines()
 
        if options.u:
            diff = difflib.unified_diff(fromlines, tolines, fromfile, tofile,

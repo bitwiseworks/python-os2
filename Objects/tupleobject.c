@@ -288,10 +288,7 @@ tuplerepr(PyTupleObject *v)
 
     /* Do repr() on each element. */
     for (i = 0; i < n; ++i) {
-        if (Py_EnterRecursiveCall(" while getting the repr of a tuple"))
-            goto Done;
         s = PyObject_Repr(v->ob_item[i]);
-        Py_LeaveRecursiveCall();
         if (s == NULL)
             goto Done;
         PyTuple_SET_ITEM(pieces, i, s);
@@ -515,8 +512,8 @@ tupleindex(PyTupleObject *self, PyObject *args)
     PyObject *v;
 
     if (!PyArg_ParseTuple(args, "O|O&O&:index", &v,
-                                _PyEval_SliceIndex, &start,
-                                _PyEval_SliceIndex, &stop))
+                                _PyEval_SliceIndexNotNone, &start,
+                                _PyEval_SliceIndexNotNone, &stop))
         return NULL;
     if (start < 0) {
         start += Py_SIZE(self);
@@ -715,11 +712,11 @@ tuplesubscript(PyTupleObject* self, PyObject* item)
         PyObject* it;
         PyObject **src, **dest;
 
-        if (PySlice_GetIndicesEx((PySliceObject*)item,
-                         PyTuple_GET_SIZE(self),
-                         &start, &stop, &step, &slicelength) < 0) {
+        if (_PySlice_Unpack(item, &start, &stop, &step) < 0) {
             return NULL;
         }
+        slicelength = _PySlice_AdjustIndices(PyTuple_GET_SIZE(self), &start,
+                                            &stop, step);
 
         if (slicelength <= 0) {
             return PyTuple_New(0);
@@ -761,27 +758,15 @@ tuple_getnewargs(PyTupleObject *v)
 
 }
 
-static PyObject *
-tuple_sizeof(PyTupleObject *self)
-{
-    Py_ssize_t res;
-
-    res = PyTuple_Type.tp_basicsize + Py_SIZE(self) * sizeof(PyObject *);
-    return PyInt_FromSsize_t(res);
-}
-
 PyDoc_STRVAR(index_doc,
 "T.index(value, [start, [stop]]) -> integer -- return first index of value.\n"
 "Raises ValueError if the value is not present."
 );
 PyDoc_STRVAR(count_doc,
 "T.count(value) -> integer -- return number of occurrences of value");
-PyDoc_STRVAR(sizeof_doc,
-"T.__sizeof__() -- size of T in memory, in bytes");
 
 static PyMethodDef tuple_methods[] = {
     {"__getnewargs__",          (PyCFunction)tuple_getnewargs,  METH_NOARGS},
-    {"__sizeof__",      (PyCFunction)tuple_sizeof, METH_NOARGS, sizeof_doc},
     {"index",           (PyCFunction)tupleindex,  METH_VARARGS, index_doc},
     {"count",           (PyCFunction)tuplecount,  METH_O, count_doc},
     {NULL,              NULL}           /* sentinel */
@@ -881,8 +866,7 @@ _PyTuple_Resize(PyObject **pv, Py_ssize_t newsize)
     _Py_ForgetReference((PyObject *) v);
     /* DECREF items deleted by shrinkage */
     for (i = newsize; i < oldsize; i++) {
-        Py_XDECREF(v->ob_item[i]);
-        v->ob_item[i] = NULL;
+        Py_CLEAR(v->ob_item[i]);
     }
     sv = PyObject_GC_Resize(PyTupleObject, v, newsize);
     if (sv == NULL) {
@@ -928,8 +912,7 @@ PyTuple_Fini(void)
 #if PyTuple_MAXSAVESIZE > 0
     /* empty tuples are used all over the place and applications may
      * rely on the fact that an empty tuple is a singleton. */
-    Py_XDECREF(free_list[0]);
-    free_list[0] = NULL;
+    Py_CLEAR(free_list[0]);
 
     (void)PyTuple_ClearFreeList();
 #endif
@@ -980,8 +963,8 @@ tupleiter_next(tupleiterobject *it)
         return item;
     }
 
-    Py_DECREF(seq);
     it->it_seq = NULL;
+    Py_DECREF(seq);
     return NULL;
 }
 

@@ -35,7 +35,7 @@ profiling interface:
 2. :mod:`profile`, a pure Python module whose interface is imitated by
    :mod:`cProfile`, but which adds significant overhead to profiled programs.
    If you're trying to extend the profiler in some way, the task might be easier
-   with this module.
+   with this module.  Originally designed and written by Jim Roskind.
 
    .. versionchanged:: 2.4
       Now also reports the time spent in calls to built-in functions
@@ -333,11 +333,12 @@ Analysis of the profiler data is done using the :class:`~pstats.Stats` class.
    corresponding version of :mod:`profile` or :mod:`cProfile`.  To be specific,
    there is *no* file compatibility guaranteed with future versions of this
    profiler, and there is no compatibility with files produced by other
-   profilers.  If several files are provided, all the statistics for identical
-   functions will be coalesced, so that an overall view of several processes can
-   be considered in a single report.  If additional files need to be combined
-   with data in an existing :class:`~pstats.Stats` object, the
-   :meth:`~pstats.Stats.add` method can be used.
+   profilers, or the same profiler run on a different operating system.  If
+   several files are provided, all the statistics for identical functions will
+   be coalesced, so that an overall view of several processes can be considered
+   in a single report.  If additional files need to be combined with data in an
+   existing :class:`~pstats.Stats` object, the :meth:`~pstats.Stats.add` method
+   can be used.
 
    Instead of reading the profile data from a file, a :class:`cProfile.Profile`
    or :class:`profile.Profile` object can be used as the profile data source.
@@ -663,7 +664,7 @@ you are using :class:`profile.Profile` or :class:`cProfile.Profile`,
 
       pr = cProfile.Profile(your_integer_time_func, 0.001)
 
-   As the :mod:`cProfile.Profile` class cannot be calibrated, custom timer
+   As the :class:`cProfile.Profile` class cannot be calibrated, custom timer
    functions should be used with care and should be as fast as possible.  For
    the best results with a custom timer, it might be necessary to hard-code it
    in the C source of the internal :mod:`_lsprof` module.

@@ -1,5 +1,6 @@
 /*****************************************************************
-  This file should be kept compatible with Python 2.3, see PEP 291.
+  This file contains remnant Python 2.3 compatibility code that is no longer
+  strictly required.
  *****************************************************************/
 
 #include "Python.h"
@@ -11,8 +12,10 @@
 #include "ctypes.h"
 
 
-#define CTYPES_CAPSULE_WCHAR_T "_ctypes/cfield.c wchar_t buffer from unicode"
+#if defined(CTYPES_UNICODE) && !defined(HAVE_USABLE_WCHAR_T)
+#   define CTYPES_CAPSULE_WCHAR_T "_ctypes/cfield.c wchar_t buffer from unicode"
 CTYPES_CAPSULE_INSTANTIATE_DESTRUCTOR(CTYPES_CAPSULE_WCHAR_T)
+#endif
 
 
 /******************************************************************/
@@ -47,7 +50,7 @@ PyCField_FromDesc(PyObject *desc, Py_ssize_t index,
 {
     CFieldObject *self;
     PyObject *proto;
-    Py_ssize_t size, align, length;
+    Py_ssize_t size, align;
     SETFUNC setfunc = NULL;
     GETFUNC getfunc = NULL;
     StgDictObject *dict;
@@ -101,7 +104,6 @@ PyCField_FromDesc(PyObject *desc, Py_ssize_t index,
     }
 
     size = dict->size;
-    length = dict->length;
     proto = desc;
 
     /*  Field descriptors for 'c_char * n' are be scpecial cased to
@@ -203,7 +205,11 @@ PyCField_set(CFieldObject *self, PyObject *inst, PyObject *value)
 {
     CDataObject *dst;
     char *ptr;
-    assert(CDataObject_Check(inst));
+    if (!CDataObject_Check(inst)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "not a ctype instance");
+        return -1;
+    }
     dst = (CDataObject *)inst;
     ptr = dst->b_ptr + self->offset;
     if (value == NULL) {
@@ -223,7 +229,11 @@ PyCField_get(CFieldObject *self, PyObject *inst, PyTypeObject *type)
         Py_INCREF(self);
         return (PyObject *)self;
     }
-    assert(CDataObject_Check(inst));
+    if (!CDataObject_Check(inst)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "not a ctype instance");
+        return NULL;
+    }
     src = (CDataObject *)inst;
     return PyCData_get(self->proto, self->getfunc, inst,
                      self->index, self->size, src->b_ptr + self->offset);
@@ -769,6 +779,7 @@ I_set_sw(void *ptr, PyObject *value, Py_ssize_t size)
     if (get_ulong(value, &val) < 0)
         return  NULL;
     memcpy(&field, ptr, sizeof(field));
+    field = SWAP_INT(field);
     field = SET(unsigned int, field, (unsigned int)val, size);
     field = SWAP_INT(field);
     memcpy(ptr, &field, sizeof(field));
@@ -1280,24 +1291,16 @@ U_set(void *ptr, PyObject *value, Py_ssize_t length)
 static PyObject *
 s_get(void *ptr, Py_ssize_t size)
 {
-    PyObject *result;
-    size_t slen;
+    Py_ssize_t i;
+    char *p;
 
-    result = PyString_FromString((char *)ptr);
-    if (!result)
-        return NULL;
-    /* chop off at the first NUL character, if any.
-     * On error, result will be deallocated and set to NULL.
-     */
-    slen = strlen(PyString_AS_STRING(result));
-    size = min(size, (Py_ssize_t)slen);
-    if (result->ob_refcnt == 1) {
-        /* shorten the result */
-        _PyString_Resize(&result, size);
-        return result;
-    } else
-        /* cannot shorten the result */
-        return PyString_FromStringAndSize(ptr, size);
+    p = (char *)ptr;
+    for (i = 0; i < size; ++i) {
+        if (*p++ == '\0')
+            break;
+    }
+
+    return PyBytes_FromStringAndSize((char *)ptr, (Py_ssize_t)i);
 }
 
 static PyObject *
@@ -1311,7 +1314,7 @@ s_set(void *ptr, PyObject *value, Py_ssize_t length)
         return NULL;
     size = strlen(data);
     if (size < length) {
-        /* This will copy the leading NUL character
+        /* This will copy the trailing NUL character
          * if there is space for it.
          */
         ++size;
@@ -1350,7 +1353,7 @@ z_set(void *ptr, PyObject *value, Py_ssize_t size)
             return NULL;
         *(char **)ptr = PyString_AS_STRING(str);
         return str;
-    } else if (PyInt_Check(value) || PyLong_Check(value)) {
+    } else if (_PyAnyInt_Check(value)) {
 #if SIZEOF_VOID_P == SIZEOF_LONG_LONG
         *(char **)ptr = (char *)PyInt_AsUnsignedLongLongMask(value);
 #else
@@ -1399,7 +1402,7 @@ Z_set(void *ptr, PyObject *value, Py_ssize_t size)
                                             _ctypes_conversion_errors);
         if (!value)
             return NULL;
-    } else if (PyInt_Check(value) || PyLong_Check(value)) {
+    } else if (_PyAnyInt_Check(value)) {
 #if SIZEOF_VOID_P == SIZEOF_LONG_LONG
         *(wchar_t **)ptr = (wchar_t *)PyInt_AsUnsignedLongLongMask(value);
 #else
@@ -1506,6 +1509,7 @@ BSTR_set(void *ptr, PyObject *value, Py_ssize_t size)
     if (value) {
         Py_ssize_t size = PyUnicode_GET_SIZE(value);
         if ((unsigned) size != size) {
+            Py_DECREF(value);
             PyErr_SetString(PyExc_ValueError, "String too long for BSTR");
             return NULL;
         }
@@ -1553,7 +1557,7 @@ P_set(void *ptr, PyObject *value, Py_ssize_t size)
         _RET(value);
     }
 
-    if (!PyInt_Check(value) && !PyLong_Check(value)) {
+    if (!_PyAnyInt_Check(value)) {
         PyErr_SetString(PyExc_TypeError,
                         "cannot be converted to pointer");
         return NULL;
@@ -1687,9 +1691,9 @@ typedef struct { char c; void *x; } s_void_p;
 /*
 #define CHAR_ALIGN (sizeof(s_char) - sizeof(char))
 #define SHORT_ALIGN (sizeof(s_short) - sizeof(short))
-#define INT_ALIGN (sizeof(s_int) - sizeof(int))
 #define LONG_ALIGN (sizeof(s_long) - sizeof(long))
 */
+#define INT_ALIGN (sizeof(s_int) - sizeof(int))
 #define FLOAT_ALIGN (sizeof(s_float) - sizeof(float))
 #define DOUBLE_ALIGN (sizeof(s_double) - sizeof(double))
 #define LONGDOUBLE_ALIGN (sizeof(s_long_double) - sizeof(long double))
@@ -1731,8 +1735,8 @@ ffi_type ffi_type_sint8 = { 1, 1, FFI_TYPE_SINT8 };
 ffi_type ffi_type_uint16 = { 2, 2, FFI_TYPE_UINT16 };
 ffi_type ffi_type_sint16 = { 2, 2, FFI_TYPE_SINT16 };
 
-ffi_type ffi_type_uint32 = { 4, 4, FFI_TYPE_UINT32 };
-ffi_type ffi_type_sint32 = { 4, 4, FFI_TYPE_SINT32 };
+ffi_type ffi_type_uint32 = { 4, INT_ALIGN, FFI_TYPE_UINT32 };
+ffi_type ffi_type_sint32 = { 4, INT_ALIGN, FFI_TYPE_SINT32 };
 
 ffi_type ffi_type_uint64 = { 8, LONG_LONG_ALIGN, FFI_TYPE_UINT64 };
 ffi_type ffi_type_sint64 = { 8, LONG_LONG_ALIGN, FFI_TYPE_SINT64 };

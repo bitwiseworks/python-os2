@@ -341,9 +341,13 @@ getenvironment(PyObject* environment)
     envsize = PyMapping_Length(environment);
 
     keys = PyMapping_Keys(environment);
+    if (!keys) {
+        return NULL;
+    }
     values = PyMapping_Values(environment);
-    if (!keys || !values)
+    if (!values) {
         goto error;
+    }
 
     out = PyString_FromStringAndSize(NULL, 2048);
     if (! out)
@@ -352,7 +356,7 @@ getenvironment(PyObject* environment)
     p = PyString_AS_STRING(out);
 
     for (i = 0; i < envsize; i++) {
-        int ksize, vsize, totalsize;
+        size_t ksize, vsize, totalsize;
         PyObject* key = PyList_GET_ITEM(keys, i);
         PyObject* value = PyList_GET_ITEM(values, i);
 
@@ -363,11 +367,24 @@ getenvironment(PyObject* environment)
         }
         ksize = PyString_GET_SIZE(key);
         vsize = PyString_GET_SIZE(value);
+        if (strlen(PyString_AS_STRING(key)) != ksize ||
+            strlen(PyString_AS_STRING(value)) != vsize)
+        {
+            PyErr_SetString(PyExc_TypeError, "embedded null character");
+            goto error;
+        }
+        /* Search from index 1 because on Windows starting '=' is allowed for
+           defining hidden environment variables. */
+        if (ksize == 0 || strchr(PyString_AS_STRING(key) + 1, '=') != NULL) {
+            PyErr_SetString(PyExc_ValueError, "illegal environment variable name");
+            goto error;
+        }
         totalsize = (p - PyString_AS_STRING(out)) + ksize + 1 +
                                                      vsize + 1 + 1;
-        if (totalsize > PyString_GET_SIZE(out)) {
-            int offset = p - PyString_AS_STRING(out);
-            _PyString_Resize(&out, totalsize + 1024);
+        if (totalsize > (size_t)PyString_GET_SIZE(out)) {
+            size_t offset = p - PyString_AS_STRING(out);
+            if (_PyString_Resize(&out, totalsize + 1024))
+                goto exit;
             p = PyString_AS_STRING(out) + offset;
         }
         memcpy(p, PyString_AS_STRING(key), ksize);
@@ -383,7 +400,7 @@ getenvironment(PyObject* environment)
     _PyString_Resize(&out, p - PyString_AS_STRING(out));
 
     /* PyObject_Print(out, stdout, 0); */
-
+exit:
     Py_XDECREF(keys);
     Py_XDECREF(values);
 

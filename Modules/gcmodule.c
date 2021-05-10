@@ -113,7 +113,7 @@ static Py_ssize_t long_lived_pending = 0;
 
 /*
    NOTE: about untracking of mutable objects.
-   
+
    Certain types of container cannot participate in a reference cycle, and
    so do not need to be tracked by the garbage collector. Untracking these
    objects reduces the cost of garbage collections. However, determining
@@ -131,10 +131,10 @@ static Py_ssize_t long_lived_pending = 0;
    not survive until garbage collection. It is therefore not worthwhile
    to untrack eligible tuples at creation time.
 
-   Instead, all tuples except the empty tuple are tracked when created. 
-   During garbage collection it is determined whether any surviving tuples 
-   can be untracked. A tuple can be untracked if all of its contents are 
-   already not tracked. Tuples are examined for untracking in all garbage 
+   Instead, all tuples except the empty tuple are tracked when created.
+   During garbage collection it is determined whether any surviving tuples
+   can be untracked. A tuple can be untracked if all of its contents are
+   already not tracked. Tuples are examined for untracking in all garbage
    collection cycles. It may take more than one cycle to untrack a tuple.
 
    Dictionaries containing only immutable objects also do not need to be
@@ -147,8 +147,8 @@ static Py_ssize_t long_lived_pending = 0;
    The module provides the python function is_tracked(obj), which returns
    the CURRENT tracking status of the object. Subsequent garbage
    collections may change the tracking status of the object.
-   
-   Untracking of certain containers was introduced in issue #4688, and 
+
+   Untracking of certain containers was introduced in issue #4688, and
    the algorithm was refined in response to issue #14775.
 */
 
@@ -771,10 +771,8 @@ debug_cycle(char *msg, PyObject *op)
  * garbage list (a Python list), else only the objects in finalizers with
  * __del__ methods are appended to garbage.  All objects in finalizers are
  * merged into the old list regardless.
- * Returns 0 if all OK, <0 on error (out of memory to grow the garbage list).
- * The finalizers list is made empty on a successful return.
  */
-static int
+static void
 handle_finalizers(PyGC_Head *finalizers, PyGC_Head *old)
 {
     PyGC_Head *gc = finalizers->gc.gc_next;
@@ -789,12 +787,11 @@ handle_finalizers(PyGC_Head *finalizers, PyGC_Head *old)
 
         if ((debug & DEBUG_SAVEALL) || has_finalizer(op)) {
             if (PyList_Append(garbage, op) < 0)
-                return -1;
+                break;
         }
     }
 
     gc_list_merge(finalizers, old);
-    return 0;
 }
 
 /* Break reference cycles by clearing the containers involved.  This is
@@ -1012,7 +1009,7 @@ collect(int generation)
      * reachable list of garbage.  The programmer has to deal with
      * this if they insist on creating this type of structure.
      */
-    (void)handle_finalizers(&finalizers, old);
+    handle_finalizers(&finalizers, old);
 
     /* Clear free list only during the collection of the highest
      * generation */
@@ -1436,8 +1433,11 @@ PyGC_Collect(void)
     if (collecting)
         n = 0; /* already collecting, don't do anything */
     else {
+        PyObject *exc, *value, *tb;
         collecting = 1;
+        PyErr_Fetch(&exc, &value, &tb);
         n = collect(NUM_GENERATIONS - 1);
+        PyErr_Restore(exc, value, tb);
         collecting = 0;
     }
 
@@ -1539,6 +1539,7 @@ _PyObject_GC_Resize(PyVarObject *op, Py_ssize_t nitems)
 {
     const size_t basicsize = _PyObject_VAR_SIZE(Py_TYPE(op), nitems);
     PyGC_Head *g = AS_GC(op);
+    assert(!IS_TRACKED(op));
     if (basicsize > PY_SSIZE_T_MAX - sizeof(PyGC_Head))
         return (PyVarObject *)PyErr_NoMemory();
     g = (PyGC_Head *)PyObject_REALLOC(g,  sizeof(PyGC_Head) + basicsize);

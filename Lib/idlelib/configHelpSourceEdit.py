@@ -8,13 +8,14 @@ import tkMessageBox
 import tkFileDialog
 
 class GetHelpSourceDialog(Toplevel):
-    def __init__(self, parent, title, menuItem='', filePath=''):
+    def __init__(self, parent, title, menuItem='', filePath='', _htest=False):
         """Get menu entry and url/ local file location for Additional Help
 
         User selects a name for the Help resource and provides a web url
         or a local file as its source.  The user can enter a url or browse
         for the file.
 
+        _htest - bool, change box location when running htest
         """
         Toplevel.__init__(self, parent)
         self.configure(borderwidth=5)
@@ -31,12 +32,14 @@ class GetHelpSourceDialog(Toplevel):
         self.withdraw() #hide while setting geometry
         #needs to be done here so that the winfo_reqwidth is valid
         self.update_idletasks()
-        #centre dialog over parent:
-        self.geometry("+%d+%d" %
-                      ((parent.winfo_rootx() + ((parent.winfo_width()/2)
-                                                -(self.winfo_reqwidth()/2)),
-                        parent.winfo_rooty() + ((parent.winfo_height()/2)
-                                                -(self.winfo_reqheight()/2)))))
+        #centre dialog over parent. below parent if running htest.
+        self.geometry(
+                "+%d+%d" % (
+                    parent.winfo_rootx() +
+                    (parent.winfo_width()/2 - self.winfo_reqwidth()/2),
+                    parent.winfo_rooty() +
+                    ((parent.winfo_height()/2 - self.winfo_reqheight()/2)
+                    if not _htest else 150)))
         self.deiconify() #geometry set, unhide
         self.bind('<Return>', self.Ok)
         self.wait_window()
@@ -152,18 +155,14 @@ class GetHelpSourceDialog(Toplevel):
                     # Mac Safari insists on using the URI form for local files
                     self.result = list(self.result)
                     self.result[1] = "file://" + path
+            self.grab_release()
             self.destroy()
 
     def Cancel(self, event=None):
         self.result = None
+        self.grab_release()
         self.destroy()
 
 if __name__ == '__main__':
-    #test the dialog
-    root = Tk()
-    def run():
-        keySeq = ''
-        dlg = GetHelpSourceDialog(root, 'Get Help Source')
-        print dlg.result
-    Button(root,text='Dialog', command=run).pack()
-    root.mainloop()
+    from idlelib.idle_test.htest import run
+    run(GetHelpSourceDialog)

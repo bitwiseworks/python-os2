@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-from test import test_support
+from test import test_support as support
 from test.test_support import TESTFN, _4G, bigmemtest, import_module, findfile
 
 import unittest
@@ -307,10 +306,8 @@ class BZ2FileTest(BaseTest):
                 for i in range(5):
                     f.write(data)
             threads = [threading.Thread(target=comp) for i in range(nthreads)]
-            for t in threads:
-                t.start()
-            for t in threads:
-                t.join()
+            with support.start_threads(threads):
+                pass
 
     def testMixedIterationReads(self):
         # Issue #8397: mixed iteration and reads should be forbidden.
@@ -324,6 +321,21 @@ class BZ2FileTest(BaseTest):
             self.assertRaises(ValueError, f.read)
             self.assertRaises(ValueError, f.readline)
             self.assertRaises(ValueError, f.readlines)
+
+    @unittest.skipIf(sys.platform == 'win32',
+                     'test depends on being able to delete a still-open file,'
+                     ' which is not possible on Windows')
+    def testInitNonExistentFile(self):
+        # Issue #19878: Should not segfault when __init__ with non-existent
+        # file for the second time.
+        self.createTempFile()
+        # Test close():
+        with BZ2File(self.filename, "wb") as f:
+            self.assertRaises(IOError, f.__init__, "non-existent-file")
+        # Test object deallocation without call to close():
+        f = bz2.BZ2File(self.filename)
+        self.assertRaises(IOError, f.__init__, "non-existent-file")
+        del f
 
 class BZ2CompressorTest(BaseTest):
     def testCompress(self):
@@ -468,13 +480,13 @@ class FuncTest(BaseTest):
         self.assertEqual(text.strip("a"), "")
 
 def test_main():
-    test_support.run_unittest(
+    support.run_unittest(
         BZ2FileTest,
         BZ2CompressorTest,
         BZ2DecompressorTest,
         FuncTest
     )
-    test_support.reap_children()
+    support.reap_children()
 
 if __name__ == '__main__':
     test_main()

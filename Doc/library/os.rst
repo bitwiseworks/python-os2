@@ -157,7 +157,9 @@ process and user.
 
    Availability: Unix.
 
-   .. note:: On Mac OS X, :func:`getgroups` behavior differs somewhat from
+   .. note::
+
+      On Mac OS X, :func:`getgroups` behavior differs somewhat from
       other Unix platforms. If the Python interpreter was built with a
       deployment target of :const:`10.5` or earlier, :func:`getgroups` returns
       the list of effective group ids associated with the current user process;
@@ -186,10 +188,10 @@ process and user.
 .. function:: getlogin()
 
    Return the name of the user logged in on the controlling terminal of the
-   process.  For most purposes, it is more useful to use the environment variable
-   :envvar:`LOGNAME` to find out who the user is, or
-   ``pwd.getpwuid(os.getuid())[0]`` to get the login name of the currently
-   effective user id.
+   process.  For most purposes, it is more useful to use the environment
+   variable :envvar:`LOGNAME` to find out who the user is, or
+   ``pwd.getpwuid(os.getuid())[0]`` to get the login name of the process's real
+   user id.
 
    Availability: Unix.
 
@@ -255,7 +257,7 @@ process and user.
 
    .. index:: single: user; id
 
-   Return the current process's user id.
+   Return the current process's real user id.
 
    Availability: Unix.
 
@@ -327,7 +329,7 @@ process and user.
 
 .. function:: setpgrp()
 
-   Call the system call :c:func:`setpgrp` or :c:func:`setpgrp(0, 0)` depending on
+   Call the system call :c:func:`setpgrp` or ``setpgrp(0, 0)`` depending on
    which version is implemented (if any).  See the Unix manual for the semantics.
 
    Availability: Unix.
@@ -461,8 +463,9 @@ These functions create new file objects. (See also :func:`open`.)
    .. index:: single: I/O control; buffering
 
    Return an open file object connected to the file descriptor *fd*.  The *mode*
-   and *bufsize* arguments have the same meaning as the corresponding arguments to
-   the built-in :func:`open` function.
+   and *bufsize* arguments have the same meaning as the corresponding arguments
+   to the built-in :func:`open` function.  If :func:`fdopen` raises an
+   exception, it leaves *fd* untouched (unclosed).
 
    Availability: Unix, Windows.
 
@@ -744,7 +747,7 @@ as internal buffering of data.
    by *how*: :const:`SEEK_SET` or ``0`` to set the position relative to the
    beginning of the file; :const:`SEEK_CUR` or ``1`` to set it relative to the
    current position; :const:`SEEK_END` or ``2`` to set it relative to the end of
-   the file.
+   the file. Return the new cursor position in bytes, starting from the beginning.
 
    Availability: Unix, Windows.
 
@@ -880,7 +883,7 @@ or `the MSDN <http://msdn.microsoft.com/en-us/library/z0kc8e3z.aspx>`_ on Window
           O_EXCL
           O_TRUNC
 
-   These constants are available on Unix and Windows.
+   The above constants are available on Unix and Windows.
 
 
 .. data:: O_DSYNC
@@ -889,10 +892,8 @@ or `the MSDN <http://msdn.microsoft.com/en-us/library/z0kc8e3z.aspx>`_ on Window
           O_NDELAY
           O_NONBLOCK
           O_NOCTTY
-          O_SHLOCK
-          O_EXLOCK
 
-   These constants are only available on Unix.
+   The above constants are only available on Unix.
 
 
 .. data:: O_BINARY
@@ -903,7 +904,7 @@ or `the MSDN <http://msdn.microsoft.com/en-us/library/z0kc8e3z.aspx>`_ on Window
           O_SEQUENTIAL
           O_TEXT
 
-   These constants are only available on Windows.
+   The above constants are only available on Windows.
 
 
 .. data:: O_ASYNC
@@ -911,9 +912,11 @@ or `the MSDN <http://msdn.microsoft.com/en-us/library/z0kc8e3z.aspx>`_ on Window
           O_DIRECTORY
           O_NOFOLLOW
           O_NOATIME
+          O_SHLOCK
+          O_EXLOCK
 
-   These constants are GNU extensions and not present if they are not defined by
-   the C library.
+   The above constants are extensions and not present if they are not
+   defined by the C library.
 
 
 .. _os-file-dir:
@@ -1219,9 +1222,16 @@ Files and Directories
 .. function:: mkdir(path[, mode])
 
    Create a directory named *path* with numeric mode *mode*. The default *mode* is
-   ``0777`` (octal).  On some systems, *mode* is ignored.  Where it is used, the
-   current umask value is first masked out.  If the directory already exists,
+   ``0777`` (octal).  If the directory already exists,
    :exc:`OSError` is raised.
+
+   .. _mkdir_modebits:
+
+   On some systems, *mode* is ignored.  Where it is used, the current umask
+   value is first masked out.  If bits other than the last 9 (i.e. the last 3
+   digits of the octal representation of the *mode*) are set, their meaning is
+   platform-dependent.  On some platforms, they are ignored and you should call
+   :func:`chmod` explicitly to set them.
 
    It is also possible to create temporary directories; see the
    :mod:`tempfile` module's :func:`tempfile.mkdtemp` function.
@@ -1238,8 +1248,10 @@ Files and Directories
    Recursive directory creation function.  Like :func:`mkdir`, but makes all
    intermediate-level directories needed to contain the leaf directory.  Raises an
    :exc:`error` exception if the leaf directory already exists or cannot be
-   created.  The default *mode* is ``0777`` (octal).  On some systems, *mode* is
-   ignored. Where it is used, the current umask value is first masked out.
+   created.  The default *mode* is ``0777`` (octal).
+
+   The *mode* parameter is passed to :func:`mkdir`; see :ref:`the mkdir()
+   description <mkdir_modebits>` for how it is interpreted.
 
    .. note::
 
@@ -1379,9 +1391,8 @@ Files and Directories
 
    .. versionchanged:: 2.3
       If :func:`stat_float_times` returns ``True``, the time values are floats, measuring
-      seconds. Fractions of a second may be reported if the system supports that. On
-      Mac OS, the times are always floats. See :func:`stat_float_times` for further
-      discussion.
+      seconds. Fractions of a second may be reported if the system supports that.
+      See :func:`stat_float_times` for further discussion.
 
    On some Unix systems (such as Linux), the following attributes may also be
    available:
@@ -1396,12 +1407,6 @@ Files and Directories
 
    * :attr:`st_gen` - file generation number
    * :attr:`st_birthtime` - time of file creation
-
-   On Mac OS systems, the following attributes may also be available:
-
-   * :attr:`st_rsize`
-   * :attr:`st_creator`
-   * :attr:`st_type`
 
    On RISCOS systems, the following attributes are also available:
 
@@ -1601,18 +1606,20 @@ Files and Directories
 
    If optional argument *topdown* is ``True`` or not specified, the triple for a
    directory is generated before the triples for any of its subdirectories
-   (directories are generated top-down).  If *topdown* is ``False``, the triple for a
-   directory is generated after the triples for all of its subdirectories
-   (directories are generated bottom-up).
+   (directories are generated top-down).  If *topdown* is ``False``, the triple
+   for a directory is generated after the triples for all of its subdirectories
+   (directories are generated bottom-up). No matter the value of *topdown*, the
+   list of subdirectories is retrieved before the tuples for the directory and
+   its subdirectories are generated.
 
    When *topdown* is ``True``, the caller can modify the *dirnames* list in-place
    (perhaps using :keyword:`del` or slice assignment), and :func:`walk` will only
    recurse into the subdirectories whose names remain in *dirnames*; this can be
    used to prune the search, impose a specific order of visiting, or even to inform
    :func:`walk` about directories the caller creates or renames before it resumes
-   :func:`walk` again.  Modifying *dirnames* when *topdown* is ``False`` is
-   ineffective, because in bottom-up mode the directories in *dirnames* are
-   generated before *dirpath* itself is generated.
+   :func:`walk` again.  Modifying *dirnames* when *topdown* is ``False`` has
+   no effect on the behavior of the walk, because in bottom-up mode the directories
+   in *dirnames* are generated before *dirpath* itself is generated.
 
    By default, errors from the :func:`listdir` call are ignored.  If optional
    argument *onerror* is specified, it should be a function; it will be called with
@@ -1935,6 +1942,10 @@ written in Python, such as a mail server's external command delivery program.
 
    Note that some platforms including FreeBSD <= 6.3, Cygwin and OS/2 EMX have
    known issues when using fork() from a thread.
+
+   .. warning::
+
+      See :mod:`ssl` for applications that use the SSL module with fork().
 
    Availability: Unix.
 

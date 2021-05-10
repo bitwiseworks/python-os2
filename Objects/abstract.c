@@ -259,7 +259,7 @@ PyObject_AsCharBuffer(PyObject *obj,
          pb->bf_getcharbuffer == NULL ||
          pb->bf_getsegcount == NULL) {
         PyErr_SetString(PyExc_TypeError,
-                        "expected a character buffer object");
+                        "expected a string or other character buffer object");
         return -1;
     }
     if ((*pb->bf_getsegcount)(obj,NULL) != 1) {
@@ -499,7 +499,7 @@ PyBuffer_ToContiguous(void *buf, Py_buffer *view, Py_ssize_t len, char fort)
 
     /* Otherwise a more elaborate scheme is needed */
 
-    /* XXX(nnorwitz): need to check for overflow! */
+    /* view->ndim <= 64 */
     indices = (Py_ssize_t *)PyMem_Malloc(sizeof(Py_ssize_t)*(view->ndim));
     if (indices == NULL) {
         PyErr_NoMemory();
@@ -521,10 +521,10 @@ PyBuffer_ToContiguous(void *buf, Py_buffer *view, Py_ssize_t len, char fort)
      */
     elements = len / view->itemsize;
     while (elements--) {
-        addone(view->ndim, indices, view->shape);
         ptr = PyBuffer_GetPointer(view, indices);
         memcpy(dest, ptr, view->itemsize);
         dest += view->itemsize;
+        addone(view->ndim, indices, view->shape);
     }
     PyMem_Free(indices);
     return 0;
@@ -550,7 +550,7 @@ PyBuffer_FromContiguous(Py_buffer *view, void *buf, Py_ssize_t len, char fort)
 
     /* Otherwise a more elaborate scheme is needed */
 
-    /* XXX(nnorwitz): need to check for overflow! */
+    /* view->ndim <= 64 */
     indices = (Py_ssize_t *)PyMem_Malloc(sizeof(Py_ssize_t)*(view->ndim));
     if (indices == NULL) {
         PyErr_NoMemory();
@@ -572,10 +572,10 @@ PyBuffer_FromContiguous(Py_buffer *view, void *buf, Py_ssize_t len, char fort)
      */
     elements = len / view->itemsize;
     while (elements--) {
-        addone(view->ndim, indices, view->shape);
         ptr = PyBuffer_GetPointer(view, indices);
         memcpy(ptr, src, view->itemsize);
         src += view->itemsize;
+        addone(view->ndim, indices, view->shape);
     }
 
     PyMem_Free(indices);
@@ -1492,14 +1492,13 @@ PyNumber_Index(PyObject *item)
     PyObject *result = NULL;
     if (item == NULL)
         return null_error();
-    if (PyInt_Check(item) || PyLong_Check(item)) {
+    if (_PyAnyInt_Check(item)) {
         Py_INCREF(item);
         return item;
     }
     if (PyIndex_Check(item)) {
         result = item->ob_type->tp_as_number->nb_index(item);
-        if (result &&
-            !PyInt_Check(result) && !PyLong_Check(result)) {
+        if (result && !_PyAnyInt_Check(result)) {
             PyErr_Format(PyExc_TypeError,
                          "__index__ returned non-(int,long) " \
                          "(type %.200s)",
@@ -1574,8 +1573,7 @@ _PyNumber_ConvertIntegralToInt(PyObject *integral, const char* error_format)
             return NULL;
     }
 
-    if (integral && (!PyInt_Check(integral) &&
-                     !PyLong_Check(integral))) {
+    if (integral && !_PyAnyInt_Check(integral)) {
         /* Don't go through tp_as_number->nb_int to avoid
            hitting the classic class fallback to __trunc__. */
         PyObject *int_func = PyObject_GetAttr(integral, int_name);
@@ -1586,8 +1584,7 @@ _PyNumber_ConvertIntegralToInt(PyObject *integral, const char* error_format)
         Py_DECREF(integral);
         integral = PyEval_CallObject(int_func, NULL);
         Py_DECREF(int_func);
-        if (integral && (!PyInt_Check(integral) &&
-                          !PyLong_Check(integral))) {
+        if (integral && !_PyAnyInt_Check(integral)) {
             goto non_integral_error;
         }
     }
@@ -1632,7 +1629,7 @@ PyNumber_Int(PyObject *o)
     if (m && m->nb_int) { /* This should include subclasses of int */
         /* Classic classes always take this branch. */
         PyObject *res = m->nb_int(o);
-        if (res && (!PyInt_Check(res) && !PyLong_Check(res))) {
+        if (res && !_PyAnyInt_Check(res)) {
             PyErr_Format(PyExc_TypeError,
                          "__int__ returned non-int (type %.200s)",
                          res->ob_type->tp_name);
@@ -1641,7 +1638,7 @@ PyNumber_Int(PyObject *o)
         }
         return res;
     }
-    if (PyInt_Check(o)) { /* A int subclass without nb_int */
+    if (PyInt_Check(o)) { /* An int subclass without nb_int */
         PyIntObject *io = (PyIntObject*)o;
         return PyInt_FromLong(io->ob_ival);
     }
@@ -1666,8 +1663,17 @@ PyNumber_Int(PyObject *o)
                                  PyUnicode_GET_SIZE(o),
                                  10);
 #endif
-    if (!PyObject_AsCharBuffer(o, &buffer, &buffer_len))
-        return int_from_string((char*)buffer, buffer_len);
+    if (!PyObject_AsCharBuffer(o, &buffer, &buffer_len)) {
+        PyObject *result, *str;
+
+        /* Copy to NUL-terminated buffer. */
+        str = PyString_FromStringAndSize((const char *)buffer, buffer_len);
+        if (str == NULL)
+            return NULL;
+        result = int_from_string(PyString_AS_STRING(str), buffer_len);
+        Py_DECREF(str);
+        return result;
+    }
 
     return type_error("int() argument must be a string or a "
                       "number, not '%.200s'", o);
@@ -1765,9 +1771,17 @@ PyNumber_Long(PyObject *o)
                                   PyUnicode_GET_SIZE(o),
                                   10);
 #endif
-    if (!PyObject_AsCharBuffer(o, &buffer, &buffer_len))
-        return long_from_string(buffer, buffer_len);
+    if (!PyObject_AsCharBuffer(o, &buffer, &buffer_len)) {
+        PyObject *result, *str;
 
+        /* Copy to NUL-terminated buffer. */
+        str = PyString_FromStringAndSize((const char *)buffer, buffer_len);
+        if (str == NULL)
+            return NULL;
+        result = long_from_string(PyString_AS_STRING(str), buffer_len);
+        Py_DECREF(str);
+        return result;
+    }
     return type_error("long() argument must be a string or a "
                       "number, not '%.200s'", o);
 }
@@ -2169,7 +2183,7 @@ PySequence_Tuple(PyObject *v)
         Py_INCREF(v);
         return v;
     }
-    if (PyList_Check(v))
+    if (PyList_CheckExact(v))
         return PyList_AsTuple(v);
 
     /* Get iterator. */
@@ -2194,21 +2208,22 @@ PySequence_Tuple(PyObject *v)
             break;
         }
         if (j >= n) {
-            Py_ssize_t oldn = n;
+            size_t newn = (size_t)n;
             /* The over-allocation strategy can grow a bit faster
                than for lists because unlike lists the
                over-allocation isn't permanent -- we reclaim
                the excess before the end of this routine.
                So, grow by ten and then add 25%.
             */
-            n += 10;
-            n += n >> 2;
-            if (n < oldn) {
+            newn += 10u;
+            newn += newn >> 2;
+            if (newn > PY_SSIZE_T_MAX) {
                 /* Check for overflow */
                 PyErr_NoMemory();
                 Py_DECREF(item);
                 goto Fail;
             }
+            n = (Py_ssize_t)newn;
             if (_PyTuple_Resize(&result, n) != 0) {
                 Py_DECREF(item);
                 goto Fail;
@@ -2617,10 +2632,8 @@ PyObject_CallMethod(PyObject *o, char *name, char *format, ...)
         return null_error();
 
     func = PyObject_GetAttrString(o, name);
-    if (func == NULL) {
-        PyErr_SetString(PyExc_AttributeError, name);
-        return 0;
-    }
+    if (func == NULL)
+        return NULL;
 
     if (!PyCallable_Check(func)) {
         type_error("attribute of type '%.200s' is not callable", func);
@@ -2656,10 +2669,8 @@ _PyObject_CallMethod_SizeT(PyObject *o, char *name, char *format, ...)
         return null_error();
 
     func = PyObject_GetAttrString(o, name);
-    if (func == NULL) {
-        PyErr_SetString(PyExc_AttributeError, name);
-        return 0;
-    }
+    if (func == NULL)
+        return NULL;
 
     if (!PyCallable_Check(func)) {
         type_error("attribute of type '%.200s' is not callable", func);

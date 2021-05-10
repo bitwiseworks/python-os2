@@ -221,7 +221,7 @@ _Py_Mangle(PyObject *privateobj, PyObject *ident)
     }
     plen = strlen(p);
 
-    if (plen + nlen >= PY_SSIZE_T_MAX - 1) {
+    if (nlen >= PY_SSIZE_T_MAX - 1 - plen) {
         PyErr_SetString(PyExc_OverflowError,
                         "private identifier too large to be mangled");
         return NULL;
@@ -233,7 +233,7 @@ _Py_Mangle(PyObject *privateobj, PyObject *ident)
     /* ident = "_" + p[:plen] + name # i.e. 1+plen+nlen bytes */
     buffer = PyString_AS_STRING(ident);
     buffer[0] = '_';
-    strncpy(buffer+1, p, plen);
+    memcpy(buffer+1, p, plen);
     strcpy(buffer+1+plen, name);
     return ident;
 }
@@ -338,7 +338,7 @@ list2dict(PyObject *list)
             return NULL;
         }
         k = PyList_GET_ITEM(list, i);
-        k = PyTuple_Pack(2, k, k->ob_type);
+        k = _PyCode_ConstantKey(k);
         if (k == NULL || PyDict_SetItem(dict, k, v) < 0) {
             Py_XDECREF(k);
             Py_DECREF(v);
@@ -399,7 +399,7 @@ dictbytype(PyObject *src, int scope_type, int flag, int offset)
                 return NULL;
             }
             i++;
-            tuple = PyTuple_Pack(2, k, k->ob_type);
+            tuple = _PyCode_ConstantKey(k);
             if (!tuple || PyDict_SetItem(dest, tuple, item) < 0) {
                 Py_DECREF(sorted_keys);
                 Py_DECREF(item);
@@ -944,49 +944,8 @@ compiler_add_o(struct compiler *c, PyObject *dict, PyObject *o)
 {
     PyObject *t, *v;
     Py_ssize_t arg;
-    double d;
 
-    /* necessary to make sure types aren't coerced (e.g., int and long) */
-    /* _and_ to distinguish 0.0 from -0.0 e.g. on IEEE platforms */
-    if (PyFloat_Check(o)) {
-        d = PyFloat_AS_DOUBLE(o);
-        /* all we need is to make the tuple different in either the 0.0
-         * or -0.0 case from all others, just to avoid the "coercion".
-         */
-        if (d == 0.0 && copysign(1.0, d) < 0.0)
-            t = PyTuple_Pack(3, o, o->ob_type, Py_None);
-        else
-            t = PyTuple_Pack(2, o, o->ob_type);
-    }
-#ifndef WITHOUT_COMPLEX
-    else if (PyComplex_Check(o)) {
-        Py_complex z;
-        int real_negzero, imag_negzero;
-        /* For the complex case we must make complex(x, 0.)
-           different from complex(x, -0.) and complex(0., y)
-           different from complex(-0., y), for any x and y.
-           All four complex zeros must be distinguished.*/
-        z = PyComplex_AsCComplex(o);
-        real_negzero = z.real == 0.0 && copysign(1.0, z.real) < 0.0;
-        imag_negzero = z.imag == 0.0 && copysign(1.0, z.imag) < 0.0;
-        if (real_negzero && imag_negzero) {
-            t = PyTuple_Pack(5, o, o->ob_type,
-                             Py_None, Py_None, Py_None);
-        }
-        else if (imag_negzero) {
-            t = PyTuple_Pack(4, o, o->ob_type, Py_None, Py_None);
-        }
-        else if (real_negzero) {
-            t = PyTuple_Pack(3, o, o->ob_type, Py_None);
-        }
-        else {
-            t = PyTuple_Pack(2, o, o->ob_type);
-        }
-    }
-#endif /* WITHOUT_COMPLEX */
-    else {
-        t = PyTuple_Pack(2, o, o->ob_type);
-    }
+    t = _PyCode_ConstantKey(o);
     if (t == NULL)
         return -1;
 
@@ -1114,6 +1073,15 @@ compiler_addop_j(struct compiler *c, int opcode, basicblock *b, int absolute)
 #define ADDOP_O(C, OP, O, TYPE) { \
     if (!compiler_addop_o((C), (OP), (C)->u->u_ ## TYPE, (O))) \
         return 0; \
+}
+
+/* Same as ADDOP_O, but steals a reference. */
+#define ADDOP_N(C, OP, O, TYPE) { \
+    if (!compiler_addop_o((C), (OP), (C)->u->u_ ## TYPE, (O))) { \
+        Py_DECREF((O)); \
+        return 0; \
+    } \
+    Py_DECREF((O)); \
 }
 
 #define ADDOP_NAME(C, OP, O, TYPE) { \
@@ -1271,11 +1239,11 @@ get_ref_type(struct compiler *c, PyObject *name)
                       "symbols: %s\nlocals: %s\nglobals: %s",
                       PyString_AS_STRING(name),
                       PyString_AS_STRING(c->u->u_name),
-                      PyObject_REPR(c->u->u_ste->ste_id),
+                      PyString_AS_STRING(PyObject_Repr(c->u->u_ste->ste_id)),
                       c->c_filename,
-                      PyObject_REPR(c->u->u_ste->ste_symbols),
-                      PyObject_REPR(c->u->u_varnames),
-                      PyObject_REPR(c->u->u_names)
+                      PyString_AS_STRING(PyObject_Repr(c->u->u_ste->ste_symbols)),
+                      PyString_AS_STRING(PyObject_Repr(c->u->u_varnames)),
+                      PyString_AS_STRING(PyObject_Repr(c->u->u_names))
         );
         Py_FatalError(buf);
     }
@@ -1287,7 +1255,7 @@ static int
 compiler_lookup_arg(PyObject *dict, PyObject *name)
 {
     PyObject *k, *v;
-    k = PyTuple_Pack(2, name, name->ob_type);
+    k = _PyCode_ConstantKey(name);
     if (k == NULL)
         return -1;
     v = PyDict_GetItem(dict, k);
@@ -1327,11 +1295,11 @@ compiler_make_closure(struct compiler *c, PyCodeObject *co, int args)
         if (arg == -1) {
             printf("lookup %s in %s %d %d\n"
                 "freevars of %s: %s\n",
-                PyObject_REPR(name),
+                PyString_AS_STRING(PyObject_Repr(name)),
                 PyString_AS_STRING(c->u->u_name),
                 reftype, arg,
                 PyString_AS_STRING(co->co_name),
-                PyObject_REPR(co->co_freevars));
+                PyString_AS_STRING(PyObject_Repr(co->co_freevars)));
             Py_FatalError("compiler_make_closure()");
         }
         ADDOP_I(c, LOAD_CLOSURE, arg);
@@ -1455,9 +1423,8 @@ compiler_class(struct compiler *c, stmt_ty s)
     if (!compiler_enter_scope(c, s->v.ClassDef.name, (void *)s,
                               s->lineno))
         return 0;
-    Py_XDECREF(c->u->u_private);
-    c->u->u_private = s->v.ClassDef.name;
-    Py_INCREF(c->u->u_private);
+    Py_INCREF(s->v.ClassDef.name);
+    Py_XSETREF(c->u->u_private, s->v.ClassDef.name);
     str = PyString_InternFromString("__name__");
     if (!str || !compiler_nameop(c, str, Load)) {
         Py_XDECREF(str);
@@ -1716,10 +1683,9 @@ compiler_while(struct compiler *c, stmt_ty s)
        if there is no else clause ?
     */
 
-    if (constant == -1) {
+    if (constant == -1)
         compiler_use_next_block(c, anchor);
-        ADDOP(c, POP_BLOCK);
-    }
+    ADDOP(c, POP_BLOCK);
     compiler_pop_fblock(c, LOOP, loop);
     if (orelse != NULL) /* what if orelse is just pass? */
         VISIT_SEQ(c, stmt, s->v.While.orelse);
@@ -1932,9 +1898,8 @@ compiler_import_as(struct compiler *c, identifier name, identifier asname)
             attr = PyString_FromStringAndSize(src,
                                 dot ? dot - src : strlen(src));
             if (!attr)
-                return -1;
-            ADDOP_O(c, LOAD_ATTR, attr, names);
-            Py_DECREF(attr);
+                return 0;
+            ADDOP_N(c, LOAD_ATTR, attr, names);
             src = dot + 1;
         }
     }
@@ -1966,8 +1931,7 @@ compiler_import(struct compiler *c, stmt_ty s)
         if (level == NULL)
             return 0;
 
-        ADDOP_O(c, LOAD_CONST, level, consts);
-        Py_DECREF(level);
+        ADDOP_N(c, LOAD_CONST, level, consts);
         ADDOP_O(c, LOAD_CONST, Py_None, consts);
         ADDOP_NAME(c, IMPORT_NAME, alias->name, names);
 
@@ -1980,9 +1944,12 @@ compiler_import(struct compiler *c, stmt_ty s)
             identifier tmp = alias->name;
             const char *base = PyString_AS_STRING(alias->name);
             char *dot = strchr(base, '.');
-            if (dot)
+            if (dot) {
                 tmp = PyString_FromStringAndSize(base,
                                                  dot - base);
+                if (tmp == NULL)
+                    return 0;
+            }
             r = compiler_nameop(c, tmp, Store);
             if (dot) {
                 Py_DECREF(tmp);
@@ -1999,8 +1966,7 @@ compiler_from_import(struct compiler *c, stmt_ty s)
 {
     int i, n = asdl_seq_LEN(s->v.ImportFrom.names);
 
-    PyObject *names = PyTuple_New(n);
-    PyObject *level;
+    PyObject *level, *names;
     static PyObject *empty_string;
 
     if (!empty_string) {
@@ -2009,9 +1975,6 @@ compiler_from_import(struct compiler *c, stmt_ty s)
             return 0;
     }
 
-    if (!names)
-        return 0;
-
     if (s->v.ImportFrom.level == 0 && c->c_flags &&
         !(c->c_flags->cf_flags & CO_FUTURE_ABSOLUTE_IMPORT))
         level = PyInt_FromLong(-1);
@@ -2019,9 +1982,13 @@ compiler_from_import(struct compiler *c, stmt_ty s)
         level = PyInt_FromLong(s->v.ImportFrom.level);
 
     if (!level) {
-        Py_DECREF(names);
         return 0;
     }
+    ADDOP_N(c, LOAD_CONST, level, consts);
+
+    names = PyTuple_New(n);
+    if (!names)
+        return 0;
 
     /* build up the names */
     for (i = 0; i < n; i++) {
@@ -2032,16 +1999,12 @@ compiler_from_import(struct compiler *c, stmt_ty s)
 
     if (s->lineno > c->c_future->ff_lineno && s->v.ImportFrom.module &&
         !strcmp(PyString_AS_STRING(s->v.ImportFrom.module), "__future__")) {
-        Py_DECREF(level);
         Py_DECREF(names);
         return compiler_error(c, "from __future__ imports must occur "
                               "at the beginning of the file");
     }
+    ADDOP_N(c, LOAD_CONST, names, consts);
 
-    ADDOP_O(c, LOAD_CONST, level, consts);
-    Py_DECREF(level);
-    ADDOP_O(c, LOAD_CONST, names, consts);
-    Py_DECREF(names);
     if (s->v.ImportFrom.module) {
         ADDOP_NAME(c, IMPORT_NAME, s->v.ImportFrom.module, names);
     }
@@ -2064,7 +2027,6 @@ compiler_from_import(struct compiler *c, stmt_ty s)
             store_name = alias->asname;
 
         if (!compiler_nameop(c, store_name, Store)) {
-            Py_DECREF(names);
             return 0;
         }
     }
@@ -2431,8 +2393,7 @@ compiler_nameop(struct compiler *c, identifier name, expr_context_ty ctx)
                             "param invalid for local variable");
             return 0;
         }
-        ADDOP_O(c, op, mangled, varnames);
-        Py_DECREF(mangled);
+        ADDOP_N(c, op, mangled, varnames);
         return 1;
     case OP_GLOBAL:
         switch (ctx) {
@@ -2932,9 +2893,9 @@ expr_constant(expr_ty e)
        BLOCK
    finally:
        if an exception was raised:
-       exc = copy of (exception, instance, traceback)
+           exc = copy of (exception, instance, traceback)
        else:
-       exc = (None, None, None)
+           exc = (None, None, None)
        exit(*exc)
  */
 static int
@@ -3187,7 +3148,7 @@ compiler_push_fblock(struct compiler *c, enum fblocktype t, basicblock *b)
 {
     struct fblockinfo *f;
     if (c->u->u_nfblocks >= CO_MAXBLOCKS) {
-        PyErr_SetString(PyExc_SystemError,
+        PyErr_SetString(PyExc_SyntaxError,
                         "too many statically nested blocks");
         return 0;
     }
@@ -3483,12 +3444,16 @@ stackdepth_walk(struct compiler *c, basicblock *b, int depth, int maxdepth)
             target_depth = depth;
             if (instr->i_opcode == FOR_ITER) {
                 target_depth = depth-2;
-            } else if (instr->i_opcode == SETUP_FINALLY ||
-                       instr->i_opcode == SETUP_EXCEPT) {
+            }
+            else if (instr->i_opcode == SETUP_FINALLY ||
+                     instr->i_opcode == SETUP_EXCEPT) {
                 target_depth = depth+3;
                 if (target_depth > maxdepth)
                     maxdepth = target_depth;
             }
+            else if (instr->i_opcode == JUMP_IF_TRUE_OR_POP ||
+                     instr->i_opcode == JUMP_IF_FALSE_OR_POP)
+                depth = depth - 1;
             maxdepth = stackdepth_walk(c, instr->i_target,
                                        target_depth, maxdepth);
             if (instr->i_opcode == JUMP_ABSOLUTE ||
@@ -3789,7 +3754,7 @@ dict_keys_inorder(PyObject *dict, int offset)
         i = PyInt_AS_LONG(v);
         /* The keys of the dictionary are tuples. (see compiler_add_o)
            The object we want is always first, though. */
-        k = PyTuple_GET_ITEM(k, 0);
+        k = PyTuple_GET_ITEM(k, 1);
         Py_INCREF(k);
         assert((i - offset) < size);
         assert((i - offset) >= 0);

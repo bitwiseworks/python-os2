@@ -245,12 +245,9 @@ class MimeTypes:
                     ctype = _winreg.EnumKey(mimedb, i)
                 except EnvironmentError:
                     break
-                try:
-                    ctype = ctype.encode(default_encoding) # omit in 3.x!
-                except UnicodeEncodeError:
-                    pass
                 else:
-                    yield ctype
+                    if '\0' not in ctype:
+                        yield ctype
                 i += 1
 
         default_encoding = sys.getdefaultencoding()
@@ -268,7 +265,6 @@ class MimeTypes:
                             continue
                         try:
                             mimetype = mimetype.encode(default_encoding)
-                            subkeyname = subkeyname.encode(default_encoding)
                         except UnicodeEncodeError:
                             continue
                         self.add_type(mimetype, subkeyname, strict)
@@ -373,9 +369,10 @@ def read_mime_types(file):
         f = open(file)
     except IOError:
         return None
-    db = MimeTypes()
-    db.readfp(f, True)
-    return db.types_map[True]
+    with f:
+        db = MimeTypes()
+        db.readfp(f, True)
+        return db.types_map[True]
 
 
 def _default_mime_types():
@@ -385,6 +382,7 @@ def _default_mime_types():
     global common_types
 
     suffix_map = {
+        '.svgz': '.svg.gz',
         '.tgz': '.tar.gz',
         '.taz': '.tar.gz',
         '.tz': '.tar.gz',
@@ -423,6 +421,7 @@ def _default_mime_types():
         '.cpio'   : 'application/x-cpio',
         '.csh'    : 'application/x-csh',
         '.css'    : 'text/css',
+        '.csv'    : 'text/csv',
         '.dll'    : 'application/octet-stream',
         '.doc'    : 'application/msword',
         '.dot'    : 'application/msword',
@@ -443,6 +442,7 @@ def _default_mime_types():
         '.jpeg'   : 'image/jpeg',
         '.jpg'    : 'image/jpeg',
         '.js'     : 'application/javascript',
+        '.json'   : 'application/json',
         '.ksh'    : 'text/plain',
         '.latex'  : 'application/x-latex',
         '.m1v'    : 'video/mpeg',
@@ -451,6 +451,7 @@ def _default_mime_types():
         '.mht'    : 'message/rfc822',
         '.mhtml'  : 'message/rfc822',
         '.mif'    : 'application/x-mif',
+        '.mjs'    : 'application/javascript',
         '.mov'    : 'video/quicktime',
         '.movie'  : 'video/x-sgi-movie',
         '.mp2'    : 'audio/mpeg',
@@ -502,6 +503,7 @@ def _default_mime_types():
         '.src'    : 'application/x-wais-source',
         '.sv4cpio': 'application/x-sv4cpio',
         '.sv4crc' : 'application/x-sv4crc',
+        '.svg'    : 'image/svg+xml',
         '.swf'    : 'application/x-shockwave-flash',
         '.t'      : 'application/x-troff',
         '.tar'    : 'application/x-tar',
@@ -517,6 +519,7 @@ def _default_mime_types():
         '.ustar'  : 'application/x-ustar',
         '.vcf'    : 'text/x-vcard',
         '.wav'    : 'audio/x-wav',
+        '.webm'   : 'video/webm',
         '.wiz'    : 'application/msword',
         '.wsdl'   : 'application/xml',
         '.xbm'    : 'image/x-xbitmap',

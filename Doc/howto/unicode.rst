@@ -7,7 +7,7 @@
 This HOWTO discusses Python 2.x's support for Unicode, and explains
 various problems that people commonly encounter when trying to work
 with Unicode.  For the Python 3 version, see
-<http://docs.python.org/py3k/howto/unicode.html>.
+<https://docs.python.org/3/howto/unicode.html>.
 
 Introduction to Unicode
 =======================
@@ -32,8 +32,8 @@ For a while people just wrote programs that didn't display accents.  I remember
 looking at Apple ][ BASIC programs, published in French-language publications in
 the mid-1980s, that had lines like these::
 
-   PRINT "FICHIER EST COMPLETE."
-   PRINT "CARACTERE NON ACCEPTE."
+   PRINT "MISE A JOUR TERMINEE"
+   PRINT "PARAMETRES ENREGISTRES"
 
 Those messages should contain accents, and they just look wrong to someone who
 can read French.
@@ -42,14 +42,14 @@ In the 1980s, almost all personal computers were 8-bit, meaning that bytes could
 hold values ranging from 0 to 255.  ASCII codes only went up to 127, so some
 machines assigned values between 128 and 255 to accented characters.  Different
 machines had different codes, however, which led to problems exchanging files.
-Eventually various commonly used sets of values for the 128-255 range emerged.
-Some were true standards, defined by the International Standards Organization,
-and some were **de facto** conventions that were invented by one company or
-another and managed to catch on.
+Eventually various commonly used sets of values for the 128--255 range emerged.
+Some were true standards, defined by the International Organization for
+Standardization, and some were *de facto* conventions that were invented by one
+company or another and managed to catch on.
 
 255 characters aren't very many.  For example, you can't fit both the accented
 characters used in Western Europe and the Cyrillic alphabet used for Russian
-into the 128-255 range because there are more than 127 such characters.
+into the 128--255 range because there are more than 128 such characters.
 
 You could write files using different codes (all your Russian files in a coding
 system called KOI8, all your French files in a different coding system called
@@ -62,7 +62,7 @@ bits means you have 2^16 = 65,536 distinct values available, making it possible
 to represent many different characters from many different alphabets; an initial
 goal was to have Unicode contain the alphabets for every single human language.
 It turns out that even 16 bits isn't enough to meet that goal, and the modern
-Unicode specification uses a wider range of codes, 0-1,114,111 (0x10ffff in
+Unicode specification uses a wider range of codes, 0--1,114,111 (0x10ffff in
 base-16).
 
 There's a related ISO standard, ISO 10646.  Unicode and ISO 10646 were
@@ -116,7 +116,7 @@ Encodings
 
 To summarize the previous section: a Unicode string is a sequence of code
 points, which are numbers from 0 to 0x10ffff.  This sequence needs to be
-represented as a set of bytes (meaning, values from 0-255) in memory.  The rules
+represented as a set of bytes (meaning, values from 0--255) in memory.  The rules
 for translating a Unicode string into a sequence of bytes are called an
 **encoding**.
 
@@ -163,7 +163,7 @@ simple; for each code point:
    case.)
 
 Latin-1, also known as ISO-8859-1, is a similar encoding.  Unicode code points
-0-255 are identical to the Latin-1 values, so converting to this encoding simply
+0--255 are identical to the Latin-1 values, so converting to this encoding simply
 requires converting code points to byte values; if a code point larger than 255
 is encountered, the string can't be encoded into Latin-1.
 
@@ -211,7 +211,7 @@ origin and development of Unicode.
 
 To help understand the standard, Jukka Korpela has written an introductory guide
 to reading the Unicode character tables, available at
-<http://www.cs.tut.fi/~jkorpela/unicode/guide.html>.
+<https://www.cs.tut.fi/~jkorpela/unicode/guide.html>.
 
 Another good introductory article was written by Joel Spolsky
 <http://www.joelonsoftware.com/articles/Unicode.html>.
@@ -435,7 +435,7 @@ When you run it with Python 2.4, it will output the following warning::
     amk:~$ python2.4 p263.py
     sys:1: DeprecationWarning: Non-ASCII character '\xe9'
          in file p263.py on line 2, but no encoding declared;
-         see http://www.python.org/peps/pep-0263.html for details
+         see https://www.python.org/peps/pep-0263.html for details
 
 Python 2.5 and higher are stricter and will produce a syntax error::
 
@@ -443,7 +443,7 @@ Python 2.5 and higher are stricter and will produce a syntax error::
     File "/tmp/p263.py", line 2
     SyntaxError: Non-ASCII character '\xc3' in file /tmp/p263.py
       on line 2, but no encoding declared; see
-      http://www.python.org/peps/pep-0263.html for details
+      https://www.python.org/peps/pep-0263.html for details
 
 
 Unicode Properties
@@ -500,7 +500,7 @@ The documentation for the :mod:`codecs` module.
 
 Marc-André Lemburg gave a presentation at EuroPython 2002 titled "Python and
 Unicode".  A PDF version of his slides is available at
-<http://downloads.egenix.com/python/Unicode-EPC2002-Talk.pdf>, and is an
+<https://downloads.egenix.com/python/Unicode-EPC2002-Talk.pdf>, and is an
 excellent overview of the design of Python's Unicode features.
 
 
@@ -619,7 +619,9 @@ default filesystem encoding is UTF-8, running the following program::
    print os.listdir('.')
    print os.listdir(u'.')
 
-will produce the following output::
+will produce the following output:
+
+.. code-block:: shell-session
 
    amk:~$ python t.py
    ['.svn', 'filename\xe4\x94\x80abc', ...]
@@ -687,7 +689,7 @@ References
 
 The PDF slides for Marc-André Lemburg's presentation "Writing Unicode-aware
 Applications in Python" are available at
-<http://downloads.egenix.com/python/LSM2005-Developing-Unicode-aware-applications-in-Python.pdf>
+<https://downloads.egenix.com/python/LSM2005-Developing-Unicode-aware-applications-in-Python.pdf>
 and discuss questions of character encodings as well as how to internationalize
 and localize an application.
 
