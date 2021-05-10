@@ -1,6 +1,9 @@
-dnl ***********************************************
-dnl * Please run autoreconf to test your changes! *
-dnl ***********************************************
+dnl ***************************************************
+dnl * Please run autoreconf -if to test your changes! *
+dnl ***************************************************
+dnl
+dnl Python's configure script requires autoconf 2.69 and autoconf-archive.
+dnl
 
 # Set VERSION so we only need to edit in one place (i.e., here)
 m4_define(PYTHON_VERSION, 3.9)
@@ -9,7 +12,11 @@ AC_PREREQ([2.69])
 
 AC_INIT([python],[PYTHON_VERSION],[https://bugs.python.org/])
 
-AC_CONFIG_MACRO_DIR(m4)
+m4_ifdef(
+    [AX_C_FLOAT_WORDS_BIGENDIAN],
+    [],
+    [AC_MSG_ERROR([Please install autoconf-archive package and re-run autoreconf])]
+)
 
 AC_SUBST(BASECPPFLAGS)
 if test "$srcdir" != . -a "$srcdir" != "$(pwd)"; then
@@ -213,12 +220,14 @@ then
 fi
 
 AC_SUBST(LIPO_32BIT_FLAGS)
+AC_SUBST(LIPO_INTEL64_FLAGS)
 AC_MSG_CHECKING(for --with-universal-archs)
 AC_ARG_WITH(universal-archs,
     AS_HELP_STRING([--with-universal-archs=ARCH],
-                   [specify the kind of universal binary that should be created. this option is
-                    only valid when --enable-universalsdk is set; options are:
-                    ("universal2", "32-bit", "64-bit", "3-way", "intel", "intel-32", "intel-64", or "all")
+                   [specify the kind of macOS universal binary that should be created.
+                    This option is only valid when --enable-universalsdk is set; options are:
+                    ("universal2", "intel-64", "intel-32", "intel", "32-bit",
+                    "64-bit", "3-way", or "all")
                     see Mac/README.rst]),
 [
 	UNIVERSAL_ARCHS="$withval"
@@ -1870,6 +1879,7 @@ yes)
             AC_MSG_RESULT($CC)
         fi
 
+        LIPO_INTEL64_FLAGS=""
         if test "${enable_universalsdk}"
         then
             case "$UNIVERSAL_ARCHS" in
@@ -1891,8 +1901,9 @@ yes)
             universal2)
                UNIVERSAL_ARCH_FLAGS="-arch arm64 -arch x86_64"
                LIPO_32BIT_FLAGS=""
+               LIPO_INTEL64_FLAGS="-extract x86_64"
                ARCH_RUN_32BIT="true"
-		;;
+               ;;
             intel)
                UNIVERSAL_ARCH_FLAGS="-arch i386 -arch x86_64"
                LIPO_32BIT_FLAGS="-extract i386"
