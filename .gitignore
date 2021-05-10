@@ -87,3 +87,8 @@ coverage/
 externals/
 htmlcov/
 gmon.out
+
+#ignore regenerated files
+configure
+pygonfig.h.in
+pyconfig.h.in~
