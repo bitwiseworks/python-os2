@@ -90,5 +90,5 @@ gmon.out
 
 #ignore regenerated files
 configure
-pygonfig.h.in
+pyconfig.h.in
 pyconfig.h.in~
