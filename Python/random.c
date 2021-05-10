@@ -426,7 +426,7 @@ _PyRandom_Fini(void)
         CryptReleaseContext(hCryptProv, 0);
         hCryptProv = 0;
     }
-#elif defined(PY_GETENTROPY)
+#elif defined(PY_GETENTROPY) || (__OS2__)
     /* nothing to clean */
 #else
     dev_urandom_close();
