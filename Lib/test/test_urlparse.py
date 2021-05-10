@@ -1,6 +1,6 @@
-#! /usr/bin/env python
-
 from test import test_support
+import sys
+import unicodedata
 import unittest
 import urlparse
 
@@ -24,6 +24,49 @@ parse_qsl_test_cases = [
     ("&a=b", [('a', 'b')]),
     ("a=a+b&b=b+c", [('a', 'a b'), ('b', 'b c')]),
     ("a=1&a=2", [('a', '1'), ('a', '2')]),
+    (";", []),
+    (";;", []),
+    (";a=b", [('a', 'b')]),
+    ("a=a+b;b=b+c", [('a', 'a b'), ('b', 'b c')]),
+    ("a=1;a=2", [('a', '1'), ('a', '2')]),
+    (b";", []),
+    (b";;", []),
+    (b";a=b", [(b'a', b'b')]),
+    (b"a=a+b;b=b+c", [(b'a', b'a b'), (b'b', b'b c')]),
+    (b"a=1;a=2", [(b'a', b'1'), (b'a', b'2')]),
+]
+
+parse_qs_test_cases = [
+    ("", {}),
+    ("&", {}),
+    ("&&", {}),
+    ("=", {'': ['']}),
+    ("=a", {'': ['a']}),
+    ("a", {'a': ['']}),
+    ("a=", {'a': ['']}),
+    ("&a=b", {'a': ['b']}),
+    ("a=a+b&b=b+c", {'a': ['a b'], 'b': ['b c']}),
+    ("a=1&a=2", {'a': ['1', '2']}),
+    (b"", {}),
+    (b"&", {}),
+    (b"&&", {}),
+    (b"=", {b'': [b'']}),
+    (b"=a", {b'': [b'a']}),
+    (b"a", {b'a': [b'']}),
+    (b"a=", {b'a': [b'']}),
+    (b"&a=b", {b'a': [b'b']}),
+    (b"a=a+b&b=b+c", {b'a': [b'a b'], b'b': [b'b c']}),
+    (b"a=1&a=2", {b'a': [b'1', b'2']}),
+    (";", {}),
+    (";;", {}),
+    (";a=b", {'a': ['b']}),
+    ("a=a+b;b=b+c", {'a': ['a b'], 'b': ['b c']}),
+    ("a=1;a=2", {'a': ['1', '2']}),
+    (b";", {}),
+    (b";;", {}),
+    (b";a=b", {b'a': [b'b']}),
+    (b"a=a+b;b=b+c", {b'a': [b'a b'], b'b': [b'b c']}),
+    (b"a=1;a=2", {b'a': [b'1', b'2']}),
 ]
 
 class UrlParseTestCase(unittest.TestCase):
@@ -88,6 +131,15 @@ class UrlParseTestCase(unittest.TestCase):
             self.assertEqual(result, expect_without_blanks,
                     "Error parsing %r" % orig)
 
+    def test_qs(self):
+        for orig, expect in parse_qs_test_cases:
+            result = urlparse.parse_qs(orig, keep_blank_values=True)
+            self.assertEqual(result, expect, "Error parsing %r" % orig)
+            expect_without_blanks = dict(
+                    [(v, expect[v]) for v in expect if len(expect[v][0])])
+            result = urlparse.parse_qs(orig, keep_blank_values=False)
+            self.assertEqual(result, expect_without_blanks,
+                    "Error parsing %r" % orig)
 
     def test_roundtrips(self):
         testcases = [
@@ -364,6 +416,16 @@ class UrlParseTestCase(unittest.TestCase):
             ('http://[::12.34.56.78]/foo/', '::12.34.56.78', None),
             ('http://[::ffff:12.34.56.78]/foo/',
              '::ffff:12.34.56.78', None),
+            ('http://Test.python.org:/foo/', 'test.python.org', None),
+            ('http://12.34.56.78:/foo/', '12.34.56.78', None),
+            ('http://[::1]:/foo/', '::1', None),
+            ('http://[dead:beef::1]:/foo/', 'dead:beef::1', None),
+            ('http://[dead:beef::]:/foo/', 'dead:beef::', None),
+            ('http://[dead:beef:cafe:5417:affe:8FA3:deaf:feed]:/foo/',
+             'dead:beef:cafe:5417:affe:8fa3:deaf:feed', None),
+            ('http://[::12.34.56.78]:/foo/', '::12.34.56.78', None),
+            ('http://[::ffff:12.34.56.78]:/foo/',
+             '::ffff:12.34.56.78', None),
             ]:
             urlparsed = urlparse.urlparse(url)
             self.assertEqual((urlparsed.hostname, urlparsed.port) , (hostname, port))
@@ -563,6 +625,45 @@ class UrlParseTestCase(unittest.TestCase):
         self.assertEqual(urlparse.urlparse("https:"),('https','','','','',''))
         self.assertEqual(urlparse.urlparse("http://www.python.org:80"),
                 ('http','www.python.org:80','','','',''))
+
+    def test_urlsplit_normalization(self):
+        # Certain characters should never occur in the netloc,
+        # including under normalization.
+        # Ensure that ALL of them are detected and cause an error
+        illegal_chars = u'/:#?@'
+        hex_chars = {'{:04X}'.format(ord(c)) for c in illegal_chars}
+        denorm_chars = [
+            c for c in map(unichr, range(128, sys.maxunicode))
+            if (hex_chars & set(unicodedata.decomposition(c).split()))
+            and c not in illegal_chars
+        ]
+        # Sanity check that we found at least one such character
+        self.assertIn(u'\u2100', denorm_chars)
+        self.assertIn(u'\uFF03', denorm_chars)
+
+        # bpo-36742: Verify port separators are ignored when they
+        # existed prior to decomposition
+        urlparse.urlsplit(u'http://\u30d5\u309a:80')
+        with self.assertRaises(ValueError):
+            urlparse.urlsplit(u'http://\u30d5\u309a\ufe1380')
+
+        for scheme in [u"http", u"https", u"ftp"]:
+            for netloc in [u"netloc{}false.netloc", u"n{}user@netloc"]:
+                for c in denorm_chars:
+                    url = u"{}://{}/path".format(scheme, netloc.format(c))
+                    if test_support.verbose:
+                        print "Checking %r" % url
+                    with self.assertRaises(ValueError):
+                        urlparse.urlsplit(url)
+
+        # check error message: invalid netloc must be formated with repr()
+        # to get an ASCII error message
+        with self.assertRaises(ValueError) as cm:
+            urlparse.urlsplit(u'http://example.com\uFF03@bing.com')
+        self.assertEqual(str(cm.exception),
+                         "netloc u'example.com\\uff03@bing.com' contains invalid characters "
+                         "under NFKC normalization")
+        self.assertIsInstance(cm.exception.args[0], str)
 
 def test_main():
     test_support.run_unittest(UrlParseTestCase)

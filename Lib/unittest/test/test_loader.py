@@ -10,7 +10,7 @@ class Test_TestLoader(unittest.TestCase):
     ### Tests for TestLoader.loadTestsFromTestCase
     ################################################################
 
-    # "Return a suite of all tests cases contained in the TestCase-derived
+    # "Return a suite of all test cases contained in the TestCase-derived
     # class testCaseClass"
     def test_loadTestsFromTestCase(self):
         class Foo(unittest.TestCase):
@@ -23,7 +23,7 @@ class Test_TestLoader(unittest.TestCase):
         loader = unittest.TestLoader()
         self.assertEqual(loader.loadTestsFromTestCase(Foo), tests)
 
-    # "Return a suite of all tests cases contained in the TestCase-derived
+    # "Return a suite of all test cases contained in the TestCase-derived
     # class testCaseClass"
     #
     # Make sure it does the right thing even if no tests were found
@@ -36,7 +36,7 @@ class Test_TestLoader(unittest.TestCase):
         loader = unittest.TestLoader()
         self.assertEqual(loader.loadTestsFromTestCase(Foo), empty_suite)
 
-    # "Return a suite of all tests cases contained in the TestCase-derived
+    # "Return a suite of all test cases contained in the TestCase-derived
     # class testCaseClass"
     #
     # What happens if loadTestsFromTestCase() is given an object
@@ -57,7 +57,7 @@ class Test_TestLoader(unittest.TestCase):
         else:
             self.fail('Should raise TypeError')
 
-    # "Return a suite of all tests cases contained in the TestCase-derived
+    # "Return a suite of all test cases contained in the TestCase-derived
     # class testCaseClass"
     #
     # Make sure loadTestsFromTestCase() picks up the default test method
@@ -1279,7 +1279,7 @@ class Test_TestLoader(unittest.TestCase):
     # "The default value is the TestSuite class"
     def test_suiteClass__default_value(self):
         loader = unittest.TestLoader()
-        self.assertTrue(loader.suiteClass is unittest.TestSuite)
+        self.assertIs(loader.suiteClass, unittest.TestSuite)
 
     # Make sure the dotted name resolution works even if the actual
     # function doesn't have the same name as is used to find it.

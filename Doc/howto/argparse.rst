@@ -8,6 +8,8 @@ Argparse Tutorial
 
 This tutorial is intended to be a gentle introduction to :mod:`argparse`, the
 recommended command-line parsing module in the Python standard library.
+This was written for argparse in Python 3. A few details are different in 2.x,
+especially some exception messages, which were improved in 3.x.
 
 .. note::
 
@@ -221,7 +223,7 @@ before proceeding.
 Introducing Optional arguments
 ==============================
 
-So far we, have been playing with positional arguments. Let us
+So far we have been playing with positional arguments. Let us
 have a look on how to add optional ones::
 
    import argparse
@@ -511,7 +513,7 @@ to count the number of occurrences of a specific optional arguments:
 
 * Sadly, our help output isn't very informative on the new ability our script
   has acquired, but that can always be fixed by improving the documentation for
-  out script (e.g. via the ``help`` keyword argument).
+  our script (e.g. via the ``help`` keyword argument).
 
 * That last output exposes a bug in our program.
 

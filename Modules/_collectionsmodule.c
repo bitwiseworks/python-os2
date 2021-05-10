@@ -3,8 +3,6 @@
 
 /* collections module implementation of a deque() datatype
    Written and maintained by Raymond D. Hettinger <python@rcn.com>
-   Copyright (c) 2004 Python Software Foundation.
-   All rights reserved.
 */
 
 /* The block length may be set to any number over 1.  Larger numbers
@@ -623,9 +621,9 @@ deque_remove(dequeobject *deque, PyObject *value)
         if (cmp > 0) {
             PyObject *tgt = deque_popleft(deque, NULL);
             assert (tgt != NULL);
-            Py_DECREF(tgt);
-            if (_deque_rotate(deque, i) == -1)
+            if (_deque_rotate(deque, i))
                 return NULL;
+            Py_DECREF(tgt);
             Py_RETURN_NONE;
         }
         else if (cmp < 0) {
@@ -641,19 +639,77 @@ deque_remove(dequeobject *deque, PyObject *value)
 PyDoc_STRVAR(remove_doc,
 "D.remove(value) -- remove first occurrence of value.");
 
-static void
+static int
 deque_clear(dequeobject *deque)
 {
+    block *b;
+    block *prevblock;
+    block *leftblock;
+    Py_ssize_t leftindex;
+    Py_ssize_t n;
     PyObject *item;
 
+    if (deque->len == 0)
+        return 0;
+
+    /* During the process of clearing a deque, decrefs can cause the
+       deque to mutate.  To avoid fatal confusion, we have to make the
+       deque empty before clearing the blocks and never refer to
+       anything via deque->ref while clearing.  (This is the same
+       technique used for clearing lists, sets, and dicts.)
+
+       Making the deque empty requires allocating a new empty block.  In
+       the unlikely event that memory is full, we fall back to an
+       alternate method that doesn't require a new block.  Repeating
+       pops in a while-loop is slower, possibly re-entrant (and a clever
+       adversary could cause it to never terminate).
+    */
+
+    b = newblock(NULL, NULL, 0);
+    if (b == NULL) {
+        PyErr_Clear();
+        goto alternate_method;
+    }
+
+    /* Remember the old size, leftblock, and leftindex */
+    leftblock = deque->leftblock;
+    leftindex = deque->leftindex;
+    n = deque->len;
+
+    /* Set the deque to be empty using the newly allocated block */
+    deque->len = 0;
+    deque->leftblock = b;
+    deque->rightblock = b;
+    deque->leftindex = CENTER + 1;
+    deque->rightindex = CENTER;
+    deque->state++;
+
+    /* Now the old size, leftblock, and leftindex are disconnected from
+       the empty deque and we can use them to decref the pointers.
+    */
+    while (n--) {
+        item = leftblock->data[leftindex];
+        Py_DECREF(item);
+        leftindex++;
+        if (leftindex == BLOCKLEN && n) {
+            assert(leftblock->rightlink != NULL);
+            prevblock = leftblock;
+            leftblock = leftblock->rightlink;
+            leftindex = 0;
+            freeblock(prevblock);
+        }
+    }
+    assert(leftblock->rightlink == NULL);
+    freeblock(leftblock);
+    return 0;
+
+  alternate_method:
     while (deque->len) {
         item = deque_pop(deque, NULL);
         assert (item != NULL);
         Py_DECREF(item);
     }
-    assert(deque->leftblock == deque->rightblock &&
-           deque->leftindex - 1 == deque->rightindex &&
-           deque->len == 0);
+    return 0;
 }
 
 static PyObject *
@@ -706,16 +762,16 @@ static int
 deque_del_item(dequeobject *deque, Py_ssize_t i)
 {
     PyObject *item;
+    int rv;
 
     assert (i >= 0 && i < deque->len);
-    if (_deque_rotate(deque, -i) == -1)
+    if (_deque_rotate(deque, -i))
         return -1;
-
     item = deque_popleft(deque, NULL);
+    rv = _deque_rotate(deque, i);
     assert (item != NULL);
     Py_DECREF(item);
-
-    return _deque_rotate(deque, i);
+    return rv;
 }
 
 static int
@@ -803,11 +859,20 @@ deque_traverse(dequeobject *deque, visitproc visit, void *arg)
 static PyObject *
 deque_copy(PyObject *deque)
 {
+    PyObject *result;
     if (((dequeobject *)deque)->maxlen == -1)
-        return PyObject_CallFunction((PyObject *)(Py_TYPE(deque)), "O", deque, NULL);
+        result = PyObject_CallFunction((PyObject *)(Py_TYPE(deque)), "O", deque, NULL);
     else
-        return PyObject_CallFunction((PyObject *)(Py_TYPE(deque)), "Oi",
+        result = PyObject_CallFunction((PyObject *)(Py_TYPE(deque)), "Oi",
             deque, ((dequeobject *)deque)->maxlen, NULL);
+    if (result != NULL && !PyObject_TypeCheck(result, &deque_type)) {
+        PyErr_Format(PyExc_TypeError,
+                     "%.200s() must return a deque, not %.200s",
+                     Py_TYPE(deque)->tp_name, Py_TYPE(result)->tp_name);
+        Py_DECREF(result);
+        return NULL;
+    }
+    return result;
 }
 
 PyDoc_STRVAR(copy_doc, "Return a shallow copy of a deque.");
@@ -1029,7 +1094,8 @@ deque_init(dequeobject *deque, PyObject *args, PyObject *kwdargs)
         }
     }
     deque->maxlen = maxlen;
-    deque_clear(deque);
+    if (deque->len > 0)
+        deque_clear(deque);
     if (iterable != NULL) {
         PyObject *rv = deque_extend(deque, iterable);
         if (rv == NULL)
@@ -1045,7 +1111,7 @@ deque_sizeof(dequeobject *deque, void *unused)
     Py_ssize_t res;
     Py_ssize_t blocks;
 
-    res = sizeof(dequeobject);
+    res = _PyObject_SIZE(Py_TYPE(deque));
     blocks = (deque->leftindex + deque->len + BLOCKLEN - 1) / BLOCKLEN;
     assert(deque->leftindex + deque->len - 1 ==
            (blocks - 1) * BLOCKLEN + deque->rightindex);
@@ -1215,6 +1281,8 @@ dequeiter_traverse(dequeiterobject *dio, visitproc visit, void *arg)
 static void
 dequeiter_dealloc(dequeiterobject *dio)
 {
+    /* bpo-31095: UnTrack is needed before calling any callbacks */
+    PyObject_GC_UnTrack(dio);
     Py_XDECREF(dio->deque);
     PyObject_GC_Del(dio);
 }
@@ -1500,6 +1568,8 @@ static PyMemberDef defdict_members[] = {
 static void
 defdict_dealloc(defdictobject *dd)
 {
+    /* bpo-31095: UnTrack is needed before calling any callbacks */
+    PyObject_GC_UnTrack(dd);
     Py_CLEAR(dd->default_factory);
     PyDict_Type.tp_dealloc((PyObject *)dd);
 }
@@ -1595,7 +1665,7 @@ defdict_init(PyObject *self, PyObject *args, PyObject *kwds)
             newdefault = PyTuple_GET_ITEM(args, 0);
             if (!PyCallable_Check(newdefault) && newdefault != Py_None) {
                 PyErr_SetString(PyExc_TypeError,
-                    "first argument must be callable");
+                    "first argument must be callable or None");
                 return -1;
             }
         }
@@ -1612,11 +1682,13 @@ defdict_init(PyObject *self, PyObject *args, PyObject *kwds)
 }
 
 PyDoc_STRVAR(defdict_doc,
-"defaultdict(default_factory) --> dict with default factory\n\
+"defaultdict(default_factory[, ...]) --> dict with default factory\n\
 \n\
 The default factory is called without arguments to produce\n\
 a new value when a key is not present, in __getitem__ only.\n\
 A defaultdict compares equal to a dict with the same items.\n\
+All remaining arguments are treated the same as if they were\n\
+passed to the dict constructor, including keyword arguments.\n\
 ");
 
 /* See comment in xxsubtype.c */

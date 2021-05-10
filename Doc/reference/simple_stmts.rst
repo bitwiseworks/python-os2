@@ -25,6 +25,7 @@ simple statements is:
               : | `break_stmt`
               : | `continue_stmt`
               : | `import_stmt`
+              : | `future_stmt`
               : | `global_stmt`
               : | `exec_stmt`
 
@@ -72,6 +73,7 @@ Assignment statements
 =====================
 
 .. index::
+   single: =; assignment statement
    pair: assignment; statement
    pair: binding; name
    pair: rebinding; name
@@ -86,7 +88,7 @@ attributes or items of mutable objects:
    target_list: `target` ("," `target`)* [","]
    target: `identifier`
          : | "(" `target_list` ")"
-         : | "[" `target_list` "]"
+         : | "[" [`target_list`] "]"
          : | `attributeref`
          : | `subscription`
          : | `slicing`
@@ -241,6 +243,18 @@ Augmented assignment statements
 .. index::
    pair: augmented; assignment
    single: statement; assignment, augmented
+   single: +=; augmented assignment
+   single: -=; augmented assignment
+   single: *=; augmented assignment
+   single: /=; augmented assignment
+   single: %=; augmented assignment
+   single: &=; augmented assignment
+   single: ^=; augmented assignment
+   single: |=; augmented assignment
+   single: **=; augmented assignment
+   single: //=; augmented assignment
+   single: >>=; augmented assignment
+   single: <<=; augmented assignment
 
 Augmented assignment is the combination, in a single statement, of a binary
 operation and an assignment statement:
@@ -293,12 +307,12 @@ program:
 The simple form, ``assert expression``, is equivalent to ::
 
    if __debug__:
-      if not expression: raise AssertionError
+       if not expression: raise AssertionError
 
 The extended form, ``assert expression1, expression2``, is equivalent to ::
 
    if __debug__:
-      if not expression1: raise AssertionError(expression2)
+       if not expression1: raise AssertionError(expression2)
 
 .. index::
    single: __debug__
@@ -493,16 +507,16 @@ create a generator function instead of a normal function.
 
 When a generator function is called, it returns an iterator known as a generator
 iterator, or more commonly, a generator.  The body of the generator function is
-executed by calling the generator's :meth:`next` method repeatedly until it
-raises an exception.
+executed by calling the generator's :meth:`~generator.next` method repeatedly
+until it raises an exception.
 
 When a :keyword:`yield` statement is executed, the state of the generator is
-frozen and the value of :token:`expression_list` is returned to :meth:`next`'s
-caller.  By "frozen" we mean that all local state is retained, including the
-current bindings of local variables, the instruction pointer, and the internal
-evaluation stack: enough information is saved so that the next time :meth:`next`
-is invoked, the function can proceed exactly as if the :keyword:`yield`
-statement were just another external call.
+frozen and the value of :token:`expression_list` is returned to
+:meth:`~generator.next`'s caller.  By "frozen" we mean that all local state is
+retained, including the current bindings of local variables, the instruction
+pointer, and the internal evaluation stack: enough information is saved so that
+the next time :meth:`~generator.next` is invoked, the function can proceed
+exactly as if the :keyword:`yield` statement were just another external call.
 
 As of Python version 2.5, the :keyword:`yield` statement is now allowed in the
 :keyword:`try` clause of a :keyword:`try` ...  :keyword:`finally` construct.  If
@@ -525,10 +539,10 @@ section.
 
 .. seealso::
 
-   :pep:`0255` - Simple Generators
+   :pep:`255` - Simple Generators
       The proposal for adding generators and the :keyword:`yield` statement to Python.
 
-   :pep:`0342` - Coroutines via Enhanced Generators
+   :pep:`342` - Coroutines via Enhanced Generators
       The proposal that, among other generator enhancements, proposed allowing
       :keyword:`yield` to appear inside a :keyword:`try` ... :keyword:`finally` block.
 
@@ -653,6 +667,7 @@ The :keyword:`import` statement
    single: module; importing
    pair: name; binding
    keyword: from
+   single: as; import statement
 
 .. productionlist::
    import_stmt: "import" `module` ["as" `name`] ( "," `module` ["as" `name`] )*
@@ -681,9 +696,7 @@ hierarchical naming of modules. To help organize modules and provide a
 hierarchy in naming, Python has a concept of packages. A package can contain
 other packages and modules while modules cannot contain other modules or
 packages. From a file system perspective, packages are directories and modules
-are files. The original `specification for packages
-<http://www.python.org/doc/essays/packages.html>`_ is still available to read,
-although minor details have changed since the writing of that document.
+are files.
 
 .. index::
     single: sys.modules
@@ -960,7 +973,7 @@ definition, function definition, or :keyword:`import` statement.
    builtin: execfile
    builtin: compile
 
-**Programmer's note:** the :keyword:`global` is a directive to the parser.  It
+**Programmer's note:** :keyword:`global` is a directive to the parser.  It
 applies only to code parsed at the same time as the :keyword:`global` statement.
 In particular, a :keyword:`global` statement contained in an :keyword:`exec`
 statement does not affect the code block *containing* the :keyword:`exec`

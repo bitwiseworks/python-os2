@@ -37,6 +37,10 @@
 
 /* EVP is the preferred interface to hashing in OpenSSL */
 #include <openssl/evp.h>
+#include <openssl/err.h>
+/* We use the object interface to discover what hashes OpenSSL supports. */
+#include <openssl/objects.h>
+#include "openssl/err.h"
 
 #define MUNCH_SIZE INT_MAX
 
@@ -48,15 +52,26 @@
 #define HASH_OBJ_CONSTRUCTOR 0
 #endif
 
-/* Minimum OpenSSL version needed to support sha224 and higher. */
 #if defined(OPENSSL_VERSION_NUMBER) && (OPENSSL_VERSION_NUMBER >= 0x00908000)
 #define _OPENSSL_SUPPORTS_SHA2
 #endif
 
+#if (OPENSSL_VERSION_NUMBER < 0x10100000L) || defined(LIBRESSL_VERSION_NUMBER)
+/* OpenSSL < 1.1.0 */
+#define EVP_MD_CTX_new EVP_MD_CTX_create
+#define EVP_MD_CTX_free EVP_MD_CTX_destroy
+#define HAS_FAST_PKCS5_PBKDF2_HMAC 0
+#include <openssl/hmac.h>
+#else
+/* OpenSSL >= 1.1.0 */
+#define HAS_FAST_PKCS5_PBKDF2_HMAC 1
+#endif
+
+
 typedef struct {
     PyObject_HEAD
     PyObject            *name;  /* name of this hash algorithm */
-    EVP_MD_CTX          ctx;    /* OpenSSL message digest context */
+    EVP_MD_CTX          *ctx;   /* OpenSSL message digest context */
 #ifdef WITH_THREAD
     PyThread_type_lock  lock;   /* OpenSSL context lock */
 #endif
@@ -68,7 +83,6 @@ static PyTypeObject EVPtype;
 
 #define DEFINE_CONSTS_FOR_NEW(Name)  \
     static PyObject *CONST_ ## Name ## _name_obj = NULL; \
-    static EVP_MD_CTX CONST_new_ ## Name ## _ctx; \
     static EVP_MD_CTX *CONST_new_ ## Name ## _ctx_p = NULL;
 
 DEFINE_CONSTS_FOR_NEW(md5)
@@ -81,18 +95,56 @@ DEFINE_CONSTS_FOR_NEW(sha512)
 #endif
 
 
+/* LCOV_EXCL_START */
+static PyObject *
+_setException(PyObject *exc)
+{
+    unsigned long errcode;
+    const char *lib, *func, *reason;
+
+    errcode = ERR_peek_last_error();
+    if (!errcode) {
+        PyErr_SetString(exc, "unknown reasons");
+        return NULL;
+    }
+    ERR_clear_error();
+
+    lib = ERR_lib_error_string(errcode);
+    func = ERR_func_error_string(errcode);
+    reason = ERR_reason_error_string(errcode);
+
+    if (lib && func) {
+        PyErr_Format(exc, "[%s: %s] %s", lib, func, reason);
+    }
+    else if (lib) {
+        PyErr_Format(exc, "[%s] %s", lib, reason);
+    }
+    else {
+        PyErr_SetString(exc, reason);
+    }
+    return NULL;
+}
+/* LCOV_EXCL_STOP */
+
 static EVPobject *
 newEVPobject(PyObject *name)
 {
     EVPobject *retval = (EVPobject *)PyObject_New(EVPobject, &EVPtype);
+    if (retval == NULL)
+        return NULL;
 
     /* save the name for .name to return */
-    if (retval != NULL) {
-        Py_INCREF(name);
-        retval->name = name;
+    Py_INCREF(name);
+    retval->name = name;
 #ifdef WITH_THREAD
-        retval->lock = NULL;
+    retval->lock = NULL;
 #endif
+
+    retval->ctx = EVP_MD_CTX_new();
+    if (retval->ctx == NULL) {
+        Py_DECREF(retval);
+        PyErr_NoMemory();
+        return NULL;
     }
 
     return retval;
@@ -109,7 +161,7 @@ EVP_hash(EVPobject *self, const void *vp, Py_ssize_t len)
             process = MUNCH_SIZE;
         else
             process = Py_SAFE_DOWNCAST(len, Py_ssize_t, unsigned int);
-        EVP_DigestUpdate(&self->ctx, (const void*)cp, process);
+        EVP_DigestUpdate(self->ctx, (const void*)cp, process);
         len -= process;
         cp += process;
     }
@@ -124,16 +176,20 @@ EVP_dealloc(EVPobject *self)
     if (self->lock != NULL)
         PyThread_free_lock(self->lock);
 #endif
-    EVP_MD_CTX_cleanup(&self->ctx);
+    EVP_MD_CTX_free(self->ctx);
     Py_XDECREF(self->name);
     PyObject_Del(self);
 }
 
-static void locked_EVP_MD_CTX_copy(EVP_MD_CTX *new_ctx_p, EVPobject *self)
+static int
+locked_EVP_MD_CTX_copy(EVP_MD_CTX *new_ctx_p, EVPobject *self)
 {
+    int result;
     ENTER_HASHLIB(self);
-    EVP_MD_CTX_copy(new_ctx_p, &self->ctx);
+    /* XXX no error reporting */
+    result = EVP_MD_CTX_copy(new_ctx_p, self->ctx);
     LEAVE_HASHLIB(self);
+    return result;
 }
 
 /* External methods for a hash object */
@@ -149,7 +205,10 @@ EVP_copy(EVPobject *self, PyObject *unused)
     if ( (newobj = newEVPobject(self->name))==NULL)
         return NULL;
 
-    locked_EVP_MD_CTX_copy(&newobj->ctx, self);
+    if (!locked_EVP_MD_CTX_copy(newobj->ctx, self)) {
+        Py_DECREF(newobj);
+        return _setException(PyExc_ValueError);
+    }
     return (PyObject *)newobj;
 }
 
@@ -160,16 +219,24 @@ static PyObject *
 EVP_digest(EVPobject *self, PyObject *unused)
 {
     unsigned char digest[EVP_MAX_MD_SIZE];
-    EVP_MD_CTX temp_ctx;
+    EVP_MD_CTX *temp_ctx;
     PyObject *retval;
     unsigned int digest_size;
 
-    locked_EVP_MD_CTX_copy(&temp_ctx, self);
-    digest_size = EVP_MD_CTX_size(&temp_ctx);
-    EVP_DigestFinal(&temp_ctx, digest, NULL);
+    temp_ctx = EVP_MD_CTX_new();
+    if (temp_ctx == NULL) {
+        PyErr_NoMemory();
+        return NULL;
+    }
+
+    if (!locked_EVP_MD_CTX_copy(temp_ctx, self)) {
+        return _setException(PyExc_ValueError);
+    }
+    digest_size = EVP_MD_CTX_size(temp_ctx);
+    EVP_DigestFinal(temp_ctx, digest, NULL);
 
     retval = PyString_FromStringAndSize((const char *)digest, digest_size);
-    EVP_MD_CTX_cleanup(&temp_ctx);
+    EVP_MD_CTX_free(temp_ctx);
     return retval;
 }
 
@@ -180,17 +247,25 @@ static PyObject *
 EVP_hexdigest(EVPobject *self, PyObject *unused)
 {
     unsigned char digest[EVP_MAX_MD_SIZE];
-    EVP_MD_CTX temp_ctx;
+    EVP_MD_CTX *temp_ctx;
     PyObject *retval;
     char *hex_digest;
     unsigned int i, j, digest_size;
 
-    /* Get the raw (binary) digest value */
-    locked_EVP_MD_CTX_copy(&temp_ctx, self);
-    digest_size = EVP_MD_CTX_size(&temp_ctx);
-    EVP_DigestFinal(&temp_ctx, digest, NULL);
+    temp_ctx = EVP_MD_CTX_new();
+    if (temp_ctx == NULL) {
+        PyErr_NoMemory();
+        return NULL;
+    }
 
-    EVP_MD_CTX_cleanup(&temp_ctx);
+    /* Get the raw (binary) digest value */
+    if (!locked_EVP_MD_CTX_copy(temp_ctx, self)) {
+        return _setException(PyExc_ValueError);
+    }
+    digest_size = EVP_MD_CTX_size(temp_ctx);
+    EVP_DigestFinal(temp_ctx, digest, NULL);
+
+    EVP_MD_CTX_free(temp_ctx);
 
     /* Create a new string */
     /* NOTE: not thread safe! modifying an already created string object */
@@ -264,7 +339,7 @@ static PyObject *
 EVP_get_block_size(EVPobject *self, void *closure)
 {
     long block_size;
-    block_size = EVP_MD_CTX_block_size(&self->ctx);
+    block_size = EVP_MD_CTX_block_size(self->ctx);
     return PyLong_FromLong(block_size);
 }
 
@@ -272,7 +347,7 @@ static PyObject *
 EVP_get_digest_size(EVPobject *self, void *closure)
 {
     long size;
-    size = EVP_MD_CTX_size(&self->ctx);
+    size = EVP_MD_CTX_size(self->ctx);
     return PyLong_FromLong(size);
 }
 
@@ -336,7 +411,7 @@ EVP_tp_init(EVPobject *self, PyObject *args, PyObject *kwds)
         PyBuffer_Release(&view);
         return -1;
     }
-    EVP_DigestInit(&self->ctx, digest);
+    EVP_DigestInit(self->ctx, digest);
 
     self->name = name_obj;
     Py_INCREF(self->name);
@@ -433,9 +508,9 @@ EVPnew(PyObject *name_obj,
         return NULL;
 
     if (initial_ctx) {
-        EVP_MD_CTX_copy(&self->ctx, initial_ctx);
+        EVP_MD_CTX_copy(self->ctx, initial_ctx);
     } else {
-        EVP_DigestInit(&self->ctx, digest);
+        EVP_DigestInit(self->ctx, digest);
     }
 
     if (cp && len) {
@@ -491,10 +566,263 @@ EVP_new(PyObject *self, PyObject *args, PyObject *kwdict)
     return ret_obj;
 }
 
+
+#if (OPENSSL_VERSION_NUMBER >= 0x10000000 && !defined(OPENSSL_NO_HMAC) \
+     && !defined(OPENSSL_NO_SHA))
+
+#define PY_PBKDF2_HMAC 1
+
+#if !HAS_FAST_PKCS5_PBKDF2_HMAC
+/* Improved implementation of PKCS5_PBKDF2_HMAC()
+ *
+ * PKCS5_PBKDF2_HMAC_fast() hashes the password exactly one time instead of
+ * `iter` times. Today (2013) the iteration count is typically 100,000 or
+ * more. The improved algorithm is not subject to a Denial-of-Service
+ * vulnerability with overly large passwords.
+ *
+ * Also OpenSSL < 1.0 don't provide PKCS5_PBKDF2_HMAC(), only
+ * PKCS5_PBKDF2_SHA1.
+ */
+static int
+PKCS5_PBKDF2_HMAC_fast(const char *pass, int passlen,
+                       const unsigned char *salt, int saltlen,
+                       int iter, const EVP_MD *digest,
+                       int keylen, unsigned char *out)
+{
+    unsigned char digtmp[EVP_MAX_MD_SIZE], *p, itmp[4];
+    int cplen, j, k, tkeylen, mdlen;
+    unsigned long i = 1;
+    HMAC_CTX hctx_tpl, hctx;
+
+    mdlen = EVP_MD_size(digest);
+    if (mdlen < 0)
+        return 0;
+
+    HMAC_CTX_init(&hctx_tpl);
+    HMAC_CTX_init(&hctx);
+    p = out;
+    tkeylen = keylen;
+    if (!HMAC_Init_ex(&hctx_tpl, pass, passlen, digest, NULL)) {
+        HMAC_CTX_cleanup(&hctx_tpl);
+        return 0;
+    }
+    while (tkeylen) {
+        if (tkeylen > mdlen)
+            cplen = mdlen;
+        else
+            cplen = tkeylen;
+        /* We are unlikely to ever use more than 256 blocks (5120 bits!)
+         * but just in case...
+         */
+        itmp[0] = (unsigned char)((i >> 24) & 0xff);
+        itmp[1] = (unsigned char)((i >> 16) & 0xff);
+        itmp[2] = (unsigned char)((i >> 8) & 0xff);
+        itmp[3] = (unsigned char)(i & 0xff);
+        if (!HMAC_CTX_copy(&hctx, &hctx_tpl)) {
+            HMAC_CTX_cleanup(&hctx_tpl);
+            return 0;
+        }
+        if (!HMAC_Update(&hctx, salt, saltlen)
+                || !HMAC_Update(&hctx, itmp, 4)
+                || !HMAC_Final(&hctx, digtmp, NULL)) {
+            HMAC_CTX_cleanup(&hctx_tpl);
+            HMAC_CTX_cleanup(&hctx);
+            return 0;
+        }
+        HMAC_CTX_cleanup(&hctx);
+        memcpy(p, digtmp, cplen);
+        for (j = 1; j < iter; j++) {
+            if (!HMAC_CTX_copy(&hctx, &hctx_tpl)) {
+                HMAC_CTX_cleanup(&hctx_tpl);
+                return 0;
+            }
+            if (!HMAC_Update(&hctx, digtmp, mdlen)
+                    || !HMAC_Final(&hctx, digtmp, NULL)) {
+                HMAC_CTX_cleanup(&hctx_tpl);
+                HMAC_CTX_cleanup(&hctx);
+                return 0;
+            }
+            HMAC_CTX_cleanup(&hctx);
+            for (k = 0; k < cplen; k++) {
+                p[k] ^= digtmp[k];
+            }
+        }
+        tkeylen-= cplen;
+        i++;
+        p+= cplen;
+    }
+    HMAC_CTX_cleanup(&hctx_tpl);
+    return 1;
+}
+#endif
+
+
+PyDoc_STRVAR(pbkdf2_hmac__doc__,
+"pbkdf2_hmac(hash_name, password, salt, iterations, dklen=None) -> key\n\
+\n\
+Password based key derivation function 2 (PKCS #5 v2.0) with HMAC as\n\
+pseudorandom function.");
+
+static PyObject *
+pbkdf2_hmac(PyObject *self, PyObject *args, PyObject *kwdict)
+{
+    static char *kwlist[] = {"hash_name", "password", "salt", "iterations",
+                             "dklen", NULL};
+    PyObject *key_obj = NULL, *dklen_obj = Py_None;
+    char *name, *key;
+    Py_buffer password, salt;
+    long iterations, dklen;
+    int retval;
+    const EVP_MD *digest;
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwdict, "ss*s*l|O:pbkdf2_hmac",
+                                     kwlist, &name, &password, &salt,
+                                     &iterations, &dklen_obj)) {
+        return NULL;
+    }
+
+    digest = EVP_get_digestbyname(name);
+    if (digest == NULL) {
+        PyErr_SetString(PyExc_ValueError, "unsupported hash type");
+        goto end;
+    }
+
+    if (password.len > INT_MAX) {
+        PyErr_SetString(PyExc_OverflowError,
+                        "password is too long.");
+        goto end;
+    }
+
+    if (salt.len > INT_MAX) {
+        PyErr_SetString(PyExc_OverflowError,
+                        "salt is too long.");
+        goto end;
+    }
+
+    if (iterations < 1) {
+        PyErr_SetString(PyExc_ValueError,
+                        "iteration value must be greater than 0.");
+        goto end;
+    }
+    if (iterations > INT_MAX) {
+        PyErr_SetString(PyExc_OverflowError,
+                        "iteration value is too great.");
+        goto end;
+    }
+
+    if (dklen_obj == Py_None) {
+        dklen = EVP_MD_size(digest);
+    } else {
+        dklen = PyLong_AsLong(dklen_obj);
+        if ((dklen == -1) && PyErr_Occurred()) {
+            goto end;
+        }
+    }
+    if (dklen < 1) {
+        PyErr_SetString(PyExc_ValueError,
+                        "key length must be greater than 0.");
+        goto end;
+    }
+    if (dklen > INT_MAX) {
+        /* INT_MAX is always smaller than dkLen max (2^32 - 1) * hLen */
+        PyErr_SetString(PyExc_OverflowError,
+                        "key length is too great.");
+        goto end;
+    }
+
+    key_obj = PyBytes_FromStringAndSize(NULL, dklen);
+    if (key_obj == NULL) {
+        goto end;
+    }
+    key = PyBytes_AS_STRING(key_obj);
+
+    Py_BEGIN_ALLOW_THREADS
+#if HAS_FAST_PKCS5_PBKDF2_HMAC
+    retval = PKCS5_PBKDF2_HMAC((char*)password.buf, (int)password.len,
+                               (unsigned char *)salt.buf, (int)salt.len,
+                               iterations, digest, dklen,
+                               (unsigned char *)key);
+#else
+    retval = PKCS5_PBKDF2_HMAC_fast((char*)password.buf, (int)password.len,
+                                    (unsigned char *)salt.buf, (int)salt.len,
+                                    iterations, digest, dklen,
+                                    (unsigned char *)key);
+#endif
+    Py_END_ALLOW_THREADS
+
+    if (!retval) {
+        Py_CLEAR(key_obj);
+        _setException(PyExc_ValueError);
+        goto end;
+    }
+
+  end:
+    PyBuffer_Release(&password);
+    PyBuffer_Release(&salt);
+    return key_obj;
+}
+
+#endif
+
+/* State for our callback function so that it can accumulate a result. */
+typedef struct _internal_name_mapper_state {
+    PyObject *set;
+    int error;
+} _InternalNameMapperState;
+
+
+/* A callback function to pass to OpenSSL's OBJ_NAME_do_all(...) */
+static void
+_openssl_hash_name_mapper(const OBJ_NAME *openssl_obj_name, void *arg)
+{
+    _InternalNameMapperState *state = (_InternalNameMapperState *)arg;
+    PyObject *py_name;
+
+    assert(state != NULL);
+    if (openssl_obj_name == NULL)
+        return;
+    /* Ignore aliased names, they pollute the list and OpenSSL appears to
+     * have its own definition of alias as the resulting list still
+     * contains duplicate and alternate names for several algorithms.     */
+    if (openssl_obj_name->alias)
+        return;
+
+    py_name = PyString_FromString(openssl_obj_name->name);
+    if (py_name == NULL) {
+        state->error = 1;
+    } else {
+        if (PySet_Add(state->set, py_name) != 0) {
+            state->error = 1;
+        }
+        Py_DECREF(py_name);
+    }
+}
+
+
+/* Ask OpenSSL for a list of supported ciphers, filling in a Python set. */
+static PyObject*
+generate_hash_name_list(void)
+{
+    _InternalNameMapperState state;
+    state.set = PyFrozenSet_New(NULL);
+    if (state.set == NULL)
+        return NULL;
+    state.error = 0;
+
+    OBJ_NAME_do_all(OBJ_NAME_TYPE_MD_METH, &_openssl_hash_name_mapper, &state);
+
+    if (state.error) {
+        Py_DECREF(state.set);
+        return NULL;
+    }
+    return state.set;
+}
+
+
 /*
  *  This macro generates constructor function definitions for specific
  *  hash algorithms.  These constructors are much faster than calling
- *  the generic one passing it a python string and are noticably
+ *  the generic one passing it a python string and are noticeably
  *  faster than calling a python new() wrapper.  Thats important for
  *  code that wants to make hashes of a bunch of small strings.
  */
@@ -531,7 +859,7 @@ EVP_new(PyObject *self, PyObject *args, PyObject *kwdict)
     if (CONST_ ## NAME ## _name_obj == NULL) { \
     CONST_ ## NAME ## _name_obj = PyString_FromString(#NAME); \
         if (EVP_get_digestbyname(#NAME)) { \
-            CONST_new_ ## NAME ## _ctx_p = &CONST_new_ ## NAME ## _ctx; \
+            CONST_new_ ## NAME ## _ctx_p = EVP_MD_CTX_new(); \
             EVP_DigestInit(CONST_new_ ## NAME ## _ctx_p, EVP_get_digestbyname(#NAME)); \
         } \
     } \
@@ -558,6 +886,10 @@ static struct PyMethodDef EVP_functions[] = {
     CONSTRUCTOR_METH_DEF(sha384),
     CONSTRUCTOR_METH_DEF(sha512),
 #endif
+#ifdef PY_PBKDF2_HMAC
+    {"pbkdf2_hmac", (PyCFunction)pbkdf2_hmac, METH_VARARGS|METH_KEYWORDS,
+     pbkdf2_hmac__doc__},
+#endif
     {NULL,      NULL}            /* Sentinel */
 };
 
@@ -567,9 +899,13 @@ static struct PyMethodDef EVP_functions[] = {
 PyMODINIT_FUNC
 init_hashlib(void)
 {
-    PyObject *m;
+    PyObject *m, *openssl_md_meth_names;
 
-    OpenSSL_add_all_digests();
+#if (OPENSSL_VERSION_NUMBER < 0x10100000L) || defined(LIBRESSL_VERSION_NUMBER)
+    /* Load all digest algorithms and initialize cpuid */
+    OPENSSL_add_all_algorithms_noconf();
+    ERR_load_crypto_strings();
+#endif
 
     /* TODO build EVP_functions openssl_* entries dynamically based
      * on what hashes are supported rather than listing many
@@ -583,6 +919,14 @@ init_hashlib(void)
     m = Py_InitModule("_hashlib", EVP_functions);
     if (m == NULL)
         return;
+
+    openssl_md_meth_names = generate_hash_name_list();
+    if (openssl_md_meth_names == NULL) {
+        return;
+    }
+    if (PyModule_AddObject(m, "openssl_md_meth_names", openssl_md_meth_names)) {
+        return;
+    }
 
 #if HASH_OBJ_CONSTRUCTOR
     Py_INCREF(&EVPtype);

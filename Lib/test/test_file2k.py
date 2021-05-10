@@ -4,6 +4,7 @@ import unittest
 import itertools
 import select
 import signal
+import stat
 import subprocess
 import time
 from array import array
@@ -14,7 +15,7 @@ except ImportError:
     threading = None
 
 from test import test_support
-from test.test_support import TESTFN, run_unittest
+from test.test_support import TESTFN, run_unittest, requires
 from UserList import UserList
 
 class AutoFileTests(unittest.TestCase):
@@ -88,6 +89,13 @@ class AutoFileTests(unittest.TestCase):
 
         self.assertRaises(TypeError, self.f.writelines,
                           [NonString(), NonString()])
+
+    def testWritelinesBuffer(self):
+        self.f.writelines([array('c', 'abc')])
+        self.f.close()
+        self.f = open(TESTFN, 'rb')
+        buf = self.f.read()
+        self.assertEqual(buf, 'abc')
 
     def testRepr(self):
         # verify repr works
@@ -223,14 +231,20 @@ class OtherFileTests(unittest.TestCase):
             else:
                 f.close()
 
-    def testStdin(self):
-        # This causes the interpreter to exit on OSF1 v5.1.
-        if sys.platform != 'osf1V5':
-            self.assertRaises(IOError, sys.stdin.seek, -1)
-        else:
-            print >>sys.__stdout__, (
-                '  Skipping sys.stdin.seek(-1), it may crash the interpreter.'
-                ' Test manually.')
+    def testStdinSeek(self):
+        if sys.platform == 'osf1V5':
+            # This causes the interpreter to exit on OSF1 v5.1.
+            self.skipTest('Skipping sys.stdin.seek(-1), it may crash '
+                          'the interpreter. Test manually.')
+
+        if not sys.stdin.isatty():
+            # Issue #23168: if stdin is redirected to a file, stdin becomes
+            # seekable
+            self.skipTest('stdin must be a TTY in this test')
+
+        self.assertRaises(IOError, sys.stdin.seek, -1)
+
+    def testStdinTruncate(self):
         self.assertRaises(IOError, sys.stdin.truncate)
 
     def testUnicodeOpen(self):
@@ -414,6 +428,40 @@ class OtherFileTests(unittest.TestCase):
                 f.close()
         finally:
             os.unlink(TESTFN)
+
+    @unittest.skipUnless(os.name == 'posix', 'test requires a posix system.')
+    def test_write_full(self):
+        devfull = '/dev/full'
+        if not (os.path.exists(devfull) and
+                stat.S_ISCHR(os.stat(devfull).st_mode)):
+            # Issue #21934: OpenBSD does not have a /dev/full character device
+            self.skipTest('requires %r' % devfull)
+        with open(devfull, 'wb', 1) as f:
+            with self.assertRaises(IOError):
+                f.write('hello\n')
+        with open(devfull, 'wb', 1) as f:
+            with self.assertRaises(IOError):
+                # Issue #17976
+                f.write('hello')
+                f.write('\n')
+        with open(devfull, 'wb', 0) as f:
+            with self.assertRaises(IOError):
+                f.write('h')
+
+    @unittest.skipUnless(sys.maxsize > 2**31, "requires 64-bit system")
+    @test_support.precisionbigmemtest(2**31, 2.5, dry_run=False)
+    def test_very_long_line(self, size):
+        # Issue #22526
+        requires('largefile')
+        with open(TESTFN, "wb") as fp:
+            fp.seek(size - 1)
+            fp.write("\0")
+        with open(TESTFN, "rb") as fp:
+            for l in fp:
+                pass
+        self.assertEqual(len(l), size)
+        self.assertEqual(l.count("\0"), size)
+        l = None
 
 class FileSubclassTests(unittest.TestCase):
 
@@ -603,6 +651,33 @@ class FileThreadingTests(unittest.TestCase):
         def io_func():
             self.f.writelines('')
         self._test_close_open_io(io_func)
+
+    def test_iteration_torture(self):
+        # bpo-31530
+        with open(self.filename, "wb") as fp:
+            for i in xrange(2**20):
+                fp.write(b"0"*50 + b"\n")
+        with open(self.filename, "rb") as f:
+            def it():
+                for l in f:
+                    pass
+            self._run_workers(it, 10)
+
+    def test_iteration_seek(self):
+        # bpo-31530: Crash when concurrently seek and iterate over a file.
+        with open(self.filename, "wb") as fp:
+            for i in xrange(10000):
+                fp.write(b"0"*50 + b"\n")
+        with open(self.filename, "rb") as f:
+            it = iter([1] + [0]*10)  # one thread reads, others seek
+            def iterate():
+                if next(it):
+                    for l in f:
+                        pass
+                else:
+                    for i in xrange(100):
+                        f.seek(i*100, 0)
+            self._run_workers(iterate, 10)
 
 
 @unittest.skipUnless(os.name == 'posix', 'test requires a posix system.')

@@ -18,7 +18,7 @@ Installing Python
 Unlike most Unix systems and services, Windows does not require Python natively
 and thus does not pre-install a version of Python.  However, the CPython team
 has compiled Windows installers (MSI packages) with every `release
-<http://www.python.org/download/releases/>`_ for many years.
+<https://www.python.org/download/releases/>`_ for many years.
 
 With ongoing development of Python, some platforms that used to be supported
 earlier are no longer supported (due to the lack of users or developers).
@@ -31,31 +31,30 @@ Check :pep:`11` for details on all unsupported platforms.
   following releases), this support was dropped and new releases are just
   expected to work on the Windows NT family.
 * `Windows CE <http://pythonce.sourceforge.net/>`_ is still supported.
-* The `Cygwin <http://cygwin.com/>`_ installer offers to install the `Python
-  interpreter <http://cygwin.com/packages/python>`_ as well; it is located under
-  "Interpreters." (cf. `Cygwin package source
+* The `Cygwin <https://cygwin.com/>`_ installer offers to install the Python
+  interpreter as well (cf. `Cygwin package source
   <ftp://ftp.uni-erlangen.de/pub/pc/gnuwin32/cygwin/mirrors/cygnus/
   release/python>`_, `Maintainer releases
   <http://www.tishler.net/jason/software/python/>`_)
 
-See `Python for Windows (and DOS) <http://www.python.org/download/windows/>`_
+See `Python for Windows (and DOS) <https://www.python.org/download/windows/>`_
 for detailed information about platforms with precompiled installers.
 
 .. seealso::
 
-   `Python on XP <http://www.richarddooling.com/index.php/2006/03/14/python-on-xp-7-minutes-to-hello-world/>`_
+   `Python on XP <http://dooling.com/index.php/2006/03/14/python-on-xp-7-minutes-to-hello-world/>`_
       "7 Minutes to "Hello World!""
       by Richard Dooling, 2006
 
-   `Installing on Windows <http://diveintopython.net/installing_python/windows.html>`_
+   `Installing on Windows <http://www.diveintopython.net/installing_python/windows.html>`_
       in "`Dive into Python: Python from novice to pro
-      <http://diveintopython.net/index.html>`_"
+      <http://www.diveintopython.net/>`_"
       by Mark Pilgrim, 2004,
       ISBN 1-59059-356-1
 
-   `For Windows users <http://swaroopch.com/text/Byte_of_Python:Installing_Python#For_Windows_users>`_
+   `For Windows users <http://python.swaroopch.com/installation.html#installation-on-windows>`_
       in "Installing Python"
-      in "`A Byte of Python <http://www.byteofpython.info>`_"
+      in "`A Byte of Python <http://python.swaroopch.com/>`_"
       by Swaroop C H, 2003
 
 
@@ -66,10 +65,10 @@ Besides the standard CPython distribution, there are modified packages including
 additional functionality.  The following is a list of popular versions and their
 key features:
 
-`ActivePython <http://www.activestate.com/Products/activepython/>`_
+`ActivePython <https://www.activestate.com/activepython/>`_
     Installer with multi-platform compatibility, documentation, PyWin32
 
-`Enthought Python Distribution <http://www.enthought.com/products/epd.php>`_
+`Enthought Python Distribution <https://www.enthought.com/products/epd/>`_
     Popular modules (such as PyWin32) with their respective documentation, tool
     suite for building extensible Python applications
 
@@ -124,13 +123,13 @@ Consult :command:`set /?` for details on this behaviour.
 
 .. seealso::
 
-   http://support.microsoft.com/kb/100843
+   https://support.microsoft.com/kb/100843
       Environment variables in Windows NT
 
-   http://support.microsoft.com/kb/310519
+   https://support.microsoft.com/kb/310519
       How To Manage Environment Variables in Windows XP
 
-   http://www.chem.gla.ac.uk/~louis/software/faq/q1.html
+   https://www.chem.gla.ac.uk/~louis/software/faq/q1.html
       Setting Environment variables, Louis J. Farrugia
 
 
@@ -243,19 +242,19 @@ The Windows-specific standard modules are documented in
 PyWin32
 -------
 
-The `PyWin32 <http://python.net/crew/mhammond/win32/>`_ module by Mark Hammond
+The `PyWin32 <https://pypi.org/project/pywin32>`_ module by Mark Hammond
 is a collection of modules for advanced Windows-specific support.  This includes
 utilities for:
 
-* `Component Object Model <http://www.microsoft.com/com/>`_ (COM)
+* `Component Object Model <https://www.microsoft.com/com/>`_ (COM)
 * Win32 API calls
 * Registry
 * Event log
-* `Microsoft Foundation Classes <http://msdn.microsoft.com/en-us/library/fe1cf721%28VS.80%29.aspx>`_ (MFC)
+* `Microsoft Foundation Classes <https://msdn.microsoft.com/en-us/library/fe1cf721%28VS.80%29.aspx>`_ (MFC)
   user interfaces
 
-`PythonWin <http://web.archive.org/web/20060524042422/
-http://www.python.org/windows/pythonwin/>`_ is a sample MFC application
+`PythonWin <https://web.archive.org/web/20060524042422/
+https://www.python.org/windows/pythonwin/>`_ is a sample MFC application
 shipped with PyWin32.  It is an embeddable IDE with a built-in debugger.
 
 .. seealso::
@@ -292,9 +291,9 @@ Compiling Python on Windows
 ===========================
 
 If you want to compile CPython yourself, first thing you should do is get the
-`source <http://python.org/download/source/>`_. You can download either the
+`source <https://www.python.org/downloads/source/>`_. You can download either the
 latest release's source or just grab a fresh `checkout
-<http://docs.python.org/devguide/setup#checking-out-the-code>`_.
+<https://docs.python.org/devguide/setup.html#getting-the-source-code>`_.
 
 For Microsoft Visual C++, which is the compiler with which official Python
 releases are built, the source tree contains solutions/project files.  View the
@@ -337,7 +336,7 @@ Other resources
 
 .. seealso::
 
-   `Python Programming On Win32 <http://www.oreilly.com/catalog/pythonwin32/>`_
+   `Python Programming On Win32 <http://shop.oreilly.com/product/9781565926219.do>`_
       "Help for Windows Programmers"
       by Mark Hammond and Andy Robinson, O'Reilly Media, 2000,
       ISBN 1-56592-621-8

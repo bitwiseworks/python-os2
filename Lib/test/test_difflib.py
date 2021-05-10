@@ -59,6 +59,15 @@ class TestSFbugs(unittest.TestCase):
         diff_gen = difflib.unified_diff([], [])
         self.assertRaises(StopIteration, diff_gen.next)
 
+    def test_matching_blocks_cache(self):
+        # Issue #21635
+        s = difflib.SequenceMatcher(None, "abxcd", "abcd")
+        first = s.get_matching_blocks()
+        second = s.get_matching_blocks()
+        self.assertEqual(second[0].size, 2)
+        self.assertEqual(second[1].size, 2)
+        self.assertEqual(second[2].size, 0)
+
     def test_added_tab_hint(self):
         # Check fix for bug #1488943
         diff = list(difflib.Differ().compare(["\tI am a buggy"],["\t\tI am a bug"]))
@@ -260,13 +269,33 @@ class TestOutputFormat(unittest.TestCase):
         self.assertEqual(fmt(3,6), '4,6')
         self.assertEqual(fmt(0,0), '0')
 
+class TestJunkAPIs(unittest.TestCase):
+    def test_is_line_junk_true(self):
+        for line in ['#', '  ', ' #', '# ', ' # ', '']:
+            self.assertTrue(difflib.IS_LINE_JUNK(line), repr(line))
+
+    def test_is_line_junk_false(self):
+        for line in ['##', ' ##', '## ', 'abc ', 'abc #', 'Mr. Moose is up!']:
+            self.assertFalse(difflib.IS_LINE_JUNK(line), repr(line))
+
+    def test_is_line_junk_REDOS(self):
+        evil_input = ('\t' * 1000000) + '##'
+        self.assertFalse(difflib.IS_LINE_JUNK(evil_input))
+
+    def test_is_character_junk_true(self):
+        for char in [' ', '\t']:
+            self.assertTrue(difflib.IS_CHARACTER_JUNK(char), repr(char))
+
+    def test_is_character_junk_false(self):
+        for char in ['a', '#', '\n', '\f', '\r', '\v']:
+            self.assertFalse(difflib.IS_CHARACTER_JUNK(char), repr(char))
 
 def test_main():
     difflib.HtmlDiff._default_prefix = 0
     Doctests = doctest.DocTestSuite(difflib)
     run_unittest(
         TestWithAscii, TestAutojunk, TestSFpatches, TestSFbugs,
-        TestOutputFormat, Doctests)
+        TestOutputFormat, TestJunkAPIs)
 
 if __name__ == '__main__':
     test_main()

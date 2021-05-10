@@ -127,7 +127,7 @@ the :mod:`glob` module.)
    .. versionadded:: 1.5.2
 
    .. versionchanged:: 2.3
-      If :func:`os.stat_float_times` returns True, the result is a floating point
+      If :func:`os.stat_float_times` returns ``True``, the result is a floating point
       number.
 
 
@@ -140,7 +140,7 @@ the :mod:`glob` module.)
    .. versionadded:: 1.5.2
 
    .. versionchanged:: 2.3
-      If :func:`os.stat_float_times` returns True, the result is a floating point
+      If :func:`os.stat_float_times` returns ``True``, the result is a floating point
       number.
 
 
@@ -185,7 +185,7 @@ the :mod:`glob` module.)
 .. function:: islink(path)
 
    Return ``True`` if *path* refers to a directory entry that is a symbolic link.
-   Always ``False`` if symbolic links are not supported.
+   Always ``False`` if symbolic links are not supported by the Python runtime.
 
 
 .. function:: ismount(path)
@@ -197,17 +197,22 @@ the :mod:`glob` module.)
    device --- this should detect mount points for all Unix and POSIX variants.
 
 
-.. function:: join(path1[, path2[, ...]])
+.. function:: join(path, *paths)
 
-   Join one or more path components intelligently.  If any component is an absolute
-   path, all previous components (on Windows, including the previous drive letter,
-   if there was one) are thrown away, and joining continues.  The return value is
-   the concatenation of *path1*, and optionally *path2*, etc., with exactly one
-   directory separator (``os.sep``) following each non-empty part except the last.
-   (This means that an empty last part will result in a path that ends with a
-   separator.)  Note that on Windows, since there is a current directory for
-   each drive, ``os.path.join("c:", "foo")`` represents a path relative to the
-   current directory on drive :file:`C:` (:file:`c:foo`), not :file:`c:\\foo`.
+   Join one or more path components intelligently.  The return value is the
+   concatenation of *path* and any members of *\*paths* with exactly one
+   directory separator (``os.sep``) following each non-empty part except the
+   last, meaning that the result will only end in a separator if the last
+   part is empty.  If a component is an absolute path, all previous
+   components are thrown away and joining continues from the absolute path
+   component.
+
+   On Windows, the drive letter is not reset when an absolute path component
+   (e.g., ``r'\foo'``) is encountered.  If a component contains a drive
+   letter, all previous components are thrown away and the drive letter is
+   reset.  Note that since there is a current directory for each drive,
+   ``os.path.join("c:", "foo")`` represents a path relative to the current
+   directory on drive :file:`C:` (:file:`c:foo`), not :file:`c:\\foo`.
 
 
 .. function:: normcase(path)
@@ -251,7 +256,7 @@ the :mod:`glob` module.)
 .. function:: samefile(path1, path2)
 
    Return ``True`` if both pathname arguments refer to the same file or directory
-   (as indicated by device number and i-node number). Raise an exception if a
+   (as indicated by device number and i-node number). Raise an exception if an
    :func:`os.stat` call on either pathname fails.
 
    Availability: Unix.
@@ -345,7 +350,7 @@ the :mod:`glob` module.)
 
 .. data:: supports_unicode_filenames
 
-   True if arbitrary Unicode strings can be used as file names (within limitations
+   ``True`` if arbitrary Unicode strings can be used as file names (within limitations
    imposed by the file system).
 
    .. versionadded:: 2.3

@@ -351,7 +351,7 @@ SRE_AT(SRE_STATE* state, SRE_CHAR* ptr, SRE_CODE at)
                 SRE_IS_LINEBREAK((int) ptr[-1]));
 
     case SRE_AT_END:
-        return (((void*) (ptr+1) == state->end &&
+        return (((SRE_CHAR *)state->end - ptr == 1 &&
                  SRE_IS_LINEBREAK((int) ptr[0])) ||
                 ((void*) ptr == state->end));
 
@@ -835,7 +835,7 @@ entrance:
     if (ctx->pattern[0] == SRE_OP_INFO) {
         /* optimization info block */
         /* <INFO> <1=skip> <2=flags> <3=min> ... */
-        if (ctx->pattern[3] && (end - ctx->ptr) < ctx->pattern[3]) {
+        if (ctx->pattern[3] && (Py_uintptr_t)(end - ctx->ptr) < ctx->pattern[3]) {
             TRACE(("reject (got %" PY_FORMAT_SIZE_T "d chars, "
                    "need %" PY_FORMAT_SIZE_T "d)\n",
                    (end - ctx->ptr), (Py_ssize_t) ctx->pattern[3]));
@@ -1404,9 +1404,9 @@ entrance:
             /* <ASSERT> <skip> <back> <pattern> */
             TRACE(("|%p|%p|ASSERT %d\n", ctx->pattern,
                    ctx->ptr, ctx->pattern[1]));
-            state->ptr = ctx->ptr - ctx->pattern[1];
-            if (state->ptr < state->beginning)
+            if (ctx->ptr - (SRE_CHAR *)state->beginning < (Py_ssize_t)ctx->pattern[1])
                 RETURN_FAILURE;
+            state->ptr = ctx->ptr - ctx->pattern[1];
             DO_JUMP(JUMP_ASSERT, jump_assert, ctx->pattern+2);
             RETURN_ON_FAILURE(ret);
             ctx->pattern += ctx->pattern[0];
@@ -1417,8 +1417,8 @@ entrance:
             /* <ASSERT_NOT> <skip> <back> <pattern> */
             TRACE(("|%p|%p|ASSERT_NOT %d\n", ctx->pattern,
                    ctx->ptr, ctx->pattern[1]));
-            state->ptr = ctx->ptr - ctx->pattern[1];
-            if (state->ptr >= state->beginning) {
+            if (ctx->ptr - (SRE_CHAR *)state->beginning >= (Py_ssize_t)ctx->pattern[1]) {
+                state->ptr = ctx->ptr - ctx->pattern[1];
                 DO_JUMP(JUMP_ASSERT_NOT, jump_assert_not, ctx->pattern+2);
                 if (ret) {
                     RETURN_ON_ERROR(ret);
@@ -1510,12 +1510,20 @@ SRE_SEARCH(SRE_STATE* state, SRE_CODE* pattern)
     SRE_CODE* overlap = NULL;
     int flags = 0;
 
+    if (ptr > end)
+        return 0;
+
     if (pattern[0] == SRE_OP_INFO) {
         /* optimization info block */
         /* <INFO> <1=skip> <2=flags> <3=min> <4=max> <5=prefix info>  */
 
         flags = pattern[2];
 
+        if (pattern[3] && end - ptr < (Py_ssize_t)pattern[3]) {
+            TRACE(("reject (got %u chars, need %u)\n",
+                   (unsigned int)(end - ptr), pattern[3]));
+            return 0;
+        }
         if (pattern[3] > 1) {
             /* adjust end point (but make sure we leave at least one
                character in there, so literal search will work) */
@@ -1614,15 +1622,18 @@ SRE_SEARCH(SRE_STATE* state, SRE_CODE* pattern)
                 break;
             ptr++;
         }
-    } else
+    } else {
         /* general case */
-        while (ptr <= end) {
+        assert(ptr <= end);
+        while (1) {
             TRACE(("|%p|%p|SEARCH\n", pattern, ptr));
-            state->start = state->ptr = ptr++;
+            state->start = state->ptr = ptr;
             status = SRE_MATCH(state, pattern);
-            if (status != 0)
+            if (status != 0 || ptr >= end)
                 break;
+            ptr++;
         }
+    }
 
     return status;
 }
@@ -1875,18 +1886,62 @@ pattern_dealloc(PatternObject* self)
     PyObject_DEL(self);
 }
 
+static int
+check_args_size(const char *name, PyObject* args, PyObject* kw, int n)
+{
+    Py_ssize_t m = PyTuple_GET_SIZE(args) + (kw ? PyDict_Size(kw) : 0);
+    if (m <= n)
+        return 1;
+    PyErr_Format(PyExc_TypeError,
+                 "%s() takes at most %d positional arguments (%zd given)",
+                 name, n, m);
+    return 0;
+}
+
+static PyObject*
+fix_string_param(PyObject *string, PyObject *string2, const char *oldname)
+{
+    if (string2 != NULL) {
+        char buf[100];
+        if (string != NULL) {
+            PyErr_Format(PyExc_TypeError,
+                         "Argument given by name ('%s') and position (1)",
+                         oldname);
+            return NULL;
+        }
+        sprintf(buf, "The '%s' keyword parameter name is deprecated.  "
+                     "Use 'string' instead.", oldname);
+        if (PyErr_Warn(PyExc_DeprecationWarning, buf) < 0)
+            return NULL;
+        return string2;
+    }
+    if (string == NULL) {
+        PyErr_SetString(PyExc_TypeError,
+                        "Required argument 'string' (pos 1) not found");
+        return NULL;
+    }
+    return string;
+}
+
 static PyObject*
 pattern_match(PatternObject* self, PyObject* args, PyObject* kw)
 {
     SRE_STATE state;
     int status;
 
-    PyObject* string;
+    PyObject *string = NULL, *string2 = NULL;
     Py_ssize_t start = 0;
     Py_ssize_t end = PY_SSIZE_T_MAX;
-    static char* kwlist[] = { "pattern", "pos", "endpos", NULL };
-    if (!PyArg_ParseTupleAndKeywords(args, kw, "O|nn:match", kwlist,
-                                     &string, &start, &end))
+    static char* kwlist[] = { "string", "pos", "endpos", "pattern", NULL };
+    if (!check_args_size("match", args, kw, 3))
+        return NULL;
+
+    if (!PyArg_ParseTupleAndKeywords(args, kw, "|OnnO:match", kwlist,
+                                     &string, &start, &end, &string2))
+        return NULL;
+
+    string = fix_string_param(string, string2, "pattern");
+    if (!string)
         return NULL;
 
     string = state_init(&state, self, string, start, end);
@@ -1920,12 +1975,19 @@ pattern_search(PatternObject* self, PyObject* args, PyObject* kw)
     SRE_STATE state;
     int status;
 
-    PyObject* string;
+    PyObject *string = NULL, *string2 = NULL;
     Py_ssize_t start = 0;
     Py_ssize_t end = PY_SSIZE_T_MAX;
-    static char* kwlist[] = { "pattern", "pos", "endpos", NULL };
-    if (!PyArg_ParseTupleAndKeywords(args, kw, "O|nn:search", kwlist,
-                                     &string, &start, &end))
+    static char* kwlist[] = { "string", "pos", "endpos", "pattern", NULL };
+    if (!check_args_size("search", args, kw, 3))
+        return NULL;
+
+    if (!PyArg_ParseTupleAndKeywords(args, kw, "|OnnO:search", kwlist,
+                                     &string, &start, &end, &string2))
+        return NULL;
+
+    string = fix_string_param(string, string2, "pattern");
+    if (!string)
         return NULL;
 
     string = state_init(&state, self, string, start, end);
@@ -1992,8 +2054,7 @@ deepcopy(PyObject** object, PyObject* memo)
     if (!copy)
         return 0;
 
-    Py_DECREF(*object);
-    *object = copy;
+    Py_SETREF(*object, copy);
 
     return 1; /* success */
 }
@@ -2055,12 +2116,19 @@ pattern_findall(PatternObject* self, PyObject* args, PyObject* kw)
     int status;
     Py_ssize_t i, b, e;
 
-    PyObject* string;
+    PyObject *string = NULL, *string2 = NULL;
     Py_ssize_t start = 0;
     Py_ssize_t end = PY_SSIZE_T_MAX;
-    static char* kwlist[] = { "source", "pos", "endpos", NULL };
-    if (!PyArg_ParseTupleAndKeywords(args, kw, "O|nn:findall", kwlist,
-                                     &string, &start, &end))
+    static char* kwlist[] = { "string", "pos", "endpos", "source", NULL };
+    if (!check_args_size("findall", args, kw, 3))
+        return NULL;
+
+    if (!PyArg_ParseTupleAndKeywords(args, kw, "|OnnO:findall", kwlist,
+                                     &string, &start, &end, &string2))
+        return NULL;
+
+    string = fix_string_param(string, string2, "source");
+    if (!string)
         return NULL;
 
     string = state_init(&state, self, string, start, end);
@@ -2185,12 +2253,33 @@ pattern_split(PatternObject* self, PyObject* args, PyObject* kw)
     Py_ssize_t i;
     void* last;
 
-    PyObject* string;
+    PyObject *string = NULL, *string2 = NULL;
     Py_ssize_t maxsplit = 0;
-    static char* kwlist[] = { "source", "maxsplit", NULL };
-    if (!PyArg_ParseTupleAndKeywords(args, kw, "O|n:split", kwlist,
-                                     &string, &maxsplit))
+    static char* kwlist[] = { "string", "maxsplit", "source", NULL };
+    if (!check_args_size("split", args, kw, 2))
         return NULL;
+
+    if (!PyArg_ParseTupleAndKeywords(args, kw, "|OnO:split", kwlist,
+                                     &string, &maxsplit, &string2))
+        return NULL;
+
+    string = fix_string_param(string, string2, "source");
+    if (!string)
+        return NULL;
+
+    if (Py_Py3kWarningFlag &&
+        (self->code[0] != SRE_OP_INFO || self->code[3] == 0))
+    {
+        if (self->code[0] == SRE_OP_INFO && self->code[4] == 0) {
+            if (PyErr_WarnPy3k("split() requires a non-empty pattern match.",
+                               1) < 0)
+                return NULL;
+        }
+        else if (PyErr_WarnEx(PyExc_FutureWarning,
+                              "split() requires a non-empty pattern match.",
+                              1) < 0)
+            return NULL;
+    }
 
     string = state_init(&state, self, string, 0, PY_SSIZE_T_MAX);
     if (!string)
@@ -2230,7 +2319,7 @@ pattern_split(PatternObject* self, PyObject* args, PyObject* kw)
         }
 
         if (state.start == state.ptr) {
-            if (last == state.end)
+            if (last == state.end || state.ptr == state.end)
                 break;
             /* skip one character */
             state.start = (void*) ((char*) state.ptr + state.charsize);
@@ -2432,6 +2521,8 @@ pattern_subx(PatternObject* self, PyObject* ptemplate, PyObject* string,
 
 next:
         /* move on */
+        if (state.ptr == state.end)
+            break;
         if (state.ptr == state.start)
             state.start = (void*) ((char*) state.ptr + state.charsize);
         else
@@ -2621,8 +2712,8 @@ static PyMemberDef pattern_members[] = {
 };
 
 statichere PyTypeObject Pattern_Type = {
-    PyObject_HEAD_INIT(NULL)
-    0, "_" SRE_MODULE ".SRE_Pattern",
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_" SRE_MODULE ".SRE_Pattern",
     sizeof(PatternObject), sizeof(SRE_CODE),
     (destructor)pattern_dealloc, /*tp_dealloc*/
     0,                                  /* tp_print */
@@ -2753,8 +2844,7 @@ _compile(PyObject* self_, PyObject* args)
     \_________\_____/        /
                \____________/
 
-   It also helps that SRE_CODE is always an unsigned type, either 2 bytes or 4
-   bytes wide (the latter if Python is compiled for "wide" unicode support).
+   It also helps that SRE_CODE is always an unsigned type.
 */
 
 /* Defining this one enables tracing of the validator */
@@ -2792,7 +2882,7 @@ _compile(PyObject* self_, PyObject* args)
         skip = *code;                                   \
         VTRACE(("%lu (skip to %p)\n",                   \
                (unsigned long)skip, code+skip));        \
-        if (skip-adj > end-code)                        \
+        if (skip-adj > (Py_uintptr_t)(end - code))      \
             FAIL;                                       \
         code++;                                         \
     } while (0)
@@ -2825,7 +2915,7 @@ _validate_charset(SRE_CODE *code, SRE_CODE *end)
 
         case SRE_OP_CHARSET:
             offset = 32/sizeof(SRE_CODE); /* 32-byte bitmap */
-            if (offset > end-code)
+            if (offset > (Py_uintptr_t)(end - code))
                 FAIL;
             code += offset;
             break;
@@ -2833,7 +2923,7 @@ _validate_charset(SRE_CODE *code, SRE_CODE *end)
         case SRE_OP_BIGCHARSET:
             GET_ARG; /* Number of blocks */
             offset = 256/sizeof(SRE_CODE); /* 256-byte table */
-            if (offset > end-code)
+            if (offset > (Py_uintptr_t)(end - code))
                 FAIL;
             /* Make sure that each byte points to a valid block */
             for (i = 0; i < 256; i++) {
@@ -2842,7 +2932,7 @@ _validate_charset(SRE_CODE *code, SRE_CODE *end)
             }
             code += offset;
             offset = arg * 32/sizeof(SRE_CODE); /* 32-byte bitmap times arg */
-            if (offset > end-code)
+            if (offset > (Py_uintptr_t)(end - code))
                 FAIL;
             code += offset;
             break;
@@ -2905,7 +2995,7 @@ _validate_inner(SRE_CODE *code, SRE_CODE *end, Py_ssize_t groups)
                sre_match() code is robust even if they don't, and the worst
                you can get is nonsensical match results. */
             GET_ARG;
-            if (arg > 2*groups+1) {
+            if (arg > 2 * (size_t)groups + 1) {
                 VTRACE(("arg=%d, groups=%d\n", (int)arg, (int)groups));
                 FAIL;
             }
@@ -2993,11 +3083,11 @@ _validate_inner(SRE_CODE *code, SRE_CODE *end, Py_ssize_t groups)
                     GET_ARG; prefix_len = arg;
                     GET_ARG; /* prefix skip */
                     /* Here comes the prefix string */
-                    if (prefix_len > newcode-code)
+                    if (prefix_len > (Py_uintptr_t)(newcode - code))
                         FAIL;
                     code += prefix_len;
                     /* And here comes the overlap table */
-                    if (prefix_len > newcode-code)
+                    if (prefix_len > (Py_uintptr_t)(newcode - code))
                         FAIL;
                     /* Each overlap value should be < prefix_len */
                     for (i = 0; i < prefix_len; i++) {
@@ -3088,7 +3178,7 @@ _validate_inner(SRE_CODE *code, SRE_CODE *end, Py_ssize_t groups)
         case SRE_OP_GROUPREF:
         case SRE_OP_GROUPREF_IGNORE:
             GET_ARG;
-            if (arg >= groups)
+            if (arg >= (size_t)groups)
                 FAIL;
             break;
 
@@ -3097,7 +3187,7 @@ _validate_inner(SRE_CODE *code, SRE_CODE *end, Py_ssize_t groups)
                'group' is either an integer group number or a group name,
                'then' and 'else' are sub-regexes, and 'else' is optional. */
             GET_ARG;
-            if (arg >= groups)
+            if (arg >= (size_t)groups)
                 FAIL;
             GET_SKIP_ADJ(1);
             code--; /* The skip is relative to the first arg! */
@@ -3126,7 +3216,7 @@ _validate_inner(SRE_CODE *code, SRE_CODE *end, Py_ssize_t groups)
                to allow arbitrary jumps anywhere in the code; so we just look
                for a JUMP opcode preceding our skip target.
             */
-            if (skip >= 3 && skip-3 < end-code &&
+            if (skip >= 3 && skip-3 < (Py_uintptr_t)(end - code) &&
                 code[skip-3] == SRE_OP_JUMP)
             {
                 VTRACE(("both then and else parts present\n"));
@@ -3237,7 +3327,7 @@ match_getindex(MatchObject* self, PyObject* index)
 {
     Py_ssize_t i;
 
-    if (PyInt_Check(index))
+    if (_PyAnyInt_Check(index))
         return PyInt_AsSsize_t(index);
 
     i = -1;
@@ -3245,7 +3335,7 @@ match_getindex(MatchObject* self, PyObject* index)
     if (self->pattern->groupindex) {
         index = PyObject_GetItem(self->pattern->groupindex, index);
         if (index) {
-            if (PyInt_Check(index) || PyLong_Check(index))
+            if (_PyAnyInt_Check(index))
                 i = PyInt_AsSsize_t(index);
             Py_DECREF(index);
         } else
@@ -3362,10 +3452,8 @@ match_groupdict(MatchObject* self, PyObject* args, PyObject* kw)
         if (!key)
             goto failed;
         value = match_getslice(self, key, def);
-        if (!value) {
-            Py_DECREF(key);
+        if (!value)
             goto failed;
-        }
         status = PyDict_SetItem(result, key, value);
         Py_DECREF(value);
         if (status < 0)
@@ -3779,6 +3867,9 @@ scanner_match(ScannerObject* self, PyObject *unused)
     PyObject* match;
     int status;
 
+    if (state->start == NULL)
+        Py_RETURN_NONE;
+
     state_reset(state);
 
     state->ptr = state->start;
@@ -3796,10 +3887,14 @@ scanner_match(ScannerObject* self, PyObject *unused)
     match = pattern_new_match((PatternObject*) self->pattern,
                                state, status);
 
-    if (status == 0 || state->ptr == state->start)
+    if (status == 0)
+        state->start = NULL;
+    else if (state->ptr != state->start)
+        state->start = state->ptr;
+    else if (state->ptr != state->end)
         state->start = (void*) ((char*) state->ptr + state->charsize);
     else
-        state->start = state->ptr;
+        state->start = NULL;
 
     return match;
 }
@@ -3811,6 +3906,9 @@ scanner_search(ScannerObject* self, PyObject *unused)
     SRE_STATE* state = &self->state;
     PyObject* match;
     int status;
+
+    if (state->start == NULL)
+        Py_RETURN_NONE;
 
     state_reset(state);
 
@@ -3829,10 +3927,14 @@ scanner_search(ScannerObject* self, PyObject *unused)
     match = pattern_new_match((PatternObject*) self->pattern,
                                state, status);
 
-    if (status == 0 || state->ptr == state->start)
+    if (status == 0)
+        state->start = NULL;
+    else if (state->ptr != state->start)
+        state->start = state->ptr;
+    else if (state->ptr != state->end)
         state->start = (void*) ((char*) state->ptr + state->charsize);
     else
-        state->start = state->ptr;
+        state->start = NULL;
 
     return match;
 }
@@ -3850,8 +3952,8 @@ static PyMemberDef scanner_members[] = {
 };
 
 statichere PyTypeObject Scanner_Type = {
-    PyObject_HEAD_INIT(NULL)
-    0, "_" SRE_MODULE ".SRE_Scanner",
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_" SRE_MODULE ".SRE_Scanner",
     sizeof(ScannerObject), 0,
     (destructor)scanner_dealloc, /*tp_dealloc*/
     0,				/* tp_print */

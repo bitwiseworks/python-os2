@@ -65,22 +65,6 @@ Long Integer Objects
    .. versionadded:: 2.6
 
 
-.. c:function:: PyObject* PyLong_FromSsize_t(Py_ssize_t v)
-
-   Return a new :c:type:`PyLongObject` object with a value of *v*, or *NULL*
-   on failure.
-
-   .. versionadded:: 2.6
-
-
-.. c:function:: PyObject* PyLong_FromSize_t(size_t v)
-
-   Return a new :c:type:`PyLongObject` object with a value of *v*, or *NULL*
-   on failure.
-
-   .. versionadded:: 2.6
-
-
 .. c:function:: PyObject* PyLong_FromLongLong(PY_LONG_LONG v)
 
    Return a new :c:type:`PyLongObject` object from a C :c:type:`long long`, or *NULL*
@@ -199,18 +183,6 @@ Long Integer Objects
    raised.
 
 
-.. c:function:: Py_ssize_t PyLong_AsSsize_t(PyObject *pylong)
-
-   .. index::
-      single: PY_SSIZE_T_MAX
-
-   Return a :c:type:`Py_ssize_t` representation of the contents of *pylong*.  If
-   *pylong* is greater than :const:`PY_SSIZE_T_MAX`, an :exc:`OverflowError` is
-   raised.
-
-   .. versionadded:: 2.6
-
-
 .. c:function:: PY_LONG_LONG PyLong_AsLongLong(PyObject *pylong)
 
    .. index::
@@ -245,6 +217,9 @@ Long Integer Objects
    Return a C :c:type:`unsigned long` from a Python long integer, without checking
    for overflow.
 
+   Returns ``(unsigned long)-1`` on error.  Use :c:func:`PyErr_Occurred` to
+   disambiguate.
+
    .. versionadded:: 2.3
 
 
@@ -252,6 +227,9 @@ Long Integer Objects
 
    Return a C :c:type:`unsigned long long` from a Python long integer, without
    checking for overflow.
+
+   Returns ``(unsigned PY_LONG_LONG)-1`` on error.  Use
+   :c:func:`PyErr_Occurred` to disambiguate.
 
    .. versionadded:: 2.3
 

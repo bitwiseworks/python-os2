@@ -55,7 +55,7 @@ The data you've saved is persistent and is available in subsequent sessions::
 Usually your SQL operations will need to use values from Python variables.  You
 shouldn't assemble your query using Python's string operations because doing so
 is insecure; it makes your program vulnerable to an SQL injection attack
-(see http://xkcd.com/327/ for humorous example of what can go wrong).
+(see https://xkcd.com/327/ for humorous example of what can go wrong).
 
 Instead, use the DB-API's parameter substitution.  Put ``?`` as a placeholder
 wherever you want to use a value, and then provide a tuple of values as the
@@ -97,11 +97,11 @@ This example uses the iterator form::
 
 .. seealso::
 
-   http://code.google.com/p/pysqlite/
+   https://github.com/ghaering/pysqlite
       The pysqlite web page -- sqlite3 is developed externally under the name
       "pysqlite".
 
-   http://www.sqlite.org
+   https://www.sqlite.org
       The SQLite web page; the documentation describes the syntax and the
       available data types for the supported SQL dialect.
 
@@ -206,8 +206,8 @@ Module functions and constants
    Registers a callable to convert a bytestring from the database into a custom
    Python type. The callable will be invoked for all database values that are of
    the type *typename*. Confer the parameter *detect_types* of the :func:`connect`
-   function for how the type detection works. Note that the case of *typename* and
-   the name of the type in your query must match!
+   function for how the type detection works. Note that *typename* and the name of
+   the type in your query are matched in case-insensitive manner.
 
 
 .. function:: register_adapter(type, callable)
@@ -234,10 +234,10 @@ Module functions and constants
 .. function:: enable_callback_tracebacks(flag)
 
    By default you will not get any tracebacks in user-defined functions,
-   aggregates, converters, authorizer callbacks etc. If you want to debug them, you
-   can call this function with *flag* as True. Afterwards, you will get tracebacks
-   from callbacks on ``sys.stderr``. Use :const:`False` to disable the feature
-   again.
+   aggregates, converters, authorizer callbacks etc. If you want to debug them,
+   you can call this function with *flag* set to ``True``. Afterwards, you will
+   get tracebacks from callbacks on ``sys.stderr``. Use :const:`False` to
+   disable the feature again.
 
 
 .. _sqlite3-connection-objects:
@@ -256,11 +256,11 @@ Connection Objects
       :ref:`sqlite3-controlling-transactions` for a more detailed explanation.
 
 
-   .. method:: cursor([cursorClass])
+   .. method:: cursor(factory=Cursor)
 
-      The cursor method accepts a single optional parameter *cursorClass*. If
-      supplied, this must be a custom cursor class that extends
-      :class:`sqlite3.Cursor`.
+      The cursor method accepts a single optional parameter *factory*. If
+      supplied, this must be a callable returning an instance of :class:`Cursor`
+      or its subclasses.
 
    .. method:: commit()
 
@@ -308,7 +308,7 @@ Connection Objects
       as the SQL function.
 
       The function can return any of the types supported by SQLite: unicode, str, int,
-      long, float, buffer and None.
+      long, float, buffer and ``None``.
 
       Example:
 
@@ -324,7 +324,7 @@ Connection Objects
       final result of the aggregate.
 
       The ``finalize`` method can return any of the types supported by SQLite:
-      unicode, str, int, long, float, buffer and None.
+      unicode, str, int, long, float, buffer and ``None``.
 
       Example:
 
@@ -346,7 +346,7 @@ Connection Objects
 
       .. literalinclude:: ../includes/sqlite3/collation_reverse.py
 
-      To remove a collation, call ``create_collation`` with None as callable::
+      To remove a collation, call ``create_collation`` with ``None`` as callable::
 
          con.create_collation("reverse", None)
 
@@ -583,7 +583,7 @@ Cursor Objects
    .. attribute:: lastrowid
 
       This read-only attribute provides the rowid of the last modified row. It is
-      only set if you issued a ``INSERT`` statement using the :meth:`execute`
+      only set if you issued an ``INSERT`` statement using the :meth:`execute`
       method. For operations other than ``INSERT`` or when :meth:`executemany` is
       called, :attr:`lastrowid` is set to :const:`None`.
 
@@ -594,6 +594,18 @@ Cursor Objects
       column where the last six items of each tuple are :const:`None`.
 
       It is set for ``SELECT`` statements without any matching rows as well.
+
+   .. attribute:: connection
+
+      This read-only attribute provides the SQLite database :class:`Connection`
+      used by the :class:`Cursor` object.  A :class:`Cursor` object created by
+      calling :meth:`con.cursor() <Connection.cursor>` will have a
+      :attr:`connection` attribute that refers to *con*::
+
+         >>> con = sqlite3.connect(":memory:")
+         >>> cur = con.cursor()
+         >>> cur.connection == con
+         True
 
 .. _sqlite3-row-objects:
 
@@ -617,7 +629,7 @@ Row Objects
 
    .. method:: keys
 
-      This method returns a tuple of column names. Immediately after a query,
+      This method returns a list of column names. Immediately after a query,
       it is the first member of each tuple in :attr:`Cursor.description`.
 
       .. versionadded:: 2.6
@@ -726,9 +738,6 @@ As described before, SQLite supports only a limited set of types natively. To
 use other Python types with SQLite, you must **adapt** them to one of the
 sqlite3 module's supported types for SQLite: one of NoneType, int, long, float,
 str, unicode, buffer.
-
-The :mod:`sqlite3` module uses Python object adaptation, as described in
-:pep:`246` for this.  The protocol to use is :class:`PrepareProtocol`.
 
 There are two ways to enable the :mod:`sqlite3` module to adapt a custom Python
 type to one of the supported ones.
@@ -859,7 +868,7 @@ You can control which kind of ``BEGIN`` statements sqlite3 implicitly executes
 (or none at all) via the *isolation_level* parameter to the :func:`connect`
 call, or via the :attr:`isolation_level` property of connections.
 
-If you want **autocommit mode**, then set :attr:`isolation_level` to None.
+If you want **autocommit mode**, then set :attr:`isolation_level` to ``None``.
 
 Otherwise leave it at its default, which will result in a plain "BEGIN"
 statement, or set it to one of SQLite's supported isolation levels: "DEFERRED",

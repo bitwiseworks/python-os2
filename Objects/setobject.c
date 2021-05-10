@@ -2,9 +2,6 @@
 /* set object implementation
    Written and maintained by Raymond D. Hettinger <python@rcn.com>
    Derived from Lib/sets.py and Objects/dictobject.c.
-
-   Copyright (c) 2003-2007 Python Software Foundation.
-   All rights reserved.
 */
 
 #include "Python.h"
@@ -552,6 +549,7 @@ set_dealloc(PySetObject *so)
 {
     register setentry *entry;
     Py_ssize_t fill = so->fill;
+    /* bpo-31095: UnTrack is needed before calling any callbacks */
     PyObject_GC_UnTrack(so);
     Py_TRASHCAN_SAFE_BEGIN(so)
     if (so->weakreflist != NULL)
@@ -585,13 +583,13 @@ set_tp_print(PySetObject *so, FILE *fp, int flags)
         if (status < 0)
             return status;
         Py_BEGIN_ALLOW_THREADS
-        fprintf(fp, "%s(...)", so->ob_type->tp_name);
+        fprintf(fp, "%s(...)", Py_TYPE(so)->tp_name);
         Py_END_ALLOW_THREADS
         return 0;
     }
 
     Py_BEGIN_ALLOW_THREADS
-    fprintf(fp, "%s([", so->ob_type->tp_name);
+    fprintf(fp, "%s([", Py_TYPE(so)->tp_name);
     Py_END_ALLOW_THREADS
     while (set_next(so, &pos, &entry)) {
         Py_BEGIN_ALLOW_THREADS
@@ -619,7 +617,7 @@ set_repr(PySetObject *so)
     if (status != 0) {
         if (status < 0)
             return NULL;
-        return PyString_FromFormat("%s(...)", so->ob_type->tp_name);
+        return PyString_FromFormat("%s(...)", Py_TYPE(so)->tp_name);
     }
 
     keys = PySequence_List((PyObject *)so);
@@ -630,7 +628,7 @@ set_repr(PySetObject *so)
     if (listrepr == NULL)
         goto done;
 
-    result = PyString_FromFormat("%s(%s)", so->ob_type->tp_name,
+    result = PyString_FromFormat("%s(%s)", Py_TYPE(so)->tp_name,
         PyString_AS_STRING(listrepr));
     Py_DECREF(listrepr);
 done:
@@ -787,7 +785,7 @@ frozenset_hash(PyObject *self)
     hash *= PySet_GET_SIZE(self) + 1;
     while (set_next(so, &pos, &entry)) {
         /* Work to increase the bit dispersion for closely spaced hash
-           values.  The is important because some use cases have many
+           values.  This is important because some use cases have many
            combinations of a small number of elements with nearby
            hashes so that many distinct combinations collapse to only
            a handful of distinct hash values. */
@@ -814,6 +812,8 @@ typedef struct {
 static void
 setiter_dealloc(setiterobject *si)
 {
+    /* bpo-31095: UnTrack is needed before calling any callbacks */
+    _PyObject_GC_UNTRACK(si);
     Py_XDECREF(si->si_set);
     PyObject_GC_Del(si);
 }
@@ -874,8 +874,8 @@ static PyObject *setiter_iternext(setiterobject *si)
     return key;
 
 fail:
-    Py_DECREF(so);
     si->si_set = NULL;
+    Py_DECREF(so);
     return NULL;
 }
 
@@ -1548,9 +1548,15 @@ set_difference(PySetObject *so, PyObject *other)
     if (PyDict_CheckExact(other)) {
         while (set_next(so, &pos, &entry)) {
             setentry entrycopy;
+            int rv;
             entrycopy.hash = entry->hash;
             entrycopy.key = entry->key;
-            if (!_PyDict_Contains(other, entry->key, entry->hash)) {
+            rv = _PyDict_Contains(other, entry->key, entry->hash);
+            if (rv < 0) {
+                Py_DECREF(result);
+                return NULL;
+            }
+            if (!rv) {
                 if (set_add_entry((PySetObject *)result, &entrycopy) == -1) {
                     Py_DECREF(result);
                     return NULL;
@@ -1704,8 +1710,10 @@ set_symmetric_difference(PySetObject *so, PyObject *other)
     if (otherset == NULL)
         return NULL;
     rv = set_symmetric_difference_update(otherset, (PyObject *)so);
-    if (rv == NULL)
+    if (rv == NULL) {
+        Py_DECREF(otherset);
         return NULL;
+    }
     Py_DECREF(rv);
     return (PyObject *)otherset;
 }
@@ -1793,15 +1801,12 @@ PyDoc_STRVAR(issuperset_doc, "Report whether this set contains another set.");
 static PyObject *
 set_richcompare(PySetObject *v, PyObject *w, int op)
 {
-    PyObject *r1, *r2;
+    PyObject *r1;
+    int r2;
 
     if(!PyAnySet_Check(w)) {
-        if (op == Py_EQ)
-            Py_RETURN_FALSE;
-        if (op == Py_NE)
-            Py_RETURN_TRUE;
-        PyErr_SetString(PyExc_TypeError, "can only compare to a set");
-        return NULL;
+        Py_INCREF(Py_NotImplemented);
+        return Py_NotImplemented;
     }
     switch (op) {
     case Py_EQ:
@@ -1816,9 +1821,11 @@ set_richcompare(PySetObject *v, PyObject *w, int op)
         r1 = set_richcompare(v, w, Py_EQ);
         if (r1 == NULL)
             return NULL;
-        r2 = PyBool_FromLong(PyObject_Not(r1));
+        r2 = PyObject_IsTrue(r1);
         Py_DECREF(r1);
-        return r2;
+        if (r2 < 0)
+            return NULL;
+        return PyBool_FromLong(!r2);
     case Py_LE:
         return set_issubset(v, w);
     case Py_GE:
@@ -1980,7 +1987,7 @@ set_sizeof(PySetObject *so)
 {
     Py_ssize_t res;
 
-    res = sizeof(PySetObject);
+    res = _PyObject_SIZE(Py_TYPE(so));
     if (so->table != so->smalltable)
         res = res + (so->mask + 1) * sizeof(setentry);
     return PyInt_FromSsize_t(res);

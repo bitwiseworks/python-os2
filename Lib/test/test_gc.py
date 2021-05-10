@@ -1,5 +1,6 @@
 import unittest
-from test.test_support import verbose, run_unittest
+from test.support import (verbose, run_unittest, start_threads,
+                          requires_type_collecting)
 import sys
 import time
 import gc
@@ -90,6 +91,7 @@ class GCTests(unittest.TestCase):
         del a
         self.assertNotEqual(gc.collect(), 0)
 
+    @requires_type_collecting
     def test_newinstance(self):
         class A(object):
             pass
@@ -352,17 +354,13 @@ class GCTests(unittest.TestCase):
         old_checkinterval = sys.getcheckinterval()
         sys.setcheckinterval(3)
         try:
-            exit = False
+            exit = []
             threads = []
             for i in range(N_THREADS):
                 t = threading.Thread(target=run_thread)
                 threads.append(t)
-            for t in threads:
-                t.start()
-            time.sleep(1.0)
-            exit = True
-            for t in threads:
-                t.join()
+            with start_threads(threads, lambda: exit.append(1)):
+                time.sleep(1.0)
         finally:
             sys.setcheckinterval(old_checkinterval)
         gc.collect()

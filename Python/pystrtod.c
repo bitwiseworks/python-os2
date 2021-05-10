@@ -324,7 +324,7 @@ PyOS_ascii_atof(const char *nptr)
 
    On overflow (e.g., when trying to convert '1e500' on an IEEE 754 machine),
    if overflow_exception is NULL then +-Py_HUGE_VAL is returned, and no Python
-   exception is raised.  Otherwise, overflow_exception should point to a
+   exception is raised.  Otherwise, overflow_exception should point to
    a Python exception, this exception will be raised, -1.0 will be returned,
    and *endptr will point just past the end of the converted value.
 
@@ -1004,8 +1004,6 @@ format_float_short(double d, char format_code,
         else {
             /* shouldn't get here: Gay's code should always return
                something starting with a digit, an 'I',  or 'N' */
-            strncpy(p, "ERR", 3);
-            p += 3;
             assert(0);
         }
         goto exit;

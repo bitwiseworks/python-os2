@@ -12,7 +12,7 @@
 
 The :mod:`subprocess` module allows you to spawn new processes, connect to their
 input/output/error pipes, and obtain their return codes.  This module intends to
-replace several other, older modules and functions, such as::
+replace several older modules and functions::
 
    os.system
    os.spawn*
@@ -20,20 +20,26 @@ replace several other, older modules and functions, such as::
    popen2.*
    commands.*
 
-Information about how the :mod:`subprocess` module can be used to replace these
-modules and functions can be found in the following sections.
+Information about how this module can be used to replace the older
+functions can be found in the subprocess-replacements_ section.
 
 .. seealso::
 
+   POSIX users (Linux, BSD, etc.) are strongly encouraged to install
+   and use the much more recent subprocess32_ module instead of the
+   version included with python 2.7.  It is a drop in replacement with
+   better behavior in many situations.
+
    :pep:`324` -- PEP proposing the subprocess module
 
+.. _subprocess32: https://pypi.org/project/subprocess32/
 
 Using the :mod:`subprocess` Module
 ----------------------------------
 
-The recommended approach to invoking subprocesses is to use the following
-convenience functions for all use cases they can handle. For more advanced
-use cases, the underlying :class:`Popen` interface can be used directly.
+The recommended way to launch subprocesses is to use the following
+convenience functions.  For more advanced use cases when these do not
+meet your needs, use the underlying :class:`Popen` interface.
 
 
 .. function:: call(args, *, stdin=None, stdout=None, stderr=None, shell=False)
@@ -57,16 +63,15 @@ use cases, the underlying :class:`Popen` interface can be used directly.
 
    .. warning::
 
-      Invoking the system shell with ``shell=True`` can be a security hazard
-      if combined with untrusted input. See the warning under
-      :ref:`frequently-used-arguments` for details.
+      Using ``shell=True`` can be a security hazard.  See the warning
+      under :ref:`frequently-used-arguments` for details.
 
    .. note::
 
-      Do not use ``stdout=PIPE`` or ``stderr=PIPE`` with this function. As
-      the pipes are not being read in the current process, the child
-      process may block if it generates enough output to a pipe to fill up
-      the OS pipe buffer.
+      Do not use ``stdout=PIPE`` or ``stderr=PIPE`` with this function
+      as that can deadlock based on the child process output volume.
+      Use :class:`Popen` with the :meth:`communicate` method when you
+      need pipes.
 
 
 .. function:: check_call(args, *, stdin=None, stdout=None, stderr=None, shell=False)
@@ -96,16 +101,15 @@ use cases, the underlying :class:`Popen` interface can be used directly.
 
    .. warning::
 
-      Invoking the system shell with ``shell=True`` can be a security hazard
-      if combined with untrusted input. See the warning under
-      :ref:`frequently-used-arguments` for details.
+      Using ``shell=True`` can be a security hazard.  See the warning
+      under :ref:`frequently-used-arguments` for details.
 
    .. note::
 
-      Do not use ``stdout=PIPE`` or ``stderr=PIPE`` with this function. As
-      the pipes are not being read in the current process, the child
-      process may block if it generates enough output to a pipe to fill up
-      the OS pipe buffer.
+      Do not use ``stdout=PIPE`` or ``stderr=PIPE`` with this function
+      as that can deadlock based on the child process output volume.
+      Use :class:`Popen` with the :meth:`communicate` method when you
+      need pipes.
 
 
 .. function:: check_output(args, *, stdin=None, stderr=None, shell=False, universal_newlines=False)
@@ -145,19 +149,16 @@ use cases, the underlying :class:`Popen` interface can be used directly.
 
    .. versionadded:: 2.7
 
-   ..
-
    .. warning::
 
-      Invoking the system shell with ``shell=True`` can be a security hazard
-      if combined with untrusted input. See the warning under
-      :ref:`frequently-used-arguments` for details.
+      Using ``shell=True`` can be a security hazard.  See the warning
+      under :ref:`frequently-used-arguments` for details.
 
    .. note::
 
-      Do not use ``stderr=PIPE`` with this function. As the pipe is not being
-      read in the current process, the child process may block if it
-      generates enough output to the pipe to fill up the OS pipe buffer.
+      Do not use ``stderr=PIPE`` with this function as that can deadlock
+      based on the child process error volume.  Use :class:`Popen` with
+      the :meth:`communicate` method when you need a stderr pipe.
 
 
 .. data:: PIPE
@@ -319,8 +320,8 @@ functions.
    manner described in :ref:`converting-argument-sequence`.  This is because
    the underlying ``CreateProcess()`` operates on strings.
 
-   The *shell* argument (which defaults to *False*) specifies whether to use
-   the shell as the program to execute.  If *shell* is *True*, it is
+   The *shell* argument (which defaults to ``False``) specifies whether to use
+   the shell as the program to execute.  If *shell* is ``True``, it is
    recommended to pass *args* as a string rather than as a sequence.
 
    On Unix with ``shell=True``, the shell defaults to :file:`/bin/sh`.  If
@@ -403,7 +404,7 @@ functions.
       `side-by-side assembly`_ the specified *env* **must** include a valid
       :envvar:`SystemRoot`.
 
-   .. _side-by-side assembly: http://en.wikipedia.org/wiki/Side-by-Side_Assembly
+   .. _side-by-side assembly: https://en.wikipedia.org/wiki/Side-by-Side_Assembly
 
    If *universal_newlines* is ``True``, the file objects *stdout* and *stderr*
    are opened as text files in :term:`universal newlines` mode.  Lines may be
@@ -585,7 +586,7 @@ on Windows.
 .. class:: STARTUPINFO()
 
    Partial support of the Windows
-   `STARTUPINFO <http://msdn.microsoft.com/en-us/library/ms686331(v=vs.85).aspx>`__
+   `STARTUPINFO <https://msdn.microsoft.com/en-us/library/ms686331(v=vs.85).aspx>`__
    structure is used for :class:`Popen` creation.
 
    .. attribute:: dwFlags
@@ -621,7 +622,7 @@ on Windows.
       If :attr:`dwFlags` specifies :data:`STARTF_USESHOWWINDOW`, this attribute
       can be any of the values that can be specified in the ``nCmdShow``
       parameter for the
-      `ShowWindow <http://msdn.microsoft.com/en-us/library/ms633548(v=vs.85).aspx>`__
+      `ShowWindow <https://msdn.microsoft.com/en-us/library/ms633548(v=vs.85).aspx>`__
       function, except for ``SW_SHOWDEFAULT``. Otherwise, this attribute is
       ignored.
 
@@ -705,20 +706,23 @@ been imported from the :mod:`subprocess` module.
 Replacing /bin/sh shell backquote
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-::
+.. code-block:: bash
 
    output=`mycmd myarg`
-   # becomes
-   output = check_output(["mycmd", "myarg"])
 
+becomes::
+
+   output = check_output(["mycmd", "myarg"])
 
 Replacing shell pipeline
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-::
+.. code-block:: bash
 
    output=`dmesg | grep hda`
-   # becomes
+
+becomes::
+
    p1 = Popen(["dmesg"], stdout=PIPE)
    p2 = Popen(["grep", "hda"], stdin=p1.stdout, stdout=PIPE)
    p1.stdout.close()  # Allow p1 to receive a SIGPIPE if p2 exits.
@@ -728,10 +732,14 @@ The p1.stdout.close() call after starting the p2 is important in order for p1
 to receive a SIGPIPE if p2 exits before p1.
 
 Alternatively, for trusted input, the shell's own pipeline support may still
-be used directly::
+be used directly:
+
+.. code-block:: bash
 
    output=`dmesg | grep hda`
-   # becomes
+
+becomes::
+
    output=check_output("dmesg | grep hda", shell=True)
 
 
@@ -740,9 +748,9 @@ Replacing :func:`os.system`
 
 ::
 
-   sts = os.system("mycmd" + " myarg")
+   status = os.system("mycmd" + " myarg")
    # becomes
-   sts = call("mycmd" + " myarg", shell=True)
+   status = subprocess.call("mycmd" + " myarg", shell=True)
 
 Notes:
 
@@ -851,7 +859,7 @@ Return code handling translates as follows::
    if rc is not None and rc >> 8:
        print "There were some errors"
    ==>
-   process = Popen("cmd", 'w', shell=True, stdin=PIPE)
+   process = Popen("cmd", shell=True, stdin=PIPE)
    ...
    process.stdin.close()
    if process.wait() != 0:
@@ -865,7 +873,7 @@ Replacing functions from the :mod:`popen2` module
 
    (child_stdout, child_stdin) = popen2.popen2("somestring", bufsize, mode)
    ==>
-   p = Popen(["somestring"], shell=True, bufsize=bufsize,
+   p = Popen("somestring", shell=True, bufsize=bufsize,
              stdin=PIPE, stdout=PIPE, close_fds=True)
    (child_stdout, child_stdin) = (p.stdout, p.stdin)
 

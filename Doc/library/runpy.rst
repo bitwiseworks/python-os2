@@ -22,6 +22,9 @@ The :mod:`runpy` module provides two functions:
 
 .. function:: run_module(mod_name, init_globals=None, run_name=None, alter_sys=False)
 
+   .. index::
+      module: __main__
+
    Execute the code of the specified module and return the resulting module
    globals dictionary. The module's code is first located using the standard
    import mechanism (refer to :pep:`302` for details) and then executed in a
@@ -69,6 +72,9 @@ The :mod:`runpy` module provides two functions:
    arguments. It is recommended that the :mod:`sys` module be left alone when
    invoking this function from threaded code.
 
+   .. seealso::
+      The :option:`-m` option offering equivalent functionality from the
+      command line.
 
    .. versionchanged:: 2.7
          Added ability to execute packages by looking for a ``__main__``
@@ -76,6 +82,9 @@ The :mod:`runpy` module provides two functions:
 
 
 .. function:: run_path(file_path, init_globals=None, run_name=None)
+
+   .. index::
+      module: __main__
 
    Execute the code at the named filesystem location and return the resulting
    module globals dictionary. As with a script name supplied to the CPython
@@ -128,14 +137,18 @@ The :mod:`runpy` module provides two functions:
    limitations still apply, use of this function in threaded code should be
    either serialised with the import lock or delegated to a separate process.
 
+   .. seealso::
+      :ref:`using-on-interface-options` for equivalent functionality on the
+      command line (``python path/to/script``).
+
    .. versionadded:: 2.7
 
 .. seealso::
 
-   :pep:`338` - Executing modules as scripts
+   :pep:`338` -- Executing modules as scripts
       PEP written and implemented by Nick Coghlan.
 
-   :pep:`366` - Main module explicit relative imports
+   :pep:`366` -- Main module explicit relative imports
       PEP written and implemented by Nick Coghlan.
 
    :ref:`using-on-general` - CPython command line details

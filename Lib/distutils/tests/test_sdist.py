@@ -130,16 +130,12 @@ class SDistTestCase(PyPIRCCommandTestCase):
             zip_file.close()
 
         # making sure everything has been pruned correctly
-        self.assertEqual(len(content), 4)
+        expected = ['', 'PKG-INFO', 'README', 'setup.py',
+                    'somecode/', 'somecode/__init__.py']
+        self.assertEqual(sorted(content), ['fake-1.0/' + x for x in expected])
 
     @unittest.skipUnless(zlib, "requires zlib")
     def test_make_distribution(self):
-
-        # check if tar and gzip are installed
-        if (find_executable('tar') is None or
-            find_executable('gzip') is None):
-            return
-
         # now building a sdist
         dist, cmd = self.get_cmd()
 
@@ -252,7 +248,13 @@ class SDistTestCase(PyPIRCCommandTestCase):
             zip_file.close()
 
         # making sure everything was added
-        self.assertEqual(len(content), 12)
+        expected = ['', 'PKG-INFO', 'README', 'buildout.cfg',
+                    'data/', 'data/data.dt', 'inroot.txt',
+                    'scripts/', 'scripts/script.py', 'setup.py',
+                    'some/', 'some/file.txt', 'some/other_file.txt',
+                    'somecode/', 'somecode/__init__.py', 'somecode/doc.dat',
+                    'somecode/doc.txt']
+        self.assertEqual(sorted(content), ['fake-1.0/' + x for x in expected])
 
         # checking the MANIFEST
         f = open(join(self.tmp_dir, 'MANIFEST'))
@@ -325,13 +327,11 @@ class SDistTestCase(PyPIRCCommandTestCase):
 
     @unittest.skipUnless(zlib, "requires zlib")
     @unittest.skipUnless(UID_GID_SUPPORT, "Requires grp and pwd support")
+    @unittest.skipIf(find_executable('tar') is None,
+                     "The tar command is not found")
+    @unittest.skipIf(find_executable('gzip') is None,
+                     "The gzip command is not found")
     def test_make_distribution_owner_group(self):
-
-        # check if tar and gzip are installed
-        if (find_executable('tar') is None or
-            find_executable('gzip') is None):
-            return
-
         # now building a sdist
         dist, cmd = self.get_cmd()
 

@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-#
 #-----------------------------------------------------------------------
 # A test suite for the table interface built on bsddb.db
 #-----------------------------------------------------------------------
@@ -84,8 +82,8 @@ class TableDBTestCase(unittest.TestCase):
             colval = pickle.loads(values[0][colname])
         else :
             colval = pickle.loads(bytes(values[0][colname], "iso8859-1"))
-        self.assertTrue(colval > 3.141)
-        self.assertTrue(colval < 3.142)
+        self.assertGreater(colval, 3.141)
+        self.assertLess(colval, 3.142)
 
 
     def test02(self):

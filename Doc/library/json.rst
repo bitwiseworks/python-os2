@@ -8,9 +8,11 @@
 .. versionadded:: 2.6
 
 `JSON (JavaScript Object Notation) <http://json.org>`_, specified by
-:rfc:`4627`, is a lightweight data interchange format based on a subset of
-`JavaScript <http://en.wikipedia.org/wiki/JavaScript>`_ syntax (`ECMA-262 3rd
-edition <http://www.ecma-international.org/publications/files/ECMA-ST-ARCH/ECMA-262,%203rd%20edition,%20December%201999.pdf>`_).
+:rfc:`7159` (which obsoletes :rfc:`4627`) and by
+`ECMA-404 <http://www.ecma-international.org/publications/standards/Ecma-404.htm>`_,
+is a lightweight data interchange format inspired by
+`JavaScript <https://en.wikipedia.org/wiki/JavaScript>`_ object literal syntax
+(although it is not a strict subset of JavaScript [#rfc-errata]_ ).
 
 :mod:`json` exposes an API familiar to users of the standard library
 :mod:`marshal` and :mod:`pickle` modules.
@@ -87,7 +89,7 @@ Extending :class:`JSONEncoder`::
     ...         # Let the base class default method raise the TypeError
     ...         return json.JSONEncoder.default(self, obj)
     ...
-    >>> dumps(2 + 1j, cls=ComplexEncoder)
+    >>> json.dumps(2 + 1j, cls=ComplexEncoder)
     '[2.0, 1.0]'
     >>> ComplexEncoder().encode(2 + 1j)
     '[2.0, 1.0]'
@@ -97,9 +99,9 @@ Extending :class:`JSONEncoder`::
 
 .. highlight:: none
 
-Using json.tool from the shell to validate and pretty-print::
+Using :mod:`json.tool` from the shell to validate and pretty-print::
 
-    $ echo '{"json":"obj"}' | python -mjson.tool
+    $ echo '{"json":"obj"}' | python -m json.tool
     {
         "json": "obj"
     }
@@ -128,28 +130,29 @@ Basic Usage
    :term:`file-like object`) using this :ref:`conversion table
    <py-to-json-table>`.
 
-   If *skipkeys* is ``True`` (default: ``False``), then dict keys that are not
+   If *skipkeys* is true (default: ``False``), then dict keys that are not
    of a basic type (:class:`str`, :class:`unicode`, :class:`int`, :class:`long`,
    :class:`float`, :class:`bool`, ``None``) will be skipped instead of raising a
    :exc:`TypeError`.
 
-   If *ensure_ascii* is ``True`` (the default), all non-ASCII characters in the
+   If *ensure_ascii* is true (the default), all non-ASCII characters in the
    output are escaped with ``\uXXXX`` sequences, and the result is a
    :class:`str` instance consisting of ASCII characters only.  If
-   *ensure_ascii* is ``False``, some chunks written to *fp* may be
+   *ensure_ascii* is false, some chunks written to *fp* may be
    :class:`unicode` instances.  This usually happens because the input contains
    unicode strings or the *encoding* parameter is used.  Unless ``fp.write()``
    explicitly understands :class:`unicode` (as in :func:`codecs.getwriter`)
    this is likely to cause an error.
 
-   If *check_circular* is ``False`` (default: ``True``), then the circular
+   If *check_circular* is false (default: ``True``), then the circular
    reference check for container types will be skipped and a circular reference
    will result in an :exc:`OverflowError` (or worse).
 
-   If *allow_nan* is ``False`` (default: ``True``), then it will be a
+   If *allow_nan* is false (default: ``True``), then it will be a
    :exc:`ValueError` to serialize out of range :class:`float` values (``nan``,
-   ``inf``, ``-inf``) in strict compliance of the JSON specification, instead of
-   using the JavaScript equivalents (``NaN``, ``Infinity``, ``-Infinity``).
+   ``inf``, ``-inf``) in strict compliance of the JSON specification.
+   If *allow_nan* is true, their JavaScript equivalents (``NaN``,
+   ``Infinity``, ``-Infinity``) will be used.
 
    If *indent* is a non-negative integer, then JSON array elements and object
    members will be pretty-printed with that indent level.  An indent level of 0,
@@ -162,16 +165,18 @@ Basic Usage
       trailing whitespace when *indent* is specified.  You can use
       ``separators=(',', ': ')`` to avoid this.
 
-   If *separators* is an ``(item_separator, dict_separator)`` tuple, then it
-   will be used instead of the default ``(', ', ': ')`` separators.  ``(',',
-   ':')`` is the most compact JSON representation.
+   If specified, *separators* should be an ``(item_separator, key_separator)``
+   tuple.  By default, ``(', ', ': ')`` are used.  To get the most compact JSON
+   representation, you should specify ``(',', ':')`` to eliminate whitespace.
 
    *encoding* is the character encoding for str instances, default is UTF-8.
 
-   *default(obj)* is a function that should return a serializable version of
-   *obj* or raise :exc:`TypeError`.  The default simply raises :exc:`TypeError`.
+   If specified, *default* should be a function that gets called for objects that
+   can't otherwise be serialized.  It should return a JSON encodable version of
+   the object or raise a :exc:`TypeError`.  If not specified, :exc:`TypeError`
+   is raised.
 
-   If *sort_keys* is ``True`` (default: ``False``), then the output of
+   If *sort_keys* is true (default: ``False``), then the output of
    dictionaries will be sorted by key.
 
    To use a custom :class:`JSONEncoder` subclass (e.g. one that overrides the
@@ -190,7 +195,7 @@ Basic Usage
                     default=None, sort_keys=False, **kw)
 
    Serialize *obj* to a JSON formatted :class:`str` using this :ref:`conversion
-   table <py-to-json-table>`.  If *ensure_ascii* is ``False``, the result may
+   table <py-to-json-table>`.  If *ensure_ascii* is false, the result may
    contain non-ASCII characters and the return value may be a :class:`unicode`
    instance.
 
@@ -339,13 +344,13 @@ Encoders and Decoders
    (e.g. :class:`float`).
 
    *parse_constant*, if specified, will be called with one of the following
-   strings: ``'-Infinity'``, ``'Infinity'``, ``'NaN'``, ``'null'``, ``'true'``,
-   ``'false'``.  This can be used to raise an exception if invalid JSON numbers
+   strings: ``'-Infinity'``, ``'Infinity'``, ``'NaN'``.
+   This can be used to raise an exception if invalid JSON numbers
    are encountered.
 
-   If *strict* is ``False`` (``True`` is the default), then control characters
+   If *strict* is false (``True`` is the default), then control characters
    will be allowed inside strings.  Control characters in this context are
-   those with character codes in the 0-31 range, including ``'\t'`` (tab),
+   those with character codes in the 0--31 range, including ``'\t'`` (tab),
    ``'\n'``, ``'\r'`` and ``'\0'``.
 
    If the data being deserialized is not a valid JSON document, a
@@ -354,7 +359,7 @@ Encoders and Decoders
    .. method:: decode(s)
 
       Return the Python representation of *s* (a :class:`str` or
-      :class:`unicode` instance containing a JSON document)
+      :class:`unicode` instance containing a JSON document).
 
    .. method:: raw_decode(s)
 
@@ -397,29 +402,29 @@ Encoders and Decoders
    for ``o`` if possible, otherwise it should call the superclass implementation
    (to raise :exc:`TypeError`).
 
-   If *skipkeys* is ``False`` (the default), then it is a :exc:`TypeError` to
-   attempt encoding of keys that are not str, int, long, float or None.  If
-   *skipkeys* is ``True``, such items are simply skipped.
+   If *skipkeys* is false (the default), then it is a :exc:`TypeError` to
+   attempt encoding of keys that are not str, int, long, float or ``None``.  If
+   *skipkeys* is true, such items are simply skipped.
 
-   If *ensure_ascii* is ``True`` (the default), all non-ASCII characters in the
+   If *ensure_ascii* is true (the default), all non-ASCII characters in the
    output are escaped with ``\uXXXX`` sequences, and the results are
    :class:`str` instances consisting of ASCII characters only. If
-   *ensure_ascii* is ``False``, a result may be a :class:`unicode`
+   *ensure_ascii* is false, a result may be a :class:`unicode`
    instance. This usually happens if the input contains unicode strings or the
    *encoding* parameter is used.
 
-   If *check_circular* is ``True`` (the default), then lists, dicts, and custom
+   If *check_circular* is true (the default), then lists, dicts, and custom
    encoded objects will be checked for circular references during encoding to
    prevent an infinite recursion (which would cause an :exc:`OverflowError`).
    Otherwise, no such check takes place.
 
-   If *allow_nan* is ``True`` (the default), then ``NaN``, ``Infinity``, and
+   If *allow_nan* is true (the default), then ``NaN``, ``Infinity``, and
    ``-Infinity`` will be encoded as such.  This behavior is not JSON
    specification compliant, but is consistent with most JavaScript based
    encoders and decoders.  Otherwise, it will be a :exc:`ValueError` to encode
    such floats.
 
-   If *sort_keys* is ``True`` (default ``False``), then the output of dictionaries
+   If *sort_keys* is true (default: ``False``), then the output of dictionaries
    will be sorted by key; this is useful for regression tests to ensure that
    JSON serializations can be compared on a day-to-day basis.
 
@@ -435,12 +440,13 @@ Encoders and Decoders
       ``separators=(',', ': ')`` to avoid this.
 
    If specified, *separators* should be an ``(item_separator, key_separator)``
-   tuple.  The default is ``(', ', ': ')``.  To get the most compact JSON
+   tuple.  By default, ``(', ', ': ')`` are used.  To get the most compact JSON
    representation, you should specify ``(',', ':')`` to eliminate whitespace.
 
-   If specified, *default* is a function that gets called for objects that can't
-   otherwise be serialized.  It should return a JSON encodable version of the
-   object or raise a :exc:`TypeError`.
+   If specified, *default* should be a function that gets called for objects that
+   can't otherwise be serialized.  It should return a JSON encodable version of
+   the object or raise a :exc:`TypeError`.  If not specified, :exc:`TypeError`
+   is raised.
 
    If *encoding* is not ``None``, then all input strings will be transformed
    into unicode using that encoding prior to JSON-encoding.  The default is
@@ -485,18 +491,18 @@ Encoders and Decoders
                 mysocket.write(chunk)
 
 
-Standard Compliance
--------------------
+Standard Compliance and Interoperability
+----------------------------------------
 
-The JSON format is specified by :rfc:`4627`.  This section details this
-module's level of compliance with the RFC.  For simplicity,
-:class:`JSONEncoder` and :class:`JSONDecoder` subclasses, and parameters other
-than those explicitly mentioned, are not considered.
+The JSON format is specified by :rfc:`7159` and by
+`ECMA-404 <http://www.ecma-international.org/publications/standards/Ecma-404.htm>`_.
+This section details this module's level of compliance with the RFC.
+For simplicity, :class:`JSONEncoder` and :class:`JSONDecoder` subclasses, and
+parameters other than those explicitly mentioned, are not considered.
 
 This module does not comply with the RFC in a strict fashion, implementing some
 extensions that are valid JavaScript but not valid JSON.  In particular:
 
-- Top-level non-object, non-array values are accepted and output;
 - Infinite and NaN number values are accepted and output;
 - Repeated names within an object are accepted, and only the value of the last
   name-value pair is used.
@@ -508,48 +514,30 @@ default settings.
 Character Encodings
 ^^^^^^^^^^^^^^^^^^^
 
-The RFC recommends that JSON be represented using either UTF-8, UTF-16, or
-UTF-32, with UTF-8 being the default.  Accordingly, this module uses UTF-8 as
-the default for its *encoding* parameter.
+The RFC requires that JSON be represented using either UTF-8, UTF-16, or
+UTF-32, with UTF-8 being the recommended default for maximum interoperability.
+Accordingly, this module uses UTF-8 as the default for its *encoding* parameter.
 
 This module's deserializer only directly works with ASCII-compatible encodings;
 UTF-16, UTF-32, and other ASCII-incompatible encodings require the use of
 workarounds described in the documentation for the deserializer's *encoding*
 parameter.
 
-The RFC also non-normatively describes a limited encoding detection technique
-for JSON texts; this module's deserializer does not implement this or any other
-kind of encoding detection.
-
 As permitted, though not required, by the RFC, this module's serializer sets
 *ensure_ascii=True* by default, thus escaping the output so that the resulting
 strings only contain ASCII characters.
 
+The RFC prohibits adding a byte order mark (BOM) to the start of a JSON text,
+and this module's serializer does not add a BOM to its output.
+The RFC permits, but does not require, JSON deserializers to ignore an initial
+BOM in their input.  This module's deserializer raises a :exc:`ValueError`
+when an initial BOM is present.
 
-Top-level Non-Object, Non-Array Values
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-The RFC specifies that the top-level value of a JSON text must be either a
-JSON object or array (Python :class:`dict` or :class:`list`).  This module's
-deserializer also accepts input texts consisting solely of a
-JSON null, boolean, number, or string value::
-
-   >>> just_a_json_string = '"spam and eggs"'  # Not by itself a valid JSON text
-   >>> json.loads(just_a_json_string)
-   u'spam and eggs'
-
-This module itself does not include a way to request that such input texts be
-regarded as illegal.  Likewise, this module's serializer also accepts single
-Python :data:`None`, :class:`bool`, numeric, and :class:`str`
-values as input and will generate output texts consisting solely of a top-level
-JSON null, boolean, number, or string value without raising an exception::
-
-   >>> neither_a_list_nor_a_dict = u"spam and eggs"
-   >>> json.dumps(neither_a_list_nor_a_dict)  # The result is not a valid JSON text
-   '"spam and eggs"'
-
-This module's serializer does not itself include a way to enforce the
-aforementioned constraint.
+The RFC does not explicitly forbid JSON strings which contain byte sequences
+that don't correspond to valid Unicode characters (e.g. unpaired UTF-16
+surrogates), but it does note that they may cause interoperability problems.
+By default, this module accepts and outputs (when present in the original
+:class:`str`) code points for such sequences.
 
 
 Infinite and NaN Number Values
@@ -579,7 +567,7 @@ Repeated Names Within an Object
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The RFC specifies that the names within a JSON object should be unique, but
-does not specify how repeated names in JSON objects should be handled.  By
+does not mandate how repeated names in JSON objects should be handled.  By
 default, this module does not raise an exception; instead, it ignores all but
 the last name-value pair for a given name::
 
@@ -588,3 +576,48 @@ the last name-value pair for a given name::
    {u'x': 3}
 
 The *object_pairs_hook* parameter can be used to alter this behavior.
+
+
+Top-level Non-Object, Non-Array Values
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The old version of JSON specified by the obsolete :rfc:`4627` required that
+the top-level value of a JSON text must be either a JSON object or array
+(Python :class:`dict` or :class:`list`), and could not be a JSON null,
+boolean, number, or string value.  :rfc:`7159` removed that restriction, and
+this module does not and has never implemented that restriction in either its
+serializer or its deserializer.
+
+Regardless, for maximum interoperability, you may wish to voluntarily adhere
+to the restriction yourself.
+
+
+Implementation Limitations
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Some JSON deserializer implementations may set limits on:
+
+* the size of accepted JSON texts
+* the maximum level of nesting of JSON objects and arrays
+* the range and precision of JSON numbers
+* the content and maximum length of JSON strings
+
+This module does not impose any such limits beyond those of the relevant
+Python datatypes themselves or the Python interpreter itself.
+
+When serializing to JSON, beware any such limitations in applications that may
+consume your JSON.  In particular, it is common for JSON numbers to be
+deserialized into IEEE 754 double precision numbers and thus subject to that
+representation's range and precision limitations.  This is especially relevant
+when serializing Python :class:`int` values of extremely large magnitude, or
+when serializing instances of "exotic" numerical types such as
+:class:`decimal.Decimal`.
+
+
+.. rubric:: Footnotes
+
+.. [#rfc-errata] As noted in `the errata for RFC 7159
+   <https://www.rfc-editor.org/errata_search.php?rfc=7159>`_,
+   JSON permits literal U+2028 (LINE SEPARATOR) and
+   U+2029 (PARAGRAPH SEPARATOR) characters in strings, whereas JavaScript
+   (as of ECMAScript Edition 5.1) does not.

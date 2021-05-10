@@ -27,7 +27,10 @@ TEST_STR = "hello world\n"
 HOST = test.test_support.HOST
 
 HAVE_UNIX_SOCKETS = hasattr(socket, "AF_UNIX")
+requires_unix_sockets = unittest.skipUnless(HAVE_UNIX_SOCKETS,
+                                            'requires Unix sockets')
 HAVE_FORKING = hasattr(os, "fork") and os.name != "os2"
+requires_forking = unittest.skipUnless(HAVE_FORKING, 'requires forking')
 
 def signal_alarm(n):
     """Call signal.alarm when it exists (i.e. not on Windows)."""
@@ -66,17 +69,32 @@ def simple_subprocess(testcase):
     testcase.assertEqual(72 << 8, status)
 
 
+def close_server(server):
+    server.server_close()
+
+    if hasattr(server, 'active_children'):
+        # ForkingMixIn: Manually reap all child processes, since server_close()
+        # calls waitpid() in non-blocking mode using the WNOHANG flag.
+        for pid in server.active_children.copy():
+            try:
+                os.waitpid(pid, 0)
+            except ChildProcessError:
+                pass
+        server.active_children.clear()
+
+
 @unittest.skipUnless(threading, 'Threading required for this test.')
 class SocketServerTest(unittest.TestCase):
     """Test all socket servers."""
 
     def setUp(self):
+        self.addCleanup(signal_alarm, 0)
         signal_alarm(60)  # Kill deadlocks after 60 seconds.
         self.port_seed = 0
         self.test_files = []
 
     def tearDown(self):
-        signal_alarm(0)  # Didn't deadlock.
+        self.doCleanups()
         reap_children()
 
         for fn in self.test_files:
@@ -115,7 +133,7 @@ class SocketServerTest(unittest.TestCase):
         class MyServer(svrcls):
             def handle_error(self, request, client_address):
                 self.close_request(request)
-                self.server_close()
+                close_server(self)
                 raise
 
         class MyHandler(hdlrbase):
@@ -155,6 +173,8 @@ class SocketServerTest(unittest.TestCase):
         if verbose: print "waiting for server"
         server.shutdown()
         t.join()
+        close_server(server)
+        self.assertRaises(socket.error, server.socket.fileno)
         if verbose: print "done"
 
     def stream_examine(self, proto, addr):
@@ -170,6 +190,8 @@ class SocketServerTest(unittest.TestCase):
 
     def dgram_examine(self, proto, addr):
         s = socket.socket(proto, socket.SOCK_DGRAM)
+        if HAVE_UNIX_SOCKETS and proto == socket.AF_UNIX:
+            s.bind(self.pickaddr(proto))
         s.sendto(TEST_STR, addr)
         buf = data = receive(s, 100)
         while data and '\n' not in buf:
@@ -188,30 +210,32 @@ class SocketServerTest(unittest.TestCase):
                         SocketServer.StreamRequestHandler,
                         self.stream_examine)
 
-    if HAVE_FORKING:
-        def test_ForkingTCPServer(self):
-            with simple_subprocess(self):
-                self.run_server(SocketServer.ForkingTCPServer,
-                                SocketServer.StreamRequestHandler,
-                                self.stream_examine)
-
-    if HAVE_UNIX_SOCKETS:
-        def test_UnixStreamServer(self):
-            self.run_server(SocketServer.UnixStreamServer,
+    @requires_forking
+    def test_ForkingTCPServer(self):
+        with simple_subprocess(self):
+            self.run_server(SocketServer.ForkingTCPServer,
                             SocketServer.StreamRequestHandler,
                             self.stream_examine)
 
-        def test_ThreadingUnixStreamServer(self):
-            self.run_server(SocketServer.ThreadingUnixStreamServer,
+    @requires_unix_sockets
+    def test_UnixStreamServer(self):
+        self.run_server(SocketServer.UnixStreamServer,
+                        SocketServer.StreamRequestHandler,
+                        self.stream_examine)
+
+    @requires_unix_sockets
+    def test_ThreadingUnixStreamServer(self):
+        self.run_server(SocketServer.ThreadingUnixStreamServer,
+                        SocketServer.StreamRequestHandler,
+                        self.stream_examine)
+
+    @requires_unix_sockets
+    @requires_forking
+    def test_ForkingUnixStreamServer(self):
+        with simple_subprocess(self):
+            self.run_server(ForkingUnixStreamServer,
                             SocketServer.StreamRequestHandler,
                             self.stream_examine)
-
-        if HAVE_FORKING:
-            def test_ForkingUnixStreamServer(self):
-                with simple_subprocess(self):
-                    self.run_server(ForkingUnixStreamServer,
-                                    SocketServer.StreamRequestHandler,
-                                    self.stream_examine)
 
     def test_UDPServer(self):
         self.run_server(SocketServer.UDPServer,
@@ -223,12 +247,12 @@ class SocketServerTest(unittest.TestCase):
                         SocketServer.DatagramRequestHandler,
                         self.dgram_examine)
 
-    if HAVE_FORKING:
-        def test_ForkingUDPServer(self):
-            with simple_subprocess(self):
-                self.run_server(SocketServer.ForkingUDPServer,
-                                SocketServer.DatagramRequestHandler,
-                                self.dgram_examine)
+    @requires_forking
+    def test_ForkingUDPServer(self):
+        with simple_subprocess(self):
+            self.run_server(SocketServer.ForkingUDPServer,
+                            SocketServer.DatagramRequestHandler,
+                            self.dgram_examine)
 
     @contextlib.contextmanager
     def mocked_select_module(self):
@@ -262,25 +286,24 @@ class SocketServerTest(unittest.TestCase):
             # Make sure select was called again:
             self.assertGreater(mock_select.called, 1)
 
-    # Alas, on Linux (at least) recvfrom() doesn't return a meaningful
-    # client address so this cannot work:
+    @requires_unix_sockets
+    def test_UnixDatagramServer(self):
+        self.run_server(SocketServer.UnixDatagramServer,
+                        SocketServer.DatagramRequestHandler,
+                        self.dgram_examine)
 
-    # if HAVE_UNIX_SOCKETS:
-    #     def test_UnixDatagramServer(self):
-    #         self.run_server(SocketServer.UnixDatagramServer,
-    #                         SocketServer.DatagramRequestHandler,
-    #                         self.dgram_examine)
-    #
-    #     def test_ThreadingUnixDatagramServer(self):
-    #         self.run_server(SocketServer.ThreadingUnixDatagramServer,
-    #                         SocketServer.DatagramRequestHandler,
-    #                         self.dgram_examine)
-    #
-    #     if HAVE_FORKING:
-    #         def test_ForkingUnixDatagramServer(self):
-    #             self.run_server(SocketServer.ForkingUnixDatagramServer,
-    #                             SocketServer.DatagramRequestHandler,
-    #                             self.dgram_examine)
+    @requires_unix_sockets
+    def test_ThreadingUnixDatagramServer(self):
+        self.run_server(SocketServer.ThreadingUnixDatagramServer,
+                        SocketServer.DatagramRequestHandler,
+                        self.dgram_examine)
+
+    @requires_unix_sockets
+    @requires_forking
+    def test_ForkingUnixDatagramServer(self):
+        self.run_server(ForkingUnixDatagramServer,
+                        SocketServer.DatagramRequestHandler,
+                        self.dgram_examine)
 
     @reap_threads
     def test_shutdown(self):
@@ -306,6 +329,41 @@ class SocketServerTest(unittest.TestCase):
             s.shutdown()
         for t, s in threads:
             t.join()
+            close_server(s)
+
+    def test_tcpserver_bind_leak(self):
+        # Issue #22435: the server socket wouldn't be closed if bind()/listen()
+        # failed.
+        # Create many servers for which bind() will fail, to see if this result
+        # in FD exhaustion.
+        for i in range(1024):
+            with self.assertRaises(OverflowError):
+                SocketServer.TCPServer((HOST, -1),
+                                       SocketServer.StreamRequestHandler)
+
+
+class MiscTestCase(unittest.TestCase):
+
+    def test_shutdown_request_called_if_verify_request_false(self):
+        # Issue #26309: BaseServer should call shutdown_request even if
+        # verify_request is False
+
+        class MyServer(SocketServer.TCPServer):
+            def verify_request(self, request, client_address):
+                return False
+
+            shutdown_called = 0
+            def shutdown_request(self, request):
+                self.shutdown_called += 1
+                SocketServer.TCPServer.shutdown_request(self, request)
+
+        server = MyServer((HOST, 0), SocketServer.StreamRequestHandler)
+        s = socket.socket(server.address_family, socket.SOCK_STREAM)
+        s.connect(server.server_address)
+        s.close()
+        server.handle_request()
+        self.assertEqual(server.shutdown_called, 1)
+        close_server(server)
 
 
 def test_main():

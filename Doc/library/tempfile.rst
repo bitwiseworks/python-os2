@@ -64,7 +64,8 @@ The module defines the following user-callable functions:
    This function operates exactly as :func:`TemporaryFile` does, except that
    the file is guaranteed to have a visible name in the file system (on
    Unix, the directory entry is not unlinked).  That name can be retrieved
-   from the :attr:`name` attribute of the file object.  Whether the name can be
+   from the :attr:`name` attribute of the returned
+   file-like object.  Whether the name can be
    used to open the file a second time, while the named temporary file is
    still open, varies across platforms (it can be so used on Unix; it cannot
    on Windows NT or later).  If *delete* is true (the default), the file is
@@ -185,7 +186,7 @@ The module defines the following user-callable functions:
          >>> os.path.exists(f.name)
          False
 
-The module uses two global variables that tell it how to construct a
+The module uses a global variable that tell it how to construct a
 temporary name.  They are initialized at the first call to any of the
 functions above.  The caller may change them, but this is discouraged; use
 the appropriate function arguments, instead.

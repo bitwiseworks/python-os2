@@ -50,7 +50,7 @@
    threads.
 
    This is valid for HP-UX 11.23 running on an ia64 system. If needed, add
-   a check of __ia64 to verify that we're running on a ia64 system instead
+   a check of __ia64 to verify that we're running on an ia64 system instead
    of a pa-risc system.
 */
 #ifdef __hpux
@@ -271,7 +271,7 @@ find_key(int key, void *value)
         if (p->id == id && p->key == key)
             goto Done;
         /* Sanity check.  These states should never happen but if
-         * they do we must abort.  Otherwise we'll end up spinning in
+         * they do we must abort.  Otherwise we'll end up spinning
          * in a tight loop with the lock held.  A similar check is done
          * in pystate.c tstate_delete_common().  */
         if (p == prev_p)

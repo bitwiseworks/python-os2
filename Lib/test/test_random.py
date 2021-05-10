@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 import unittest
 import random
 import time
@@ -142,11 +140,12 @@ class TestBasicOps(unittest.TestCase):
             self.assertEqual(y1, y2)
 
     def test_pickling(self):
-        state = pickle.dumps(self.gen)
-        origseq = [self.gen.random() for i in xrange(10)]
-        newgen = pickle.loads(state)
-        restoredseq = [newgen.random() for i in xrange(10)]
-        self.assertEqual(origseq, restoredseq)
+        for proto in range(pickle.HIGHEST_PROTOCOL + 1):
+            state = pickle.dumps(self.gen, proto)
+            origseq = [self.gen.random() for i in xrange(10)]
+            newgen = pickle.loads(state)
+            restoredseq = [newgen.random() for i in xrange(10)]
+            self.assertEqual(origseq, restoredseq)
 
     def test_bug_1727780(self):
         # verify that version-2-pickles can be loaded
@@ -228,7 +227,8 @@ class SystemRandom_TestBasicOps(TestBasicOps):
         self.assertEqual(self.gen.gauss_next, None)
 
     def test_pickling(self):
-        self.assertRaises(NotImplementedError, pickle.dumps, self.gen)
+        for proto in range(pickle.HIGHEST_PROTOCOL + 1):
+            self.assertRaises(NotImplementedError, pickle.dumps, self.gen, proto)
 
     def test_53_bits_per_float(self):
         # This should pass whenever a C double has 53 bit precision.
@@ -251,10 +251,10 @@ class SystemRandom_TestBasicOps(TestBasicOps):
 
     def test_bigrand_ranges(self):
         for i in [40,80, 160, 200, 211, 250, 375, 512, 550]:
-            start = self.gen.randrange(2 ** i)
-            stop = self.gen.randrange(2 ** (i-2))
+            start = self.gen.randrange(2 ** (i-2))
+            stop = self.gen.randrange(2 ** i)
             if stop <= start:
-                return
+                continue
             self.assertTrue(start <= self.gen.randrange(start, stop) < stop)
 
     def test_rangelimits(self):
@@ -307,10 +307,27 @@ class SystemRandom_TestBasicOps(TestBasicOps):
 class MersenneTwister_TestBasicOps(TestBasicOps):
     gen = random.Random()
 
+    @test_support.cpython_only
+    def test_bug_31478(self):
+        # _random.Random.seed() should ignore the __abs__() method of a
+        # long/int subclass argument.
+        class BadInt(int):
+            def __abs__(self):
+                1/0.0
+        class BadLong(long):
+            def __abs__(self):
+                1/0.0
+        self.gen.seed(42)
+        expected_value = self.gen.random()
+        for seed_arg in [42L, BadInt(42), BadLong(42)]:
+            self.gen.seed(seed_arg)
+            self.assertEqual(self.gen.random(), expected_value)
+
     def test_setstate_first_arg(self):
         self.assertRaises(ValueError, self.gen.setstate, (1, None, None))
 
     def test_setstate_middle_arg(self):
+        start_state = self.gen.getstate()
         # Wrong type, s/b tuple
         self.assertRaises(TypeError, self.gen.setstate, (2, None, None))
         # Wrong length, s/b 625
@@ -319,6 +336,15 @@ class MersenneTwister_TestBasicOps(TestBasicOps):
         self.assertRaises(TypeError, self.gen.setstate, (2, ('a',)*625, None))
         # Last element s/b an int also
         self.assertRaises(TypeError, self.gen.setstate, (2, (0,)*624+('a',), None))
+        # Last element s/b between 0 and 624
+        with self.assertRaises((ValueError, OverflowError)):
+            self.gen.setstate((2, (1,)*624+(625,), None))
+        with self.assertRaises((ValueError, OverflowError)):
+            self.gen.setstate((2, (1,)*624+(-1,), None))
+        # Failed calls to setstate() should not have changed the state.
+        bits100 = self.gen.getrandbits(100)
+        self.gen.setstate(start_state)
+        self.assertEqual(self.gen.getrandbits(100), bits100)
 
     def test_referenceImplementation(self):
         # Compare the python implementation with results from the original
@@ -403,10 +429,10 @@ class MersenneTwister_TestBasicOps(TestBasicOps):
 
     def test_bigrand_ranges(self):
         for i in [40,80, 160, 200, 211, 250, 375, 512, 550]:
-            start = self.gen.randrange(2 ** i)
-            stop = self.gen.randrange(2 ** (i-2))
+            start = self.gen.randrange(2 ** (i-2))
+            stop = self.gen.randrange(2 ** i)
             if stop <= start:
-                return
+                continue
             self.assertTrue(start <= self.gen.randrange(start, stop) < stop)
 
     def test_rangelimits(self):
@@ -543,7 +569,7 @@ class TestDistributions(unittest.TestCase):
         for variate, args, expected in [
                 (g.uniform, (10.0, 10.0), 10.0),
                 (g.triangular, (10.0, 10.0), 10.0),
-                #(g.triangular, (10.0, 10.0, 10.0), 10.0),
+                (g.triangular, (10.0, 10.0, 10.0), 10.0),
                 (g.expovariate, (float('inf'),), 0.0),
                 (g.vonmisesvariate, (3.0, float('inf')), 3.0),
                 (g.gauss, (10.0, 0.0), 10.0),

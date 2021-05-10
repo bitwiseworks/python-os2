@@ -68,10 +68,11 @@ objects:
    Return the number of times *x* appears in the list.
 
 
-.. method:: list.sort()
+.. method:: list.sort(cmp=None, key=None, reverse=False)
    :noindex:
 
-   Sort the items of the list, in place.
+   Sort the items of the list in place (the arguments can be used for sort
+   customization, see :func:`sorted` for their explanation).
 
 
 .. method:: list.reverse()
@@ -99,6 +100,15 @@ An example that uses most of the list methods::
    >>> a.sort()
    >>> a
    [-1, 1, 66.25, 333, 333, 1234.5]
+   >>> a.pop()
+   1234.5
+   >>> a
+   [-1, 1, 66.25, 333, 333]
+
+You might have noticed that methods like ``insert``, ``remove`` or ``sort`` that
+only modify the list have no return value printed -- they return the default
+``None``.  This is a design principle for all mutable data structures in
+Python.
 
 
 .. _tut-lists-as-stacks:
@@ -169,14 +179,14 @@ There are three built-in functions that are very useful when used with lists:
 
 ``filter(function, sequence)`` returns a sequence consisting of those items from
 the sequence for which ``function(item)`` is true. If *sequence* is a
-:class:`string` or :class:`tuple`, the result will be of the same type;
-otherwise, it is always a :class:`list`. For example, to compute a sequence of
-numbers not divisible by 2 or 3::
+:class:`str`, :class:`unicode` or :class:`tuple`, the result will be of the
+same type; otherwise, it is always a :class:`list`.  For example, to compute a
+sequence of numbers divisible by 3 or 5::
 
-   >>> def f(x): return x % 2 != 0 and x % 3 != 0
+   >>> def f(x): return x % 3 == 0 or x % 5 == 0
    ...
    >>> filter(f, range(2, 25))
-   [5, 7, 11, 13, 17, 19, 23]
+   [3, 5, 6, 9, 10, 12, 15, 18, 20, 21, 24]
 
 ``map(function, sequence)`` calls ``function(item)`` for each of the sequence's
 items and returns a list of the return values.  For example, to compute some
@@ -301,7 +311,7 @@ it must be parenthesized. ::
    [(0, 0), (1, 1), (2, 4), (3, 9), (4, 16), (5, 25)]
    >>> # the tuple must be parenthesized, otherwise an error is raised
    >>> [x, x**2 for x in range(6)]
-     File "<stdin>", line 1
+     File "<stdin>", line 1, in <module>
        [x, x**2 for x in range(6)]
                   ^
    SyntaxError: invalid syntax
@@ -442,7 +452,7 @@ objects, such as lists.
 
 Though tuples may seem similar to lists, they are often used in different
 situations and for different purposes.
-Tuples are :term:`immutable`, and usually contain an heterogeneous sequence of
+Tuples are :term:`immutable`, and usually contain a heterogeneous sequence of
 elements that are accessed via unpacking (see later in this section) or indexing
 (or even by attribute in the case of :func:`namedtuples <collections.namedtuple>`).
 Lists are :term:`mutable`, and their elements are usually homogeneous and are
@@ -654,18 +664,18 @@ retrieved at the same time using the :meth:`iteritems` method. ::
    gallahad the pure
    robin the brave
 
-To change a sequence you are iterating over while inside the loop (for
-example to duplicate certain items), it is recommended that you first make
-a copy.  Looping over a sequence does not implicitly make a copy.  The slice
-notation makes this especially convenient::
+It is sometimes tempting to change a list while you are looping over it;
+however, it is often simpler and safer to create a new list instead. ::
 
-   >>> words = ['cat', 'window', 'defenestrate']
-   >>> for w in words[:]:  # Loop over a slice copy of the entire list.
-   ...     if len(w) > 6:
-   ...         words.insert(0, w)
+   >>> import math
+   >>> raw_data = [56.2, float('NaN'), 51.7, 55.3, 52.5, float('NaN'), 47.8]
+   >>> filtered_data = []
+   >>> for value in raw_data:
+   ...     if not math.isnan(value):
+   ...         filtered_data.append(value)
    ...
-   >>> words
-   ['defenestrate', 'cat', 'window', 'defenestrate']
+   >>> filtered_data
+   [56.2, 51.7, 55.3, 52.5, 47.8]
 
 
 .. _tut-conditions:

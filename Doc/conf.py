@@ -8,25 +8,17 @@
 # that aren't pickleable (module imports are okay, they're removed automatically).
 
 import sys, os, time
-sys.path.append(os.path.abspath('tools/sphinxext'))
+sys.path.append(os.path.abspath('tools/extensions'))
 
 # General configuration
 # ---------------------
 
-extensions = ['sphinx.ext.refcounting', 'sphinx.ext.coverage',
-              'sphinx.ext.doctest', 'pyspecific']
-templates_path = ['tools/sphinxext']
+extensions = ['sphinx.ext.coverage', 'sphinx.ext.doctest',
+              'pyspecific', 'c_annotations']
 
 # General substitutions.
 project = 'Python'
 copyright = '1990-%s, Python Software Foundation' % time.strftime('%Y')
-
-# The default replacements for |version| and |release|.
-#
-# The short X.Y version.
-# version = '2.6'
-# The full version, including alpha/beta/rc tags.
-# release = '2.6a0'
 
 # We look for the Include/patchlevel.h file in the current Python source tree
 # and replace the values accordingly.
@@ -40,25 +32,17 @@ today = ''
 today_fmt = '%B %d, %Y'
 
 # List of files that shouldn't be included in the build.
-unused_docs = [
-    'maclib/scrap',
-    'library/xmllib',
-    'library/xml.etree',
+exclude_patterns = [
+    'maclib/scrap.rst',
+    'library/xmllib.rst',
+    'library/xml.etree.rst',
 ]
 
-# Ignore .rst in Sphinx its self.
-exclude_trees = ['tools/sphinx']
+# Require Sphinx 1.2 for build.
+needs_sphinx = '1.2'
 
-# Relative filename of the reference count data file.
-refcount_file = 'data/refcounts.dat'
-
-# If true, '()' will be appended to :func: etc. cross-reference text.
-add_function_parentheses = True
-
-# If true, the current module name will be prepended to all description
-# unit titles (such as .. function::).
-add_module_names = True
-
+# Avoid a warning with Sphinx >= 2.0
+master_doc = 'contents'
 
 # Options for HTML output
 # -----------------------
@@ -70,13 +54,12 @@ html_theme_options = {'collapsiblesidebar': True}
 # using the given strftime format.
 html_last_updated_fmt = '%b %d, %Y'
 
-# If true, SmartyPants will be used to convert quotes and dashes to
-# typographically correct entities.
-html_use_smartypants = True
+# Path to find HTML templates.
+templates_path = ['tools/templates']
 
 # Custom sidebar templates, filenames relative to this file.
 html_sidebars = {
-    'index': 'indexsidebar.html',
+    'index': ['indexsidebar.html'],
 }
 
 # Additional templates that should be rendered to pages.
@@ -86,10 +69,10 @@ html_additional_pages = {
 }
 
 # Output an OpenSearch description file.
-html_use_opensearch = 'http://docs.python.org/'
+html_use_opensearch = 'https://docs.python.org/'
 
 # Additional static files.
-html_static_path = ['tools/sphinxext/static']
+html_static_path = ['tools/static']
 
 # Output file base name for HTML help builder.
 htmlhelp_basename = 'python' + release.replace('.', '')
@@ -97,27 +80,47 @@ htmlhelp_basename = 'python' + release.replace('.', '')
 # Split the index
 html_split_index = True
 
+html_context = {
+    'outdated': True
+}
+
 
 # Options for LaTeX output
 # ------------------------
 
+latex_engine = 'xelatex'
+
+# Get LaTeX to handle Unicode correctly
+latex_elements = {
+}
+
+# Additional stuff for the LaTeX preamble.
+latex_elements['preamble'] = r'''
+\authoraddress{
+  \sphinxstrong{Python Software Foundation}\\
+  Email: \sphinxemail{docs@python.org}
+}
+\let\Verbatim=\OriginalVerbatim
+\let\endVerbatim=\endOriginalVerbatim
+'''
+
 # The paper size ('letter' or 'a4').
-latex_paper_size = 'a4'
+latex_elements['papersize'] = 'a4'
 
 # The font size ('10pt', '11pt' or '12pt').
-latex_font_size = '10pt'
+latex_elements['pointsize'] = '10pt'
 
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, document class [howto/manual]).
-_stdauthor = r'Guido van Rossum\\Fred L. Drake, Jr., editor'
+_stdauthor = r'Guido van Rossum\\and the Python development team'
 latex_documents = [
     ('c-api/index', 'c-api.tex',
      'The Python/C API', _stdauthor, 'manual'),
-    ('distutils/index', 'distutils.tex',
+    ('distributing/index', 'distributing.tex',
      'Distributing Python Modules', _stdauthor, 'manual'),
     ('extending/index', 'extending.tex',
      'Extending and Embedding Python', _stdauthor, 'manual'),
-    ('install/index', 'install.tex',
+    ('installing/index', 'installing.tex',
      'Installing Python Modules', _stdauthor, 'manual'),
     ('library/index', 'library.tex',
      'The Python Library Reference', _stdauthor, 'manual'),
@@ -138,21 +141,14 @@ latex_documents.extend(('howto/' + fn[:-4], 'howto-' + fn[:-4] + '.tex',
                        for fn in os.listdir('howto')
                        if fn.endswith('.rst') and fn != 'index.rst')
 
-# Additional stuff for the LaTeX preamble.
-latex_preamble = r'''
-\authoraddress{
-  \strong{Python Software Foundation}\\
-  Email: \email{docs@python.org}
-}
-\let\Verbatim=\OriginalVerbatim
-\let\endVerbatim=\endOriginalVerbatim
-'''
-
 # Documents to append as an appendix to all manuals.
 latex_appendices = ['glossary', 'about', 'license', 'copyright']
 
-# Get LaTeX to handle Unicode correctly
-latex_elements = {'inputenc': r'\usepackage[utf8x]{inputenc}', 'utf8extra': ''}
+# Options for Epub output
+# -----------------------
+
+epub_author = 'Python Documentation Authors'
+epub_publisher = 'Python Software Foundation'
 
 # Options for the coverage checker
 # --------------------------------
@@ -189,3 +185,19 @@ coverage_c_regexes = {
 coverage_ignore_c_items = {
 #    'cfunction': [...]
 }
+
+
+# Options for the link checker
+# ----------------------------
+
+# Ignore certain URLs.
+linkcheck_ignore = [r'https://bugs.python.org/(issue)?\d+',
+                    # Ignore PEPs for now, they all have permanent redirects.
+                    r'http://www.python.org/dev/peps/pep-\d+']
+
+
+# Options for extensions
+# ----------------------
+
+# Relative filename of the reference count data file.
+refcount_file = 'data/refcounts.dat'

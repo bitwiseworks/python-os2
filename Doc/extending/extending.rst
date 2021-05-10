@@ -20,12 +20,17 @@ source file by including the header ``"Python.h"``.
 The compilation of an extension module depends on its intended use as well as on
 your system setup; details are given in later chapters.
 
-Do note that if your use case is calling C library functions or system calls,
-you should consider using the :mod:`ctypes` module rather than writing custom
-C code. Not only does :mod:`ctypes` let you write Python code to interface
-with C code, but it is more portable between implementations of Python than
-writing and compiling an extension module which typically ties you to CPython.
+.. note::
 
+   The C extension interface is specific to CPython, and extension modules do
+   not work on other Python implementations.  In many cases, it is possible to
+   avoid writing C extensions and preserve portability to other implementations.
+   For example, if your use case is calling C library functions or system calls,
+   you should consider using the :mod:`ctypes` module or the `cffi
+   <https://cffi.readthedocs.org>`_ library rather than writing custom C code.
+   These modules let you write Python code to interface with C code and are more
+   portable between implementations of Python than writing and compiling a C
+   extension module.
 
 
 .. _extending-simpleexample:
@@ -35,7 +40,7 @@ A Simple Example
 
 Let's create an extension module called ``spam`` (the favorite food of Monty
 Python fans...) and let's say we want to create a Python interface to the C
-library function :c:func:`system`. [#]_ This function takes a null-terminated
+library function :c:func:`system` [#]_. This function takes a null-terminated
 character string as argument and returns an integer.  We want this function to
 be callable from Python as follows::
 
@@ -89,8 +94,9 @@ example, the single expression ``"ls -l"``) to the arguments passed to the C
 function.  The C function always has two arguments, conventionally named *self*
 and *args*.
 
-The *self* argument points to the module object for module-level functions;
-for a method it would point to the object instance.
+For module functions, the *self* argument is *NULL* or a pointer selected while
+initializing the module (see :c:func:`Py_InitModule4`).  For a method, it would
+point to the object instance.
 
 The *args* argument will be a pointer to a Python tuple object containing the
 arguments.  Each item of the tuple corresponds to an argument in the call's
@@ -757,7 +763,9 @@ the format string is empty, it returns ``None``; if it contains exactly one
 format unit, it returns whatever object is described by that format unit.  To
 force it to return a tuple of size 0 or one, parenthesize the format string.
 
-Examples (to the left the call, to the right the resulting Python value)::
+Examples (to the left the call, to the right the resulting Python value):
+
+.. code-block:: none
 
    Py_BuildValue("")                        None
    Py_BuildValue("i", 123)                  123
@@ -850,7 +858,7 @@ The :mod:`gc` module also exposes a way to run the detector (the
 :func:`~gc.collect` function), as well as configuration
 interfaces and the ability to disable the detector at runtime.  The cycle
 detector is considered an optional component; though it is included by default,
-it can be disabled at build time using the :option:`--without-cycle-gc` option
+it can be disabled at build time using the :option:`!--without-cycle-gc` option
 to the :program:`configure` script on Unix platforms (including Mac OS X) or by
 removing the definition of ``WITH_CYCLE_GC`` in the :file:`pyconfig.h` header on
 other platforms.  If the cycle detector is disabled in this way, the :mod:`gc`
@@ -882,7 +890,7 @@ It is also possible to :dfn:`borrow` [#]_ a reference to an object.  The
 borrower of a reference should not call :c:func:`Py_DECREF`.  The borrower must
 not hold on to the object longer than the owner from which it was borrowed.
 Using a borrowed reference after the owner has disposed of it risks using freed
-memory and should be avoided completely. [#]_
+memory and should be avoided completely [#]_.
 
 The advantage of borrowing over owning a reference is that you don't need to
 take care of disposing of the reference on all possible paths through the code
@@ -1053,7 +1061,7 @@ checking.
 
 The C function calling mechanism guarantees that the argument list passed to C
 functions (``args`` in the examples) is never *NULL* --- in fact it guarantees
-that it is always a tuple. [#]_
+that it is always a tuple [#]_.
 
 It is a severe error to ever let a *NULL* pointer "escape" to the Python user.
 

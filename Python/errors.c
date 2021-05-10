@@ -227,14 +227,11 @@ finally:
     tstate = PyThreadState_GET();
     if (++tstate->recursion_depth > Py_GetRecursionLimit()) {
         --tstate->recursion_depth;
-        /* throw away the old exception... */
-        Py_DECREF(*exc);
-        Py_DECREF(*val);
-        /* ... and use the recursion error instead */
-        *exc = PyExc_RuntimeError;
-        *val = PyExc_RecursionErrorInst;
-        Py_INCREF(*exc);
-        Py_INCREF(*val);
+        /* throw away the old exception and use the recursion error instead */
+        Py_INCREF(PyExc_RuntimeError);
+        Py_SETREF(*exc, PyExc_RuntimeError);
+        Py_INCREF(PyExc_RecursionErrorInst);
+        Py_SETREF(*val, PyExc_RecursionErrorInst);
         /* just keeping the old traceback */
         return;
     }
@@ -261,6 +258,26 @@ void
 PyErr_Clear(void)
 {
     PyErr_Restore(NULL, NULL, NULL);
+}
+
+/* Restore previously fetched exception if an exception is not set,
+   otherwise drop previously fetched exception.
+   Like _PyErr_ChainExceptions() in Python 3, but doesn't set the context.
+ */
+void
+_PyErr_ReplaceException(PyObject *exc, PyObject *val, PyObject *tb)
+{
+    if (exc == NULL)
+        return;
+
+    if (PyErr_Occurred()) {
+        Py_DECREF(exc);
+        Py_XDECREF(val);
+        Py_XDECREF(tb);
+    }
+    else {
+        PyErr_Restore(exc, val, tb);
+    }
 }
 
 /* Convenience functions to set a type error exception and return 0 */
@@ -515,7 +532,7 @@ PyObject *PyErr_SetFromWindowsErrWithUnicodeFilename(
 #endif /* MS_WINDOWS */
 
 void
-_PyErr_BadInternalCall(char *filename, int lineno)
+_PyErr_BadInternalCall(const char *filename, int lineno)
 {
     PyErr_Format(PyExc_SystemError,
                  "%s:%d: bad argument to internal function",
@@ -679,12 +696,18 @@ PyErr_WriteUnraisable(PyObject *obj)
                 PyFile_WriteString(className, f);
             if (v && v != Py_None) {
                 PyFile_WriteString(": ", f);
-                PyFile_WriteObject(v, f, 0);
+                if (PyFile_WriteObject(v, f, 0) < 0) {
+                    PyErr_Clear();
+                    PyFile_WriteString("<exception repr() failed>", f);
+                }
             }
             Py_XDECREF(moduleName);
         }
         PyFile_WriteString(" in ", f);
-        PyFile_WriteObject(obj, f, 0);
+        if (PyFile_WriteObject(obj, f, 0) < 0) {
+            PyErr_Clear();
+            PyFile_WriteString("<object repr() failed>", f);
+        }
         PyFile_WriteString(" ignored\n", f);
         PyErr_Clear(); /* Just in case */
     }

@@ -210,6 +210,7 @@ definition looked like this::
    class MyClass:
        """A simple example class"""
        i = 12345
+
        def f(self):
            return 'hello world'
 
@@ -327,14 +328,85 @@ the corresponding function with an argument list that is created by inserting
 the method's object before the first argument.
 
 If you still don't understand how methods work, a look at the implementation can
-perhaps clarify matters.  When an instance attribute is referenced that isn't a
-data attribute, its class is searched.  If the name denotes a valid class
+perhaps clarify matters.  When a non-data attribute of an instance is
+referenced, the instance's class is searched.  If the name denotes a valid class
 attribute that is a function object, a method object is created by packing
 (pointers to) the instance object and the function object just found together in
 an abstract object: this is the method object.  When the method object is called
 with an argument list, a new argument list is constructed from the instance
 object and the argument list, and the function object is called with this new
 argument list.
+
+
+.. _tut-class-and-instance-variables:
+
+Class and Instance Variables
+----------------------------
+
+Generally speaking, instance variables are for data unique to each instance
+and class variables are for attributes and methods shared by all instances
+of the class::
+
+    class Dog:
+
+        kind = 'canine'         # class variable shared by all instances
+
+        def __init__(self, name):
+            self.name = name    # instance variable unique to each instance
+
+    >>> d = Dog('Fido')
+    >>> e = Dog('Buddy')
+    >>> d.kind                  # shared by all dogs
+    'canine'
+    >>> e.kind                  # shared by all dogs
+    'canine'
+    >>> d.name                  # unique to d
+    'Fido'
+    >>> e.name                  # unique to e
+    'Buddy'
+
+As discussed in :ref:`tut-object`, shared data can have possibly surprising
+effects with involving :term:`mutable` objects such as lists and dictionaries.
+For example, the *tricks* list in the following code should not be used as a
+class variable because just a single list would be shared by all *Dog*
+instances::
+
+    class Dog:
+
+        tricks = []             # mistaken use of a class variable
+
+        def __init__(self, name):
+            self.name = name
+
+        def add_trick(self, trick):
+            self.tricks.append(trick)
+
+    >>> d = Dog('Fido')
+    >>> e = Dog('Buddy')
+    >>> d.add_trick('roll over')
+    >>> e.add_trick('play dead')
+    >>> d.tricks                # unexpectedly shared by all dogs
+    ['roll over', 'play dead']
+
+Correct design of the class should use an instance variable instead::
+
+    class Dog:
+
+        def __init__(self, name):
+            self.name = name
+            self.tricks = []    # creates a new empty list for each dog
+
+        def add_trick(self, trick):
+            self.tricks.append(trick)
+
+    >>> d = Dog('Fido')
+    >>> e = Dog('Buddy')
+    >>> d.add_trick('roll over')
+    >>> e.add_trick('play dead')
+    >>> d.tricks
+    ['roll over']
+    >>> e.tricks
+    ['play dead']
 
 
 .. _tut-remarks:
@@ -387,8 +459,10 @@ variable in the class is also ok.  For example::
 
    class C:
        f = f1
+
        def g(self):
            return 'hello world'
+
        h = g
 
 Now ``f``, ``g`` and ``h`` are all attributes of class :class:`C` that refer to
@@ -402,8 +476,10 @@ argument::
    class Bag:
        def __init__(self):
            self.data = []
+
        def add(self, x):
            self.data.append(x)
+
        def addtwice(self, x):
            self.add(x)
            self.add(x)
@@ -529,7 +605,7 @@ parent only once, and that is monotonic (meaning that a class can be subclassed
 without affecting the precedence order of its parents).  Taken together, these
 properties make it possible to design reliable and extensible classes with
 multiple inheritance.  For more detail, see
-http://www.python.org/download/releases/2.3/mro/.
+https://www.python.org/download/releases/2.3/mro/.
 
 
 .. _tut-private:
@@ -543,6 +619,9 @@ by most Python code: a name prefixed with an underscore (e.g. ``_spam``) should
 be treated as a non-public part of the API (whether it is a function, a method
 or a data member).  It should be considered an implementation detail and subject
 to change without notice.
+
+.. index::
+   pair: name; mangling
 
 Since there is a valid use-case for class-private members (namely to avoid name
 clashes of names with names defined by subclasses), there is limited support for
@@ -575,6 +654,11 @@ breaking intraclass method calls.  For example::
            for item in zip(keys, values):
                self.items_list.append(item)
 
+The above example would work even if ``MappingSubclass`` were to introduce a
+``__update`` identifier since it is replaced with ``_Mapping__update`` in the
+``Mapping`` class  and ``_MappingSubclass__update`` in the ``MappingSubclass``
+class respectively.
+
 Note that the mangling rules are designed mostly to avoid accidents; it still is
 possible to access or modify a variable that is considered private.  This can
 even be useful in special circumstances, such as in the debugger.
@@ -599,7 +683,7 @@ will do nicely::
    class Employee:
        pass
 
-   john = Employee() # Create an empty employee record
+   john = Employee()  # Create an empty employee record
 
    # Fill the fields of the record
    john.name = 'John Doe'
@@ -711,22 +795,24 @@ This example shows how it all works::
    'c'
    >>> it.next()
    Traceback (most recent call last):
-     File "<stdin>", line 1, in ?
+     File "<stdin>", line 1, in <module>
        it.next()
    StopIteration
 
 Having seen the mechanics behind the iterator protocol, it is easy to add
 iterator behavior to your classes.  Define an :meth:`__iter__` method which
-returns an object with a :meth:`next` method.  If the class defines
-:meth:`next`, then :meth:`__iter__` can just return ``self``::
+returns an object with a :meth:`~iterator.next` method.  If the class
+defines :meth:`~iterator.next`, then :meth:`__iter__` can just return ``self``::
 
    class Reverse:
        """Iterator for looping over a sequence backwards."""
        def __init__(self, data):
            self.data = data
            self.index = len(data)
+
        def __iter__(self):
            return self
+
        def next(self):
            if self.index == 0:
                raise StopIteration
@@ -754,8 +840,8 @@ Generators
 
 :term:`Generator`\s are a simple and powerful tool for creating iterators.  They
 are written like regular functions but use the :keyword:`yield` statement
-whenever they want to return data.  Each time :meth:`next` is called, the
-generator resumes where it left-off (it remembers all the data values and which
+whenever they want to return data.  Each time :func:`next` is called on it, the
+generator resumes where it left off (it remembers all the data values and which
 statement was last executed).  An example shows that generators can be trivially
 easy to create::
 
@@ -773,10 +859,10 @@ easy to create::
    o
    g
 
-Anything that can be done with generators can also be done with class based
+Anything that can be done with generators can also be done with class-based
 iterators as described in the previous section.  What makes generators so
-compact is that the :meth:`__iter__` and :meth:`next` methods are created
-automatically.
+compact is that the :meth:`__iter__` and :meth:`~generator.next` methods
+are created automatically.
 
 Another key feature is that the local variables and execution state are
 automatically saved between calls.  This made the function easier to write and
@@ -795,9 +881,9 @@ Generator Expressions
 =====================
 
 Some simple generators can be coded succinctly as expressions using a syntax
-similar to list comprehensions but with parentheses instead of brackets.  These
-expressions are designed for situations where the generator is used right away
-by an enclosing function.  Generator expressions are more compact but less
+similar to list comprehensions but with parentheses instead of square brackets.
+These expressions are designed for situations where the generator is used right
+away by an enclosing function.  Generator expressions are more compact but less
 versatile than full generator definitions and tend to be more memory friendly
 than equivalent list comprehensions.
 
@@ -827,8 +913,8 @@ Examples::
 .. rubric:: Footnotes
 
 .. [#] Except for one thing.  Module objects have a secret read-only attribute called
-   :attr:`__dict__` which returns the dictionary used to implement the module's
-   namespace; the name :attr:`__dict__` is an attribute but not a global name.
+   :attr:`~object.__dict__` which returns the dictionary used to implement the module's
+   namespace; the name :attr:`~object.__dict__` is an attribute but not a global name.
    Obviously, using this violates the abstraction of namespace implementation, and
    should be restricted to things like post-mortem debuggers.
 

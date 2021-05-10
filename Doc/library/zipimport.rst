@@ -37,7 +37,7 @@ ZIP archives with an archive comment are currently not supported.
 
 .. seealso::
 
-   `PKZIP Application Note <http://www.pkware.com/documents/casestudies/APPNOTE.TXT>`_
+   `PKZIP Application Note <https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT>`_
       Documentation on the ZIP file format by Phil Katz, the creator of the format and
       algorithms used.
 
@@ -115,7 +115,7 @@ zipimporter Objects
 
    .. method:: is_package(fullname)
 
-      Return True if the module specified by *fullname* is a package. Raise
+      Return ``True`` if the module specified by *fullname* is a package. Raise
       :exc:`ZipImportError` if the module couldn't be found.
 
 
@@ -149,7 +149,9 @@ Examples
 --------
 
 Here is an example that imports a module from a ZIP archive - note that the
-:mod:`zipimport` module is not explicitly used. ::
+:mod:`zipimport` module is not explicitly used.
+
+.. code-block:: shell-session
 
    $ unzip -l example.zip
    Archive:  example.zip

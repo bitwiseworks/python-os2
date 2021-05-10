@@ -51,7 +51,7 @@ any that have been added to the map during asynchronous service) is closed.
 
    Enter a polling loop that terminates after count passes or all open
    channels have been closed.  All arguments are optional.  The *count*
-   parameter defaults to None, resulting in the loop terminating only when all
+   parameter defaults to ``None``, resulting in the loop terminating only when all
    channels have been closed.  The *timeout* argument sets the timeout
    parameter for the appropriate :func:`~select.select` or :func:`~select.poll`
    call, measured in seconds; the default is 30 seconds.  The *use_poll*
@@ -192,6 +192,11 @@ any that have been added to the map during asynchronous service) is closed.
 
       Read at most *buffer_size* bytes from the socket's remote end-point.  An
       empty string implies that the channel has been closed from the other end.
+
+      Note that :meth:`recv` may raise :exc:`socket.error` with
+      :data:`~errno.EAGAIN` or :data:`~errno.EWOULDBLOCK`, even though
+      :func:`select.select` or :func:`select.poll` has reported the socket
+      ready for reading.
 
 
    .. method:: listen(backlog)

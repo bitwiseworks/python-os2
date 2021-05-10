@@ -12,7 +12,9 @@
    pair: UNIX; I/O control
 
 This module performs file control and I/O control on file descriptors. It is an
-interface to the :c:func:`fcntl` and :c:func:`ioctl` Unix routines.
+interface to the :c:func:`fcntl` and :c:func:`ioctl` Unix routines.  For a
+complete description of these calls, see :manpage:`fcntl(2)` and
+:manpage:`ioctl(2)` Unix manual pages.
 
 All functions in this module take a file descriptor *fd* as their first
 argument.  This can be an integer file descriptor, such as returned by
@@ -24,11 +26,11 @@ The module defines the following functions:
 
 .. function:: fcntl(fd, op[, arg])
 
-   Perform the requested operation on file descriptor *fd* (file objects providing
-   a :meth:`~io.IOBase.fileno` method are accepted as well). The operation is
-   defined by *op*
-   and is operating system dependent.  These codes are also found in the
-   :mod:`fcntl` module. The argument *arg* is optional, and defaults to the integer
+   Perform the operation *op* on file descriptor *fd* (file objects providing
+   a :meth:`~io.IOBase.fileno` method are accepted as well).  The values used
+   for for *op* are operating system dependent, and are available as constants
+   in the :mod:`fcntl` module, using the same names as used in the relevant C
+   header files.  The argument *arg* is optional, and defaults to the integer
    value ``0``.  When present, it can either be an integer value, or a string.
    With the argument missing or an integer value, the return value of this function
    is the integer return value of the C :c:func:`fcntl` call.  When the argument is
@@ -51,6 +53,9 @@ The module defines the following functions:
    argument handling is even more complicated.
 
    The op parameter is limited to values that can fit in 32-bits.
+   Additional constants of interest for use as the *op* argument can be
+   found in the :mod:`termios` module, under the same names as used in
+   the relevant C header files.
 
    The parameter *arg* can be one of an integer, absent (treated identically to the
    integer ``0``), an object supporting the read-only buffer interface (most likely
@@ -79,6 +84,8 @@ The module defines the following functions:
    which is a change from versions 2.3 and 2.4. Supply the argument explicitly if
    version portability is a priority.
 
+   If the :c:func:`ioctl` fails, an :exc:`IOError` exception is raised.
+
    An example::
 
       >>> import array, fcntl, struct, termios, os
@@ -99,6 +106,8 @@ The module defines the following functions:
    a :meth:`~io.IOBase.fileno` method are accepted as well). See the Unix manual
    :manpage:`flock(2)` for details.  (On some systems, this function is emulated
    using :c:func:`fcntl`.)
+
+   If the :c:func:`flock` fails, an :exc:`IOError` exception is raised.
 
 
 .. function:: lockf(fd, operation, [length, [start, [whence]]])

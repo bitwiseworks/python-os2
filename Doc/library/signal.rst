@@ -77,7 +77,7 @@ The variables defined in the :mod:`signal` module are:
 
 .. data:: CTRL_C_EVENT
 
-   The signal corresponding to the CTRL+C keystroke event. This signal can
+   The signal corresponding to the :kbd:`Ctrl+C` keystroke event. This signal can
    only be used with :func:`os.kill`.
 
    Availability: Windows.
@@ -87,7 +87,7 @@ The variables defined in the :mod:`signal` module are:
 
 .. data:: CTRL_BREAK_EVENT
 
-   The signal corresponding to the CTRL+BREAK keystroke event. This signal can
+   The signal corresponding to the :kbd:`Ctrl+Break` keystroke event. This signal can
    only be used with :func:`os.kill`.
 
    Availability: Windows.
@@ -197,8 +197,10 @@ The :mod:`signal` module defines the following functions:
    written to the fd.  This can be used by a library to wakeup a poll or select
    call, allowing the signal to be fully processed.
 
-   The old wakeup fd is returned.  *fd* must be non-blocking.  It is up to the
-   library to remove any bytes before calling poll or select again.
+   The old wakeup fd is returned (or -1 if file descriptor wakeup was not
+   enabled).  If *fd* is -1, file descriptor wakeup is disabled.
+   If not -1, *fd* must be non-blocking.  It is up to the library to remove
+   any bytes from *fd* before calling poll or select again.
 
    When threads are enabled, this function can only be called from the main thread;
    attempting to call it from other threads will cause a :exc:`ValueError`

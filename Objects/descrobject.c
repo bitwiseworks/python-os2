@@ -1117,11 +1117,11 @@ PyWrapper_New(PyObject *d, PyObject *self)
 /* A built-in 'property' type */
 
 /*
-    class property(object):
+class property(object):
 
     def __init__(self, fget=None, fset=None, fdel=None, doc=None):
         if doc is None and fget is not None and hasattr(fget, "__doc__"):
-        doc = fget.__doc__
+            doc = fget.__doc__
         self.__get = fget
         self.__set = fset
         self.__del = fdel
@@ -1129,19 +1129,19 @@ PyWrapper_New(PyObject *d, PyObject *self)
 
     def __get__(self, inst, type=None):
         if inst is None:
-        return self
+            return self
         if self.__get is None:
-        raise AttributeError, "unreadable attribute"
+            raise AttributeError, "unreadable attribute"
         return self.__get(inst)
 
     def __set__(self, inst, value):
         if self.__set is None:
-        raise AttributeError, "can't set attribute"
+            raise AttributeError, "can't set attribute"
         return self.__set(inst, value)
 
     def __delete__(self, inst):
         if self.__del is None:
-        raise AttributeError, "can't delete attribute"
+            raise AttributeError, "can't delete attribute"
         return self.__del(inst)
 
 */
@@ -1332,8 +1332,7 @@ property_init(PyObject *self, PyObject *args, PyObject *kwds)
         PyObject *get_doc = PyObject_GetAttrString(get, "__doc__");
         if (get_doc) {
             if (Py_TYPE(self) == &PyProperty_Type) {
-                Py_XDECREF(prop->prop_doc);
-                prop->prop_doc = get_doc;
+                Py_XSETREF(prop->prop_doc, get_doc);
             }
             else {
                 /* If this is a property subclass, put __doc__
@@ -1363,21 +1362,25 @@ PyDoc_STRVAR(property_doc,
 "\n"
 "fget is a function to be used for getting an attribute value, and likewise\n"
 "fset is a function for setting, and fdel a function for del'ing, an\n"
-"attribute.  Typical use is to define a managed attribute x:\n"
+"attribute.  Typical use is to define a managed attribute x:\n\n"
 "class C(object):\n"
 "    def getx(self): return self._x\n"
 "    def setx(self, value): self._x = value\n"
 "    def delx(self): del self._x\n"
 "    x = property(getx, setx, delx, \"I'm the 'x' property.\")\n"
 "\n"
-"Decorators make defining new properties or modifying existing ones easy:\n"
+"Decorators make defining new properties or modifying existing ones easy:\n\n"
 "class C(object):\n"
 "    @property\n"
-"    def x(self): return self._x\n"
+"    def x(self):\n"
+"        \"I am the 'x' property.\"\n"
+"        return self._x\n"
 "    @x.setter\n"
-"    def x(self, value): self._x = value\n"
+"    def x(self, value):\n"
+"        self._x = value\n"
 "    @x.deleter\n"
-"    def x(self): del self._x\n"
+"    def x(self):\n"
+"        del self._x\n"
 );
 
 static int

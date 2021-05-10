@@ -8,6 +8,9 @@
 #ifdef HAVE_SYS_STAT_H
 #include <sys/stat.h>
 #endif
+#ifdef HAVE_IO_H
+#include <io.h>
+#endif
 #ifdef HAVE_FCNTL_H
 #include <fcntl.h>
 #endif
@@ -101,16 +104,16 @@ internal_close(fileio *self)
 static PyObject *
 fileio_close(fileio *self)
 {
+    PyObject *res;
+    res = PyObject_CallMethod((PyObject*)&PyRawIOBase_Type,
+                              "close", "O", self);
     if (!self->closefd) {
         self->fd = -1;
-        Py_RETURN_NONE;
+        return res;
     }
-    errno = internal_close(self);
-    if (errno < 0)
-        return NULL;
-
-    return PyObject_CallMethod((PyObject*)&PyRawIOBase_Type,
-                               "close", "O", self);
+    if (internal_close(self) < 0)
+        Py_CLEAR(res);
+    return res;
 }
 
 static PyObject *
@@ -143,9 +146,15 @@ dircheck(fileio* self, PyObject *nameobj)
 {
 #if defined(HAVE_FSTAT) && defined(S_IFDIR) && defined(EISDIR)
     struct stat buf;
+    int res;
     if (self->fd < 0)
         return 0;
-    if (fstat(self->fd, &buf) == 0 && S_ISDIR(buf.st_mode)) {
+
+    Py_BEGIN_ALLOW_THREADS
+    res = fstat(self->fd, &buf);
+    Py_END_ALLOW_THREADS
+
+    if (res == 0 && S_ISDIR(buf.st_mode)) {
         errno = EISDIR;
         PyErr_SetFromErrnoWithFilenameObject(PyExc_IOError, nameobj);
         return -1;
@@ -159,17 +168,34 @@ check_fd(int fd)
 {
 #if defined(HAVE_FSTAT)
     struct stat buf;
-    if (!_PyVerify_fd(fd) || (fstat(fd, &buf) < 0 && errno == EBADF)) {
-        PyObject *exc;
-        char *msg = strerror(EBADF);
-        exc = PyObject_CallFunction(PyExc_OSError, "(is)",
-                                    EBADF, msg);
-        PyErr_SetObject(PyExc_OSError, exc);
-        Py_XDECREF(exc);
-        return -1;
+    int res;
+    PyObject *exc;
+    char *msg;
+
+    if (!_PyVerify_fd(fd)) {
+        goto badfd;
     }
-#endif
+
+    Py_BEGIN_ALLOW_THREADS
+    res = fstat(fd, &buf);
+    Py_END_ALLOW_THREADS
+
+    if (res < 0 && errno == EBADF) {
+        goto badfd;
+    }
+
     return 0;
+
+badfd:
+    msg = strerror(EBADF);
+    exc = PyObject_CallFunction(PyExc_OSError, "(is)",
+                                EBADF, msg);
+    PyErr_SetObject(PyExc_OSError, exc);
+    Py_XDECREF(exc);
+    return -1;
+#else
+    return 0;
+#endif
 }
 
 
@@ -217,15 +243,20 @@ fileio_init(PyObject *oself, PyObject *args, PyObject *kwds)
     if (fd < 0) {
         if (!PyErr_Occurred()) {
             PyErr_SetString(PyExc_ValueError,
-                            "Negative filedescriptor");
+                            "negative file descriptor");
             return -1;
         }
         PyErr_Clear();
     }
 
 #ifdef MS_WINDOWS
-    if (PyUnicode_Check(nameobj))
+    if (PyUnicode_Check(nameobj)) {
         widename = PyUnicode_AS_UNICODE(nameobj);
+        if (wcslen(widename) != (size_t)PyUnicode_GET_SIZE(nameobj)) {
+            PyErr_SetString(PyExc_TypeError, "embedded NUL character");
+            return -1;
+        }
+    }
     if (widename == NULL)
 #endif
     if (fd < 0)
@@ -234,6 +265,10 @@ fileio_init(PyObject *oself, PyObject *args, PyObject *kwds)
             Py_ssize_t namelen;
             if (PyObject_AsCharBuffer(nameobj, &name, &namelen) < 0)
                 return -1;
+            if (strlen(name) != (size_t)namelen) {
+                PyErr_SetString(PyExc_TypeError, "embedded NUL character");
+                return -1;
+            }
         }
         else {
             PyObject *u = PyUnicode_FromObject(nameobj);
@@ -252,6 +287,10 @@ fileio_init(PyObject *oself, PyObject *args, PyObject *kwds)
                 goto error;
             }
             name = PyBytes_AS_STRING(stringobj);
+            if (strlen(name) != (size_t)PyBytes_GET_SIZE(stringobj)) {
+                PyErr_SetString(PyExc_TypeError, "embedded NUL character");
+                goto error;
+            }
         }
     }
 
@@ -503,9 +542,19 @@ new_buffersize(fileio *self, size_t currentsize)
 #ifdef HAVE_FSTAT
     off_t pos, end;
     struct stat st;
-    if (fstat(self->fd, &st) == 0) {
+    int res;
+
+    Py_BEGIN_ALLOW_THREADS
+    res = fstat(self->fd, &st);
+    Py_END_ALLOW_THREADS
+
+    if (res == 0) {
         end = st.st_size;
+
+        Py_BEGIN_ALLOW_THREADS
         pos = lseek(self->fd, 0L, SEEK_CUR);
+        Py_END_ALLOW_THREADS
+
         /* Files claiming a size smaller than SMALLCHUNK may
            actually be streaming pseudo-files. In this case, we
            apply the more aggressive algorithm below.
@@ -549,14 +598,8 @@ fileio_readall(fileio *self)
         }
 
         if (PyBytes_GET_SIZE(result) < (Py_ssize_t)newsize) {
-            if (_PyBytes_Resize(&result, newsize) < 0) {
-                if (total == 0) {
-                    Py_DECREF(result);
-                    return NULL;
-                }
-                PyErr_Clear();
-                break;
-            }
+            if (_PyBytes_Resize(&result, newsize) < 0)
+                return NULL; /* result has been freed */
         }
         Py_BEGIN_ALLOW_THREADS
         errno = 0;
@@ -583,9 +626,9 @@ fileio_readall(fileio *self)
                 }
                 continue;
             }
-            if (total > 0)
-                break;
             if (errno == EAGAIN) {
+                if (total > 0)
+                    break;
                 Py_DECREF(result);
                 Py_RETURN_NONE;
             }
@@ -599,7 +642,6 @@ fileio_readall(fileio *self)
     if (PyBytes_GET_SIZE(result) > total) {
         if (_PyBytes_Resize(&result, total) < 0) {
             /* This should never happen, but just in case */
-            Py_DECREF(result);
             return NULL;
         }
     }
@@ -656,10 +698,8 @@ fileio_read(fileio *self, PyObject *args)
     }
 
     if (n != size) {
-        if (_PyBytes_Resize(&bytes, n) < 0) {
-            Py_DECREF(bytes);
+        if (_PyBytes_Resize(&bytes, n) < 0)
             return NULL;
-        }
     }
 
     return (PyObject *) bytes;
@@ -676,8 +716,16 @@ fileio_write(fileio *self, PyObject *args)
     if (!self->writable)
         return err_mode("writing");
 
-    if (!PyArg_ParseTuple(args, "s*", &pbuf))
+    if (!PyArg_ParseTuple(args, "s*:write", &pbuf)) {
         return NULL;
+    }
+    if (PyUnicode_Check(PyTuple_GET_ITEM(args, 0)) &&
+        PyErr_WarnPy3k("write() argument must be string or buffer, "
+                       "not 'unicode'", 1) < 0)
+    {
+        PyBuffer_Release(&pbuf);
+        return NULL;
+    }
 
     if (_PyVerify_fd(self->fd)) {
         Py_BEGIN_ALLOW_THREADS
@@ -958,7 +1006,7 @@ fileio_isatty(fileio *self)
 PyDoc_STRVAR(fileio_doc,
 "file(name: str[, mode: str]) -> file IO object\n"
 "\n"
-"Open a file.  The mode can be 'r', 'w' or 'a' for reading (default),\n"
+"Open a file.  The mode can be 'r' (default), 'w' or 'a' for reading,\n"
 "writing or appending.  The file will be created if it doesn't exist\n"
 "when opened for writing or appending; it will be truncated when\n"
 "opened for writing.  Add a '+' to the mode to allow simultaneous\n"
@@ -978,37 +1026,42 @@ PyDoc_STRVAR(readall_doc,
 "or None if no data is available.  On end-of-file, returns ''.");
 
 PyDoc_STRVAR(write_doc,
-"write(b: bytes) -> int.  Write bytes b to file, return number written.\n"
+"write(b) -> int.  Write array of bytes b, return number written.\n"
 "\n"
 "Only makes one system call, so not all of the data may be written.\n"
-"The number of bytes actually written is returned.");
+"The number of bytes actually written is returned.  In non-blocking mode,\n"
+"returns None if the write would block."
+);
 
 PyDoc_STRVAR(fileno_doc,
-"fileno() -> int. \"file descriptor\".\n"
-"\n"
-"This is needed for lower-level file interfaces, such the fcntl module.");
+"fileno() -> int.  Return the underlying file descriptor (an integer).");
 
 PyDoc_STRVAR(seek_doc,
-"seek(offset: int[, whence: int]) -> None.  Move to new file position.\n"
+"seek(offset: int[, whence: int]) -> int.  Move to new file position\n"
+"and return the file position.\n"
 "\n"
 "Argument offset is a byte count.  Optional argument whence defaults to\n"
-"0 (offset from start of file, offset should be >= 0); other values are 1\n"
-"(move relative to current position, positive or negative), and 2 (move\n"
-"relative to end of file, usually negative, although many platforms allow\n"
-"seeking beyond the end of a file)."
+"SEEK_SET or 0 (offset from start of file, offset should be >= 0); other values\n"
+"are SEEK_CUR or 1 (move relative to current position, positive or negative),\n"
+"and SEEK_END or 2 (move relative to end of file, usually negative, although\n"
+"many platforms allow seeking beyond the end of a file).\n"
 "\n"
 "Note that not all file objects are seekable.");
 
 #ifdef HAVE_FTRUNCATE
 PyDoc_STRVAR(truncate_doc,
-"truncate([size: int]) -> None.  Truncate the file to at most size bytes.\n"
+"truncate([size: int]) -> int.  Truncate the file to at most size bytes and\n"
+"return the truncated size.\n"
 "\n"
-"Size defaults to the current file position, as returned by tell()."
+"Size defaults to the current file position, as returned by tell().\n"
 "The current file position is changed to the value of size.");
 #endif
 
 PyDoc_STRVAR(tell_doc,
-"tell() -> int.  Current file position");
+"tell() -> int.  Current file position.\n"
+"\n"
+"Can raise OSError for non seekable files."
+);
 
 PyDoc_STRVAR(readinto_doc,
 "readinto() -> Same as RawIOBase.readinto().");
@@ -1017,10 +1070,10 @@ PyDoc_STRVAR(close_doc,
 "close() -> None.  Close the file.\n"
 "\n"
 "A closed file cannot be used for further I/O operations.  close() may be\n"
-"called more than once without error.  Changes the fileno to -1.");
+"called more than once without error.");
 
 PyDoc_STRVAR(isatty_doc,
-"isatty() -> bool.  True if the file is connected to a tty device.");
+"isatty() -> bool.  True if the file is connected to a TTY device.");
 
 PyDoc_STRVAR(seekable_doc,
 "seekable() -> bool.  True if file supports random-access.");
@@ -1073,7 +1126,7 @@ get_mode(fileio *self, void *closure)
 static PyGetSetDef fileio_getsetlist[] = {
     {"closed", (getter)get_closed, NULL, "True if the file is closed"},
     {"closefd", (getter)get_closefd, NULL,
-        "True if the file descriptor will be closed"},
+        "True if the file descriptor will be closed by close()."},
     {"mode", (getter)get_mode, NULL, "String giving the file mode"},
     {NULL},
 };

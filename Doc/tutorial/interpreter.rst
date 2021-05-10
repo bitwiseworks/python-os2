@@ -37,7 +37,7 @@ The interpreter's line-editing features usually aren't very sophisticated.  On
 Unix, whoever installed the interpreter may have enabled support for the GNU
 readline library, which adds more elaborate interactive editing and history
 features. Perhaps the quickest check to see whether command line editing is
-supported is typing Control-P to the first Python prompt you get.  If it beeps,
+supported is typing :kbd:`Control-P` to the first Python prompt you get.  If it beeps,
 you have command line editing; see Appendix :ref:`tut-interacting` for an
 introduction to the keys.  If nothing appears to happen, or if ``^P`` is echoed,
 command line editing isn't available; you'll only be able to use backspace to
@@ -61,6 +61,8 @@ if you had spelled out its full name on the command line.
 When a script file is used, it is sometimes useful to be able to run the script
 and enter interactive mode afterwards.  This can be done by passing :option:`-i`
 before the script.
+
+All command-line options are described in :ref:`using-on-general`.
 
 
 .. _tut-argpassing:
@@ -91,7 +93,9 @@ mode*.  In this mode it prompts for the next command with the *primary prompt*,
 usually three greater-than signs (``>>>``); for continuation lines it prompts
 with the *secondary prompt*, by default three dots (``...``). The interpreter
 prints a welcome message stating its version number and a copyright notice
-before printing the first prompt::
+before printing the first prompt:
+
+.. code-block:: shell-session
 
    python
    Python 2.7 (#1, Feb 28 2010, 00:02:06)
@@ -108,61 +112,13 @@ example, take a look at this :keyword:`if` statement::
    Be careful not to fall off!
 
 
+For more on interactive mode, see :ref:`tut-interac`.
+
+
 .. _tut-interp:
 
 The Interpreter and Its Environment
 ===================================
-
-
-.. _tut-error:
-
-Error Handling
---------------
-
-When an error occurs, the interpreter prints an error message and a stack trace.
-In interactive mode, it then returns to the primary prompt; when input came from
-a file, it exits with a nonzero exit status after printing the stack trace.
-(Exceptions handled by an :keyword:`except` clause in a :keyword:`try` statement
-are not errors in this context.)  Some errors are unconditionally fatal and
-cause an exit with a nonzero exit; this applies to internal inconsistencies and
-some cases of running out of memory.  All error messages are written to the
-standard error stream; normal output from executed commands is written to
-standard output.
-
-Typing the interrupt character (usually Control-C or DEL) to the primary or
-secondary prompt cancels the input and returns to the primary prompt. [#]_
-Typing an interrupt while a command is executing raises the
-:exc:`KeyboardInterrupt` exception, which may be handled by a :keyword:`try`
-statement.
-
-
-.. _tut-scripts:
-
-Executable Python Scripts
--------------------------
-
-On BSD'ish Unix systems, Python scripts can be made directly executable, like
-shell scripts, by putting the line ::
-
-   #! /usr/bin/env python
-
-(assuming that the interpreter is on the user's :envvar:`PATH`) at the beginning
-of the script and giving the file an executable mode.  The ``#!`` must be the
-first two characters of the file.  On some platforms, this first line must end
-with a Unix-style line ending (``'\n'``), not a Windows (``'\r\n'``) line
-ending.  Note that the hash, or pound, character, ``'#'``, is used to start a
-comment in Python.
-
-The script can be given an executable mode, or permission, using the
-:program:`chmod` command::
-
-   $ chmod +x myscript.py
-
-On Windows systems, there is no notion of an "executable mode".  The Python
-installer automatically associates ``.py`` files with ``python.exe`` so that
-a double-click on a Python file will run it as a script.  The extension can
-also be ``.pyw``, in that case, the console window that normally appears is
-suppressed.
 
 
 .. _tut-source-encoding:
@@ -170,100 +126,23 @@ suppressed.
 Source Code Encoding
 --------------------
 
-It is possible to use encodings different than ASCII in Python source files. The
-best way to do it is to put one more special comment line right after the ``#!``
-line to define the source file encoding::
+By default, Python source files are treated as encoded in ASCII.
+To declare an encoding other than the default one, a special comment line
+should be added as the *first* line of the file.  The syntax is as follows::
 
    # -*- coding: encoding -*-
 
+where *encoding* is one of the valid :mod:`codecs` supported by Python.
 
-With that declaration, all characters in the source file will be treated as
-having the encoding *encoding*, and it will be possible to directly write
-Unicode string literals in the selected encoding.  The list of possible
-encodings can be found in the Python Library Reference, in the section on
-:mod:`codecs`.
+For example, to declare that Windows-1252 encoding is to be used, the first
+line of your source code file should be::
 
-For example, to write Unicode literals including the Euro currency symbol, the
-ISO-8859-15 encoding can be used, with the Euro symbol having the ordinal value
-164.  This script, when saved in the ISO-8859-15 encoding, will print the value
-8364 (the Unicode codepoint corresponding to the Euro symbol) and then exit::
+   # -*- coding: cp1252 -*-
 
-   # -*- coding: iso-8859-15 -*-
+One exception to the *first line* rule is when the source code starts with a
+:ref:`UNIX "shebang" line <tut-scripts>`.  In this case, the encoding
+declaration should be added as the second line of the file.  For example::
 
-   currency = u"€"
-   print ord(currency)
+   #!/usr/bin/env python
+   # -*- coding: cp1252 -*-
 
-If your editor supports saving files as ``UTF-8`` with a UTF-8 *byte order mark*
-(aka BOM), you can use that instead of an encoding declaration. IDLE supports
-this capability if ``Options/General/Default Source Encoding/UTF-8`` is set.
-Notice that this signature is not understood in older Python releases (2.2 and
-earlier), and also not understood by the operating system for script files with
-``#!`` lines (only used on Unix systems).
-
-By using UTF-8 (either through the signature or an encoding declaration),
-characters of most languages in the world can be used simultaneously in string
-literals and comments.  Using non-ASCII characters in identifiers is not
-supported. To display all these characters properly, your editor must recognize
-that the file is UTF-8, and it must use a font that supports all the characters
-in the file.
-
-
-.. _tut-startup:
-
-The Interactive Startup File
-----------------------------
-
-When you use Python interactively, it is frequently handy to have some standard
-commands executed every time the interpreter is started.  You can do this by
-setting an environment variable named :envvar:`PYTHONSTARTUP` to the name of a
-file containing your start-up commands.  This is similar to the :file:`.profile`
-feature of the Unix shells.
-
-.. XXX This should probably be dumped in an appendix, since most people
-   don't use Python interactively in non-trivial ways.
-
-This file is only read in interactive sessions, not when Python reads commands
-from a script, and not when :file:`/dev/tty` is given as the explicit source of
-commands (which otherwise behaves like an interactive session).  It is executed
-in the same namespace where interactive commands are executed, so that objects
-that it defines or imports can be used without qualification in the interactive
-session. You can also change the prompts ``sys.ps1`` and ``sys.ps2`` in this
-file.
-
-If you want to read an additional start-up file from the current directory, you
-can program this in the global start-up file using code like ``if
-os.path.isfile('.pythonrc.py'): execfile('.pythonrc.py')``.  If you want to use
-the startup file in a script, you must do this explicitly in the script::
-
-   import os
-   filename = os.environ.get('PYTHONSTARTUP')
-   if filename and os.path.isfile(filename):
-       execfile(filename)
-
-
-.. _tut-customize:
-
-The Customization Modules
--------------------------
-
-Python provides two hooks to let you customize it: :mod:`sitecustomize` and
-:mod:`usercustomize`.  To see how it works, you need first to find the location
-of your user site-packages directory.  Start Python and run this code:
-
-   >>> import site
-   >>> site.getusersitepackages()
-   '/home/user/.local/lib/python2.7/site-packages'
-
-Now you can create a file named :file:`usercustomize.py` in that directory and
-put anything you want in it.  It will affect every invocation of Python, unless
-it is started with the :option:`-s` option to disable the automatic import.
-
-:mod:`sitecustomize` works in the same way, but is typically created by an
-administrator of the computer in the global site-packages directory, and is
-imported before :mod:`usercustomize`.  See the documentation of the :mod:`site`
-module for more details.
-
-
-.. rubric:: Footnotes
-
-.. [#] A problem with the GNU Readline package may prevent this.
