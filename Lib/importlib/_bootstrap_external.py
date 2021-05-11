@@ -28,15 +28,20 @@ import marshal
 
 
 _MS_WINDOWS = (sys.platform == 'win32')
+_OS2 = (sys.platform == 'os2knix')
 if _MS_WINDOWS:
     import nt as _os
     import winreg
+elif _OS2:
+    import os2 as _os
 else:
     import posix as _os
 
 
 if _MS_WINDOWS:
     path_separators = ['\\', '/']
+elif _OS2:
+    path_separators = ['/', '\\']
 else:
     path_separators = ['/']
 # Assumption made in _path_join()
@@ -170,7 +175,14 @@ if _MS_WINDOWS:
             return False
         root = _os._path_splitroot(path)[0].replace('/', '\\')
         return len(root) > 1 and (root.startswith('\\\\') or root.endswith('\\'))
+elif _OS2:
+    def _path_isabs(path):
+        """Replacement for os.path.isabs.
 
+        Considers a OS2 drive-relative path (no drive, but starts with slash) to
+        still be "absolute".
+        """
+        return path.startswith(path_separators) or path[1:3] in _pathseps_with_colon
 else:
     def _path_isabs(path):
         """Replacement for os.path.isabs."""
