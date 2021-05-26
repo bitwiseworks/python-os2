@@ -979,6 +979,20 @@ posix_1str(PyObject *args, char *format, int (*func)(const char*))
         return NULL;
     Py_BEGIN_ALLOW_THREADS
     res = (*func)(path1);
+#ifdef __OS2__
+    // we can't remove a dir if we are still inside it
+    // so handle this case as well
+    if (res && errno == EBUSY && !strcmp(format, "et:rmdir")) {
+        char buf1[PATH_MAX];
+        char buf2[PATH_MAX];
+        realpath(".", buf1);
+        realpath(path1, buf2);
+        if (!stricmp(buf1, buf2)) {
+            chdir("..");
+            res = (*func)(buf2);
+        }
+    }
+#endif
     Py_END_ALLOW_THREADS
     if (res < 0)
         return posix_error_with_allocated_filename(path1);
