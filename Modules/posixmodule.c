@@ -4953,6 +4953,20 @@ os_rmdir_impl(PyObject *module, path_t *path, int dir_fd)
     } else
 #endif
         result = rmdir(path->narrow);
+#ifdef __OS2__
+    // we can't remove a dir if we are still inside it
+    // so handle this case as well
+    if (result && errno == EBUSY) {
+        char buf1[PATH_MAX];
+        char buf2[PATH_MAX];
+        realpath(".", buf1);
+        realpath(path->narrow, buf2);
+        if (!stricmp(buf1, buf2)) {
+            chdir("..");
+            result = rmdir(buf2);
+        }
+    }
+#endif
 #endif
     Py_END_ALLOW_THREADS
 
