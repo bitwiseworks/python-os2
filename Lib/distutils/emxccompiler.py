@@ -41,7 +41,7 @@ class EMXCCompiler (UnixCCompiler):
     compiler_type = 'emx'
     obj_extension = ".o"
     static_lib_extension = ".a"
-    shared_lib_extension = get_config_vars().get('EXT_SUFFIX')
+    shared_lib_extension = ".dll"
     static_lib_format = "%s%s"
     shared_lib_format = "%s%s"
     res_extension = ".res"      # compiled resource file
@@ -106,8 +106,9 @@ class EMXCCompiler (UnixCCompiler):
             dll_name8 = dll_name
 
         # full relative path of dll/pyd
+        dll_extension = get_config_vars().get('EXT_SUFFIX')
         dll_namefull = os.path.join(os.path.dirname(output_filename),
-            dll_name8 + self.shared_lib_extension)
+            dll_name8 + dll_extension)
 
         # handle export symbols by creating a def-file
         # with executables this only works with gcc/ld as linker
@@ -184,7 +185,7 @@ class EMXCCompiler (UnixCCompiler):
                 os.remove( output_filename)
             except OSError:
                 pass
-            os.symlink( dll_name8 + self.shared_lib_extension, output_filename)
+            os.symlink( dll_name8 + dll_extension, output_filename)
 
     # link ()
 
