@@ -7001,6 +7001,7 @@ os_spawn2_impl(PyObject *module, int mode, path_t *path, PyObject *argv,
         stdfdc_none = 0;
         for (i = 0; i < stdfdc; i++) {
             PyObject *elem = (*stdfd_getitem)(stdfds, i);
+            // if the value is None we have to adjust it to 0
             if (elem == Py_None) {
                 stdfdlist[i] = 0;
             } else {
@@ -7010,8 +7011,11 @@ os_spawn2_impl(PyObject *module, int mode, path_t *path, PyObject *argv,
                     goto fail_2;
                 }
             }
-            if (stdfdlist[i] == -1)
+            // the new defaultis -1, so adjust it to 0 as well
+            if (stdfdlist[i] == -1) {
                 stdfdc_none++;
+                stdfdlist[i] = 0;
+            }
         }
     }
     // the stdfdlist entries can all be -1, which means no redirecting done
