@@ -303,6 +303,8 @@ def expanduser(path):
 
     if 'USERPROFILE' in os.environ:
         userhome = os.environ['USERPROFILE']
+    elif 'HOME' in os.environ:
+        userhome = os.environ['HOME']
     elif not 'HOMEPATH' in os.environ:
         return path
     else:
