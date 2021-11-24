@@ -182,7 +182,7 @@ elif _OS2:
         Considers a OS2 drive-relative path (no drive, but starts with slash) to
         still be "absolute".
         """
-        return path.startswith(path_separators) or path[1:3] in _pathseps_with_colon
+        return path.startswith(path_sep_tuple) or path[1:3] in _pathseps_with_colon
 else:
     def _path_isabs(path):
         """Replacement for os.path.isabs."""
