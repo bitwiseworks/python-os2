@@ -476,6 +476,10 @@ _Py_COMP_DIAG_POP
     /* don't translate newlines (\r\n <=> \n) */
     _setmode(self->fd, O_BINARY);
 #endif
+#if defined(__OS2__)
+    /* don't translate newlines (\r\n <=> \n) */
+    setmode(self->fd, O_BINARY);
+#endif
 
     if (_PyObject_SetAttrId((PyObject *)self, &PyId_name, nameobj) < 0)
         goto error;
