@@ -478,7 +478,8 @@ _Py_COMP_DIAG_POP
 #endif
 #if defined(__OS2__)
     /* don't translate newlines (\r\n <=> \n) */
-    setmode(self->fd, O_BINARY);
+    if (!isatty(self->fd))
+        setmode(self->fd, O_BINARY);
 #endif
 
     if (_PyObject_SetAttrId((PyObject *)self, &PyId_name, nameobj) < 0)
