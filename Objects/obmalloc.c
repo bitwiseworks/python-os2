@@ -20,7 +20,7 @@
 
 #ifdef WITH_PYMALLOC
 
-#ifdef HAVE_MMAP
+#if defined(HAVE_MMAP) && !defined(__OS2__)
  #include <sys/mman.h>
  #ifdef MAP_ANONYMOUS
   #define ARENAS_USE_MMAP
