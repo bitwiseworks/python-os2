@@ -8,7 +8,10 @@
 #  include <windows.h>
 extern int winerror_to_errno(int);
 #endif
-
+#ifdef __OS2__
+#define INCL_DOS
+#include <os2.h>
+#endif
 #ifdef HAVE_LANGINFO_H
 #include <langinfo.h>
 #endif
@@ -82,6 +85,13 @@ _Py_device_encoding(int fd)
        has no console */
     if (cp != 0)
         return PyUnicode_FromFormat("cp%u", (unsigned int)cp);
+#elif defined(__OS2__)
+    {
+        ULONG OS2CodePage[5];
+        ULONG OS2CodePageLen;
+        if (!DosQueryCp(sizeof(OS2CodePage), OS2CodePage, &OS2CodePageLen))
+            return PyUnicode_FromFormat("cp%u", OS2CodePage[0]);
+    }
 #elif defined(CODESET)
     {
         char *codeset = nl_langinfo(CODESET);
