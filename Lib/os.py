@@ -755,7 +755,7 @@ class _Environ(MutableMapping):
         return new
 
 def _createenviron():
-    if name == 'nt':
+    if name in ('nt', 'os2'):
         # Where Env Var Names Must Be UPPERCASE
         def check_str(value):
             if not isinstance(value, str):

@@ -1676,6 +1676,8 @@ convertenviron(void)
             continue;
 #ifdef MS_WINDOWS
         k = PyUnicode_FromWideChar(*e, (Py_ssize_t)(p-*e));
+#elif defined(__OS2__)
+        k = PyUnicode_FromStringAndSize(*e, (int)(p-*e));
 #else
         k = PyBytes_FromStringAndSize(*e, (int)(p-*e));
 #endif
@@ -1685,6 +1687,8 @@ convertenviron(void)
         }
 #ifdef MS_WINDOWS
         v = PyUnicode_FromWideChar(p+1, wcslen(p+1));
+#elif defined(__OS2__)
+        v = PyUnicode_FromStringAndSize(p+1, strlen(p+1));
 #else
         v = PyBytes_FromStringAndSize(p+1, strlen(p+1));
 #endif
@@ -1713,7 +1717,7 @@ convertenviron(void)
         }
         /* Do not pollute the einvironment with unset pseudo-env variables */
         if (*val) {
-            PyObject *v = PyBytes_FromString(val);
+            PyObject *v = PyUnicode_FromString(val);
             PyDict_SetItemString(d, sp_envvars[i], v);
             Py_DECREF(v);
         }
