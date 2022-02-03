@@ -634,7 +634,7 @@ preconfig_init_utf8_mode(PyPreConfig *config, const _PyPreCmdline *cmdline)
     }
 
 
-#ifndef MS_WINDOWS
+#if !defined(MS_WINDOWS) && !defined(__OS2__)
     if (config->utf8_mode < 0) {
         /* The C locale and the POSIX locale enable the UTF-8 Mode (PEP 540) */
         const char *ctype_loc = setlocale(LC_CTYPE, NULL);
