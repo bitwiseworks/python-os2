@@ -33,17 +33,23 @@ import unittest
 import numbers
 import locale
 from test.support import (run_unittest, run_doctest, is_resource_enabled,
-                          requires_IEEE_754, requires_docstrings)
-from test.support import (import_fresh_module, TestFailed,
-                          run_with_locale, cpython_only)
+                          requires_IEEE_754, requires_docstrings,
+                          import_fresh_module, TestFailed,
+                          run_with_locale, cpython_only,
+                          darwin_malloc_err_warning,
+                          check_sanitizer)
 import random
 import inspect
 import threading
 
 
+if sys.platform == 'darwin':
+    darwin_malloc_err_warning('test_decimal')
+
+
 C = import_fresh_module('decimal', fresh=['_decimal'])
 P = import_fresh_module('decimal', blocked=['_decimal'])
-orig_sys_decimal = sys.modules['decimal']
+import decimal as orig_sys_decimal
 
 # fractions module must import the correct decimal module.
 cfractions = import_fresh_module('fractions', fresh=['fractions'])
@@ -5481,6 +5487,9 @@ class CWhitebox(unittest.TestCase):
     # Issue 41540:
     @unittest.skipIf(sys.platform.startswith("aix"),
                      "AIX: default ulimit: test is flaky because of extreme over-allocation")
+    @unittest.skipIf(check_sanitizer(address=True, memory=True),
+                     "ASAN/MSAN sanitizer defaults to crashing "
+                     "instead of returning NULL for malloc failure.")
     def test_maxcontext_exact_arith(self):
 
         # Make sure that exact operations do not raise MemoryError due

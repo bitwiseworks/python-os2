@@ -27,10 +27,25 @@
 
 PyObject* pysqlite_cursor_iternext(pysqlite_Cursor* self);
 
+static inline int
+check_cursor_locked(pysqlite_Cursor *cur)
+{
+    if (cur->locked) {
+        PyErr_SetString(pysqlite_ProgrammingError,
+                        "Recursive use of cursors not allowed.");
+        return 0;
+    }
+    return 1;
+}
+
 static const char errmsg_fetch_across_rollback[] = "Cursor needed to be reset because of commit/rollback and can no longer be fetched from.";
 
 static int pysqlite_cursor_init(pysqlite_Cursor* self, PyObject* args, PyObject* kwargs)
 {
+    if (!check_cursor_locked(self)) {
+        return -1;
+    }
+
     pysqlite_Connection* connection;
 
     if (!PyArg_ParseTuple(args, "O!", &pysqlite_ConnectionType, &connection))
@@ -357,12 +372,9 @@ static int check_cursor(pysqlite_Cursor* cur)
         return 0;
     }
 
-    if (cur->locked) {
-        PyErr_SetString(pysqlite_ProgrammingError, "Recursive use of cursors not allowed.");
-        return 0;
-    }
-
-    return pysqlite_check_thread(cur->connection) && pysqlite_check_connection(cur->connection);
+    return (pysqlite_check_thread(cur->connection)
+            && pysqlite_check_connection(cur->connection)
+            && check_cursor_locked(cur));
 }
 
 static PyObject *
@@ -750,27 +762,29 @@ PyObject* pysqlite_cursor_iternext(pysqlite_Cursor *self)
     if (self->statement) {
         rc = pysqlite_step(self->statement->st, self->connection);
         if (PyErr_Occurred()) {
-            (void)pysqlite_statement_reset(self->statement);
-            Py_DECREF(next_row);
-            return NULL;
+            goto error;
         }
         if (rc != SQLITE_DONE && rc != SQLITE_ROW) {
-            (void)pysqlite_statement_reset(self->statement);
-            Py_DECREF(next_row);
             _pysqlite_seterror(self->connection->db, NULL);
-            return NULL;
+            goto error;
         }
 
         if (rc == SQLITE_ROW) {
+            self->locked = 1;  // GH-80254: Prevent recursive use of cursors.
             self->next_row = _pysqlite_fetch_one_row(self);
+            self->locked = 0;
             if (self->next_row == NULL) {
-                (void)pysqlite_statement_reset(self->statement);
-                return NULL;
+                goto error;
             }
         }
     }
 
     return next_row;
+
+error:
+    (void)pysqlite_statement_reset(self->statement);
+    Py_DECREF(next_row);
+    return NULL;
 }
 
 PyObject* pysqlite_cursor_fetchone(pysqlite_Cursor* self, PyObject* args)
@@ -857,6 +871,10 @@ PyObject* pysqlite_noop(pysqlite_Connection* self, PyObject* args)
 
 PyObject* pysqlite_cursor_close(pysqlite_Cursor* self, PyObject* args)
 {
+    if (!check_cursor_locked(self)) {
+        return NULL;
+    }
+
     if (!self->connection) {
         PyErr_SetString(pysqlite_ProgrammingError,
                         "Base Cursor.__init__ not called.");
@@ -878,11 +896,11 @@ PyObject* pysqlite_cursor_close(pysqlite_Cursor* self, PyObject* args)
 
 static PyMethodDef cursor_methods[] = {
     {"execute", (PyCFunction)pysqlite_cursor_execute, METH_VARARGS,
-        PyDoc_STR("Executes a SQL statement.")},
+        PyDoc_STR("Executes an SQL statement.")},
     {"executemany", (PyCFunction)pysqlite_cursor_executemany, METH_VARARGS,
-        PyDoc_STR("Repeatedly executes a SQL statement.")},
+        PyDoc_STR("Repeatedly executes an SQL statement.")},
     {"executescript", (PyCFunction)pysqlite_cursor_executescript, METH_VARARGS,
-        PyDoc_STR("Executes a multiple SQL statements at once. Non-standard.")},
+        PyDoc_STR("Executes multiple SQL statements at once.")},
     {"fetchone", (PyCFunction)pysqlite_cursor_fetchone, METH_NOARGS,
         PyDoc_STR("Fetches one row from the resultset.")},
     {"fetchmany", (PyCFunction)(void(*)(void))pysqlite_cursor_fetchmany, METH_VARARGS|METH_KEYWORDS,
@@ -892,9 +910,9 @@ static PyMethodDef cursor_methods[] = {
     {"close", (PyCFunction)pysqlite_cursor_close, METH_NOARGS,
         PyDoc_STR("Closes the cursor.")},
     {"setinputsizes", (PyCFunction)pysqlite_noop, METH_VARARGS,
-        PyDoc_STR("Required by DB-API. Does nothing in pysqlite.")},
+        PyDoc_STR("Required by DB-API. Does nothing in sqlite3.")},
     {"setoutputsize", (PyCFunction)pysqlite_noop, METH_VARARGS,
-        PyDoc_STR("Required by DB-API. Does nothing in pysqlite.")},
+        PyDoc_STR("Required by DB-API. Does nothing in sqlite3.")},
     {NULL, NULL}
 };
 

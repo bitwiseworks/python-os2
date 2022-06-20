@@ -35,7 +35,7 @@
 
   A number of SysV or ncurses functions don't have wrappers yet; if you
   need a given function, add it and send a patch.  See
-  http://www.python.org/dev/patches/ for instructions on how to submit
+  https://www.python.org/dev/patches/ for instructions on how to submit
   patches to Python.
 
   Here's a list of currently unsupported functions:
@@ -1077,8 +1077,8 @@ PyCursesWindow_ChgAt(PyCursesWindowObject *self, PyObject *args)
         return NULL;
     }
 
-    color = (short)((attr >> 8) & 0xff);
-    attr = attr - (color << 8);
+    color = (short) PAIR_NUMBER(attr);
+    attr = attr & A_ATTRIBUTES;
 
     if (use_xy) {
         rtn = mvwchgat(self->win,y,x,num,attr,color,NULL);

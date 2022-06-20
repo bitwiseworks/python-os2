@@ -173,7 +173,10 @@ markblocks(PyCodeObject *code_obj, int len)
                     break;
                 case GET_ITER:
                 case GET_AITER:
-                    block_stack = push_block(block_stack, Loop);
+                    // For-loops get a Loop block, but comprehensions do not.
+                    if (_Py_OPCODE(code[i + 1]) != CALL_FUNCTION) {
+                        block_stack = push_block(block_stack, Loop);
+                    }
                     blocks[i+1] = block_stack;
                     break;
                 case FOR_ITER:
@@ -575,7 +578,7 @@ frame_dealloc(PyFrameObject *f)
     if (_PyObject_GC_IS_TRACKED(f))
         _PyObject_GC_UNTRACK(f);
 
-    Py_TRASHCAN_SAFE_BEGIN(f)
+    Py_TRASHCAN_BEGIN(f, frame_dealloc);
     /* Kill all local variables */
     valuestack = f->f_valuestack;
     for (p = f->f_localsplus; p < valuestack; p++)
@@ -609,7 +612,7 @@ frame_dealloc(PyFrameObject *f)
     }
 
     Py_DECREF(co);
-    Py_TRASHCAN_SAFE_END(f)
+    Py_TRASHCAN_END;
 }
 
 static inline Py_ssize_t

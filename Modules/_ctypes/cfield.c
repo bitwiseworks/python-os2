@@ -35,7 +35,7 @@ PyCField_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
  * Expects the size, index and offset for the current field in *psize and
  * *poffset, stores the total size so far in *psize, the offset for the next
  * field in *poffset, the alignment requirements for the current field in
- * *palign, and returns a field desriptor for this field.
+ * *palign, and returns a field descriptor for this field.
  */
 /*
  * bitfields extension:
@@ -320,7 +320,7 @@ PyTypeObject PyCField_Type = {
     0,                                          /* tp_setattro */
     0,                                          /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC, /* tp_flags */
-    "Structure/Union member",                   /* tp_doc */
+    PyDoc_STR("Structure/Union member"),        /* tp_doc */
     (traverseproc)PyCField_traverse,                    /* tp_traverse */
     (inquiry)PyCField_clear,                            /* tp_clear */
     0,                                          /* tp_richcompare */
