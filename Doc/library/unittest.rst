@@ -223,7 +223,7 @@ Command-line options
 
    Only run test methods and classes that match the pattern or substring.
    This option may be used multiple times, in which case all test cases that
-   match of the given patterns are included.
+   match any of the given patterns are included.
 
    Patterns that contain a wildcard character (``*``) are matched against the
    test name using :meth:`fnmatch.fnmatchcase`; otherwise simple case-sensitive
@@ -597,8 +597,9 @@ The following decorators and exception implement test skipping and expected fail
 .. decorator:: expectedFailure
 
    Mark the test as an expected failure or error.  If the test fails or errors
-   it will be considered a success.  If the test passes, it will be considered
-   a failure.
+   in the test function itself (rather than in one of the :dfn:`test fixture`
+   methods) then it will be considered a success.  If the test passes, it will
+   be considered a failure.
 
 .. exception:: SkipTest(reason)
 
@@ -2417,7 +2418,7 @@ To add cleanup code that must be run even in the case of an exception, use
    after :func:`setUpModule` if :func:`setUpModule` raises an exception.
 
    It is responsible for calling all the cleanup functions added by
-   :func:`addCleanupModule`. If you need cleanup functions to be called
+   :func:`addModuleCleanup`. If you need cleanup functions to be called
    *prior* to :func:`tearDownModule` then you can call
    :func:`doModuleCleanups` yourself.
 

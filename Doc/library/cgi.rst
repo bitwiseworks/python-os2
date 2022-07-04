@@ -3,6 +3,7 @@
 
 .. module:: cgi
    :synopsis: Helpers for running Python scripts via the Common Gateway Interface.
+   :deprecated:
 
 **Source code:** :source:`Lib/cgi.py`
 
@@ -13,6 +14,10 @@
    pair: MIME; headers
    single: URL
    single: Common Gateway Interface
+
+.. deprecated:: 3.11
+   The :mod:`cgi` module is deprecated
+   (see :pep:`PEP 594 <594#cgi>` for details and alternatives).
 
 --------------
 
@@ -89,7 +94,7 @@ To get at submitted form data, use the :class:`FieldStorage` class. If the form
 contains non-ASCII characters, use the *encoding* keyword parameter set to the
 value of the encoding defined for the document. It is usually contained in the
 META tag in the HEAD section of the HTML document or by the
-:mailheader:`Content-Type` header).  This reads the form contents from the
+:mailheader:`Content-Type` header.  This reads the form contents from the
 standard input or the environment (depending on the value of various
 environment variables set according to the CGI standard).  Since it may consume
 standard input, it should be instantiated only once.
@@ -316,7 +321,7 @@ algorithms implemented in this module in other circumstances.
 .. function:: test()
 
    Robust test CGI script, usable as main program. Writes minimal HTTP headers and
-   formats all information provided to the script in HTML form.
+   formats all information provided to the script in HTML format.
 
 
 .. function:: print_environ()
@@ -346,8 +351,8 @@ Caring about security
 
 .. index:: pair: CGI; security
 
-There's one important rule: if you invoke an external program (via the
-:func:`os.system` or :func:`os.popen` functions. or others with similar
+There's one important rule: if you invoke an external program (via
+:func:`os.system`, :func:`os.popen` or other functions with similar
 functionality), make very sure you don't pass arbitrary strings received from
 the client to the shell.  This is a well-known security hole whereby clever
 hackers anywhere on the Web can exploit a gullible CGI script to invoke
@@ -424,7 +429,7 @@ above on installing your CGI script carefully can save you a lot of time.  If
 you wonder whether you have understood the installation procedure correctly, try
 installing a copy of this module file (:file:`cgi.py`) as a CGI script.  When
 invoked as a script, the file will dump its environment and the contents of the
-form in HTML form. Give it the right mode etc, and send it a request.  If it's
+form in HTML format. Give it the right mode etc., and send it a request.  If it's
 installed in the standard :file:`cgi-bin` directory, it should be possible to
 send it a request by entering a URL into your browser of the form:
 

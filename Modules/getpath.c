@@ -1291,6 +1291,7 @@ calculate_read_pyenv(PyCalculatePath *calculate)
 
     status = calculate_open_pyenv(calculate, &env_file);
     if (_PyStatus_EXCEPTION(status)) {
+        assert(env_file == NULL);
         return status;
     }
     if (env_file == NULL) {
@@ -1537,7 +1538,7 @@ calculate_path(PyCalculatePath *calculate, _PyPathConfig *pathconfig)
     }
 
     /* If a pyvenv.cfg configure file is found,
-       argv0_path is overriden with its 'home' variable. */
+       argv0_path is overridden with its 'home' variable. */
     status = calculate_read_pyenv(calculate);
     if (_PyStatus_EXCEPTION(status)) {
         return status;
