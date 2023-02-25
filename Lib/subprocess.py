@@ -2027,6 +2027,8 @@ class Popen(object):
                 stdout = stdout[0] if stdout else None
                 stderr = stderr[0] if stderr else None
 
+            return (stdout, stderr)
+
             else:
                 if self.stdin and not self._communication_started:
                     # Flush stdio buffer.  This might block, if the user has
