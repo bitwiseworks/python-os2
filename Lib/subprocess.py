@@ -2023,6 +2023,10 @@ class Popen(object):
                     stderr = self._stderr_buff
                     self.stderr.close()
 
+                # All data exchanged.  Translate lists into strings.
+                stdout = stdout[0] if stdout else None
+                stderr = stderr[0] if stderr else None
+
             else:
                 if self.stdin and not self._communication_started:
                     # Flush stdio buffer.  This might block, if the user has
