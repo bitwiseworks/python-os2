@@ -2023,11 +2023,6 @@ class Popen(object):
                     stderr = self._stderr_buff
                     self.stderr.close()
 
-                # All data exchanged.  Translate lists into strings.
-                if stdout is not None:
-                    stdout = ''.join(stdout)
-                if stderr is not None:
-                    stderr = ''.join(stderr)
             else:
                 if self.stdin and not self._communication_started:
                     # Flush stdio buffer.  This might block, if the user has
@@ -2109,23 +2104,23 @@ class Popen(object):
 
                 self.wait(timeout=self._remaining_time(endtime))
 
-                # All data exchanged.  Translate lists into strings.
-                if stdout is not None:
-                    stdout = b''.join(stdout)
-                if stderr is not None:
-                    stderr = b''.join(stderr)
+            # All data exchanged.  Translate lists into strings.
+            if stdout is not None:
+                stdout = b''.join(stdout)
+            if stderr is not None:
+                stderr = b''.join(stderr)
 
-                # Translate newlines, if requested.
-                # This also turns bytes into strings.
-                if self.text_mode:
-                    if stdout is not None:
-                        stdout = self._translate_newlines(stdout,
-                                                          self.stdout.encoding,
-                                                          self.stdout.errors)
-                    if stderr is not None:
-                        stderr = self._translate_newlines(stderr,
-                                                          self.stderr.encoding,
-                                                          self.stderr.errors)
+            # Translate newlines, if requested.
+            # This also turns bytes into strings.
+            if self.text_mode:
+                if stdout is not None:
+                    stdout = self._translate_newlines(stdout,
+                                                      self.stdout.encoding,
+                                                      self.stdout.errors)
+                if stderr is not None:
+                    stderr = self._translate_newlines(stderr,
+                                                      self.stderr.encoding,
+                                                      self.stderr.errors)
 
             return (stdout, stderr)
 
