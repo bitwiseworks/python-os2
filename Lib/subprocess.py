@@ -106,7 +106,7 @@ if not _mswindows:
     import sysconfig
     # On Android the default shell is at '/system/bin/sh'.
     _UNIX_SHELL = sysconfig.get_config_var('SHELL') or ('/system/bin/sh' if
-                  hasattr(sys, 'getandroidapilevel') else '/bin/sh')    
+                  hasattr(sys, 'getandroidapilevel') else '/bin/sh')
     if _os2:
         import fcntl
         import time
@@ -1968,7 +1968,7 @@ class Popen(object):
 
 
         if _os2:
-            # _readerthread and also the os2 part in _communicate is 
+            # _readerthread and also the os2 part in _communicate is
             # borrowed from the winows implementation, so try to be in sync
             def _readerthread(self, fh, buffer):
                 buffer.append(fh.read())
@@ -2022,6 +2022,10 @@ class Popen(object):
                 if self.stderr:
                     stderr = self._stderr_buff
                     self.stderr.close()
+
+                # All data exchanged.  Translate lists into strings.
+                stdout = stdout[0] if stdout else None
+                stderr = stderr[0] if stderr else None
 
             else:
                 if self.stdin and not self._communication_started:
@@ -2104,23 +2108,23 @@ class Popen(object):
 
                 self.wait(timeout=self._remaining_time(endtime))
 
-            # All data exchanged.  Translate lists into strings.
-            if stdout is not None:
-                stdout = b''.join(stdout)
-            if stderr is not None:
-                stderr = b''.join(stderr)
-
-            # Translate newlines, if requested.
-            # This also turns bytes into strings.
-            if self.text_mode:
+                # All data exchanged.  Translate lists into strings.
                 if stdout is not None:
-                    stdout = self._translate_newlines(stdout,
-                                                      self.stdout.encoding,
-                                                      self.stdout.errors)
+                    stdout = b''.join(stdout)
                 if stderr is not None:
-                    stderr = self._translate_newlines(stderr,
-                                                      self.stderr.encoding,
-                                                      self.stderr.errors)
+                    stderr = b''.join(stderr)
+
+                # Translate newlines, if requested.
+                # This also turns bytes into strings.
+                if self.text_mode:
+                    if stdout is not None:
+                        stdout = self._translate_newlines(stdout,
+                                                          self.stdout.encoding,
+                                                          self.stdout.errors)
+                    if stderr is not None:
+                        stderr = self._translate_newlines(stderr,
+                                                          self.stderr.encoding,
+                                                          self.stderr.errors)
 
             return (stdout, stderr)
 
