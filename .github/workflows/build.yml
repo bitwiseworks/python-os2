@@ -147,11 +147,23 @@ jobs:
     needs: check_source
     if: needs.check_source.outputs.run_tests == 'true'
     env:
+      HOMEBREW_NO_ANALYTICS: 1
+      HOMEBREW_NO_AUTO_UPDATE: 1
+      HOMEBREW_NO_INSTALL_CLEANUP: 1
       PYTHONSTRICTEXTENSIONBUILD: 1
     steps:
     - uses: actions/checkout@v3
     - name: Configure CPython
-      run: ./configure --with-pydebug --with-openssl=/usr/local/opt/openssl --prefix=/opt/python-dev
+      run: |
+        brew install pkg-config openssl@1.1 xz gdbm tcl-tk
+        CC=clang \
+        CPPFLAGS="-I$(brew --prefix gdbm)/include -I$(brew --prefix xz)/include" \
+        LDFLAGS="-L$(brew --prefix gdbm)/lib -L$(brew --prefix xz)/lib" \
+        ./configure --prefix=/opt/python-dev \
+            --with-pydebug \
+            --with-openssl="$(brew --prefix openssl@1.1)" \
+            --with-tcltk-libs="$(pkg-config --libs tk)" \
+            --with-tcltk-includes="$(pkg-config --cflags tk)"
     - name: Build CPython
       run: make -j4
     - name: Display build info
@@ -165,7 +177,7 @@ jobs:
     needs: check_source
     if: needs.check_source.outputs.run_tests == 'true'
     env:
-      OPENSSL_VER: 1.1.1n
+      OPENSSL_VER: 1.1.1u
       PYTHONSTRICTEXTENSIONBUILD: 1
     steps:
     - uses: actions/checkout@v3
@@ -207,7 +219,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        openssl_ver: [1.0.2u, 1.1.0l, 1.1.1n, 3.0.2]
+        openssl_ver: [1.0.2u, 1.1.0l, 1.1.1u, 3.0.9, 3.1.1]
     env:
       OPENSSL_VER: ${{ matrix.openssl_ver }}
       MULTISSL_DIR: ${{ github.workspace }}/multissl
@@ -224,7 +236,7 @@ jobs:
         echo "LD_LIBRARY_PATH=${GITHUB_WORKSPACE}/multissl/openssl/${OPENSSL_VER}/lib" >> $GITHUB_ENV
     - name: 'Restore OpenSSL build'
       id: cache-openssl
-      uses: actions/cache@v3.0.2
+      uses: actions/cache@v3
       with:
         path: ./multissl/openssl/${{ env.OPENSSL_VER }}
         key: ${{ runner.os }}-multissl-openssl-${{ env.OPENSSL_VER }}
@@ -235,7 +247,7 @@ jobs:
       run: |
         echo "PATH=/usr/lib/ccache:$PATH" >> $GITHUB_ENV
     - name: Configure ccache action
-      uses: hendrikmuhs/ccache-action@v1
+      uses: hendrikmuhs/ccache-action@v1.2
     - name: Configure CPython
       run: ./configure --with-pydebug --with-openssl=$OPENSSL_DIR
     - name: Build CPython
