@@ -119,7 +119,7 @@ def ismount(path):
 
 def normpath(path):
     """Normalize path, eliminating double slashes, etc."""
-    path = path.replace('\\', '/')
+    path = str(path).replace('\\', '/')
     prefix, path = splitdrive(path)
     while path[:1] == '/':
         prefix = prefix + '/'
