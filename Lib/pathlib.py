@@ -22,6 +22,8 @@ if os.name == 'nt':
         supports_symlinks = False
         _getfinalpathname = None
 else:
+    if os.name == 'os2':
+        _getfinalpathname = None
     nt = None
 
 
@@ -126,7 +128,7 @@ class _WindowsFlavour(_Flavour):
     has_drv = True
     pathmod = ntpath
 
-    is_supported = (os.name == 'nt')
+    is_supported = (os.name in ['nt', 'os2'])
 
     drive_letters = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')
     ext_namespace_prefix = '\\\\?\\'
@@ -264,6 +266,21 @@ class _WindowsFlavour(_Flavour):
             return 'file:' + urlquote_from_bytes(path.as_posix().encode('utf-8'))
 
     def gethomedir(self, username):
+        if os.name == 'os2':
+            if not username:
+                try:
+                    return os.environ['HOME']
+                except KeyError:
+                    import pwd
+                    return pwd.getpwuid(os.getuid()).pw_dir
+            else:
+                import pwd
+                try:
+                    return pwd.getpwnam(username).pw_dir
+                except KeyError:
+                    raise RuntimeError("Can't determine home directory "
+                                       "for %r" % username)
+
         if 'USERPROFILE' in os.environ:
             userhome = os.environ['USERPROFILE']
         elif 'HOMEPATH' in os.environ:
@@ -298,7 +315,7 @@ class _PosixFlavour(_Flavour):
     has_drv = False
     pathmod = posixpath
 
-    is_supported = (os.name != 'nt')
+    is_supported = (os.name not in ['nt', 'os2'])
 
     def splitroot(self, part, sep=sep):
         if part and part[0] == sep:
@@ -1078,7 +1095,7 @@ class Path(PurePath):
 
     def __new__(cls, *args, **kwargs):
         if cls is Path:
-            cls = WindowsPath if os.name == 'nt' else PosixPath
+            cls = WindowsPath if os.name in ['nt', 'os2'] else PosixPath
         self = cls._from_parts(args, init=False)
         if not self._flavour.is_supported:
             raise NotImplementedError("cannot instantiate %r on your system"
