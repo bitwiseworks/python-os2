@@ -25,7 +25,7 @@ jobs:
       run_tests: ${{ steps.check.outputs.run_tests }}
       run_ssl_tests: ${{ steps.check.outputs.run_ssl_tests }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Check for source changes
         id: check
         run: |
@@ -57,8 +57,8 @@ jobs:
     needs: check_source
     if: needs.check_source.outputs.run_tests == 'true'
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
       - name: Install Dependencies
         run: |
             sudo ./.github/workflows/posix-deps-apt.sh
@@ -79,8 +79,8 @@ jobs:
     needs: check_source
     if: needs.check_source.outputs.run_tests == 'true'
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
       - name: Install Dependencies
         run: sudo ./.github/workflows/posix-deps-apt.sh
       - name: Add ccache to PATH
@@ -93,8 +93,12 @@ jobs:
           grep "aclocal 1.16.3" aclocal.m4
           grep -q "runstatedir" configure
           grep -q "PKG_PROG_PKG_CONFIG" aclocal.m4
+      - name: Configure CPython
+        run: |
+          # Build Python with the libpython dynamic library
+          ./configure --config-cache --with-pydebug --enable-shared
       - name: Regenerate autoconf files
-        run: docker run --rm -v $(pwd):/src quay.io/tiran/cpython_autoconf:269
+        run: make regen-configure
       - name: Build CPython
         run: |
           ./configure --with-pydebug
@@ -119,7 +123,7 @@ jobs:
     needs: check_source
     if: needs.check_source.outputs.run_tests == 'true'
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Build CPython
       run: .\PCbuild\build.bat -e -p Win32
     - name: Display build info
@@ -133,7 +137,7 @@ jobs:
     needs: check_source
     if: needs.check_source.outputs.run_tests == 'true'
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Build CPython
       run: .\PCbuild\build.bat -e -p x64
     - name: Display build info
@@ -152,18 +156,24 @@ jobs:
       HOMEBREW_NO_INSTALL_CLEANUP: 1
       PYTHONSTRICTEXTENSIONBUILD: 1
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+    - name: Install Homebrew dependencies
+      run: |
+        brew install pkg-config openssl@3.0 xz gdbm tcl-tk@8
+        # Because alternate versions are not symlinked into place by default:
+        brew link tcl-tk@8
     - name: Configure CPython
       run: |
-        brew install pkg-config openssl@1.1 xz gdbm tcl-tk
         CC=clang \
         CPPFLAGS="-I$(brew --prefix gdbm)/include -I$(brew --prefix xz)/include" \
         LDFLAGS="-L$(brew --prefix gdbm)/lib -L$(brew --prefix xz)/lib" \
         ./configure --prefix=/opt/python-dev \
             --with-pydebug \
-            --with-openssl="$(brew --prefix openssl@1.1)" \
+            --with-openssl="$(brew --prefix openssl@3.0)" \
             --with-tcltk-libs="$(pkg-config --libs tk)" \
-            --with-tcltk-includes="$(pkg-config --cflags tk)"
+            --with-tcltk-includes="$(pkg-config --cflags tk)" \
+            --with-dbmliborder=gdbm:ndbm
+        # (--with-dbmliborder needed for homebrew's gdbm 1.24: see gh-89452)
     - name: Build CPython
       run: make -j4
     - name: Display build info
@@ -177,10 +187,10 @@ jobs:
     needs: check_source
     if: needs.check_source.outputs.run_tests == 'true'
     env:
-      OPENSSL_VER: 1.1.1u
+      OPENSSL_VER: 3.0.11
       PYTHONSTRICTEXTENSIONBUILD: 1
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Install Dependencies
       run: sudo ./.github/workflows/posix-deps-apt.sh
     - name: Configure OpenSSL env vars
@@ -219,14 +229,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        openssl_ver: [1.0.2u, 1.1.0l, 1.1.1u, 3.0.9, 3.1.1]
+        openssl_ver: [1.0.2u, 1.1.0l, 1.1.1w, 3.0.11, 3.1.3]
     env:
       OPENSSL_VER: ${{ matrix.openssl_ver }}
       MULTISSL_DIR: ${{ github.workspace }}/multissl
       OPENSSL_DIR: ${{ github.workspace }}/multissl/openssl/${{ matrix.openssl_ver }}
       LD_LIBRARY_PATH: ${{ github.workspace }}/multissl/openssl/${{ matrix.openssl_ver }}/lib
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Install Dependencies
       run: sudo ./.github/workflows/posix-deps-apt.sh
     - name: Configure OpenSSL env vars
