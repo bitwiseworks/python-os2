@@ -1848,6 +1848,9 @@ yes)
       CFLAGS_NODIST="$CFLAGS_NODIST -Werror=implicit-function-declaration"
     fi
 
+    # no visibility cflag on OS/2 please.
+    if test "$MACHDEP" != os2knix; then
+
     AC_MSG_CHECKING(if we can use visibility in $CC)
      ac_save_cc="$CC"
      CC="$CC -fvisibility=hidden"
@@ -1866,6 +1869,8 @@ yes)
     if test $ac_cv_enable_visibility = yes
     then
       CFLAGS_NODIST="$CFLAGS_NODIST -fvisibility=hidden"
+    fi
+
     fi
 
     # if using gcc on alpha, use -mieee to get (near) full IEEE 754
