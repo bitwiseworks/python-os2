@@ -1,5 +1,5 @@
-:mod:`email.policy`: Policy Objects
------------------------------------
+:mod:`!email.policy`: Policy Objects
+------------------------------------
 
 .. module:: email.policy
    :synopsis: Controlling the parsing and generating of messages
@@ -97,6 +97,7 @@ file on disk and pass it to the system ``sendmail`` program on a Unix system:
    >>> from subprocess import Popen, PIPE
    >>> with open('mymsg.txt', 'rb') as f:
    ...     msg = message_from_binary_file(f, policy=policy.default)
+   ...
    >>> p = Popen(['sendmail', msg['To'].addresses[0]], stdin=PIPE)
    >>> g = BytesGenerator(p.stdin, policy=msg.policy.clone(linesep='\r\n'))
    >>> g.flatten(msg)
@@ -218,7 +219,6 @@ added matters.  To illustrate::
       Default: :const:`False`.
 
       .. versionadded:: 3.5
-         The *mangle_from_* parameter.
 
 
    .. attribute:: message_factory
@@ -244,7 +244,7 @@ added matters.  To illustrate::
       For backwards compatible, but unsafe, behavior, it must be set to
       ``False`` explicitly.
 
-      .. versionadded:: 3.9.20
+      .. versionadded:: 3.13
 
 
    The following :class:`Policy` method is intended to be called by code using
@@ -267,7 +267,7 @@ added matters.  To illustrate::
 
       Handle a *defect* found on *obj*.  When the email package calls this
       method, *defect* will always be a subclass of
-      :class:`~email.errors.Defect`.
+      :class:`~email.errors.MessageDefect`.
 
       The default implementation checks the :attr:`raise_on_defect` flag.  If
       it is ``True``, *defect* is raised as an exception.  If it is ``False``
@@ -277,7 +277,7 @@ added matters.  To illustrate::
    .. method:: register_defect(obj, defect)
 
       Register a *defect* on *obj*.  In the email package, *defect* will always
-      be a subclass of :class:`~email.errors.Defect`.
+      be a subclass of :class:`~email.errors.MessageDefect`.
 
       The default implementation calls the ``append`` method of the ``defects``
       attribute of *obj*.  When the email package calls :attr:`handle_defect`,
@@ -574,17 +574,17 @@ more closely to the RFCs relevant to their domains.
 With all of these :class:`EmailPolicies <.EmailPolicy>`, the effective API of
 the email package is changed from the Python 3.2 API in the following ways:
 
-   * Setting a header on a :class:`~email.message.Message` results in that
-     header being parsed and a header object created.
+* Setting a header on a :class:`~email.message.Message` results in that
+  header being parsed and a header object created.
 
-   * Fetching a header value from a :class:`~email.message.Message` results
-     in that header being parsed and a header object created and
-     returned.
+* Fetching a header value from a :class:`~email.message.Message` results
+  in that header being parsed and a header object created and
+  returned.
 
-   * Any header object, or any header that is refolded due to the
-     policy settings, is folded using an algorithm that fully implements the
-     RFC folding algorithms, including knowing where encoded words are required
-     and allowed.
+* Any header object, or any header that is refolded due to the
+  policy settings, is folded using an algorithm that fully implements the
+  RFC folding algorithms, including knowing where encoded words are required
+  and allowed.
 
 From the application view, this means that any header obtained through the
 :class:`~email.message.EmailMessage` is a header object with extra

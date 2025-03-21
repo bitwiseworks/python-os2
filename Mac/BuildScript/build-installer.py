@@ -165,8 +165,10 @@ def getTargetCompilers():
         '10.4': ('gcc-4.0', 'g++-4.0'),
         '10.5': ('gcc', 'g++'),
         '10.6': ('gcc', 'g++'),
+        '10.7': ('gcc', 'g++'),
+        '10.8': ('gcc', 'g++'),
     }
-    return target_cc_map.get(DEPTARGET, ('gcc', 'g++') )
+    return target_cc_map.get(DEPTARGET, ('clang', 'clang++') )
 
 CC, CXX = getTargetCompilers()
 
@@ -201,7 +203,7 @@ def internalTk():
 
 # Do we use 8.6.8 when building our own copy
 # of Tcl/Tk or a modern version.
-#   We use the old version when buildin on
+#   We use the old version when building on
 #   old versions of macOS due to build issues.
 def useOldTk():
     return getBuildTuple() < (10, 15)
@@ -244,9 +246,9 @@ def library_recipes():
 
     result.extend([
           dict(
-              name="OpenSSL 1.1.1u",
-              url="https://www.openssl.org/source/openssl-1.1.1u.tar.gz",
-              checksum='72f7ba7395f0f0652783ba1089aa0dcc',
+              name="OpenSSL 3.0.15",
+              url="https://github.com/openssl/openssl/releases/download/openssl-3.0.15/openssl-3.0.15.tar.gz",
+              checksum='23c666d0edf20f14249b3d8f0368acaee9ab585b09e1de82107c66e1f3ec9533',
               buildrecipe=build_universal_openssl,
               configure=None,
               install=None,
@@ -259,20 +261,21 @@ def library_recipes():
             tcl_checksum='81656d3367af032e0ae6157eff134f89'
 
             tk_checksum='5e0faecba458ee1386078fb228d008ba'
-            tk_patches = ['tk868_on_10_8_10_9.patch']
+            tk_patches = ['backport_gh71383_fix.patch', 'tk868_on_10_8_10_9.patch', 'backport_gh110950_fix.patch']
 
         else:
-            tcl_tk_ver='8.6.12'
-            tcl_checksum='87ea890821d2221f2ab5157bc5eb885f'
+            tcl_tk_ver='8.6.15'
+            tcl_checksum='861e159753f2e2fbd6ec1484103715b0be56be3357522b858d3cbb5f893ffef1'
 
-            tk_checksum='1d6dcf6120356e3d211e056dff5e462a'
-            tk_patches = [ ]
+            tk_checksum='550969f35379f952b3020f3ab7b9dd5bfd11c1ef7c9b7c6a75f5c49aca793fec'
+            tk_patches = []
 
 
+        base_url = "https://prdownloads.sourceforge.net/tcl/{what}{version}-src.tar.gz"
         result.extend([
           dict(
               name="Tcl %s"%(tcl_tk_ver,),
-              url="ftp://ftp.tcl.tk/pub/tcl//tcl8_6/tcl%s-src.tar.gz"%(tcl_tk_ver,),
+              url=base_url.format(what="tcl", version=tcl_tk_ver),
               checksum=tcl_checksum,
               buildDir="unix",
               configure_pre=[
@@ -289,7 +292,7 @@ def library_recipes():
               ),
           dict(
               name="Tk %s"%(tcl_tk_ver,),
-              url="ftp://ftp.tcl.tk/pub/tcl//tcl8_6/tk%s-src.tar.gz"%(tcl_tk_ver,),
+              url=base_url.format(what="tk", version=tcl_tk_ver),
               checksum=tk_checksum,
               patches=tk_patches,
               buildDir="unix",
@@ -356,15 +359,15 @@ def library_recipes():
                   ),
           ),
           dict(
-              name="SQLite 3.37.2",
-              url="https://sqlite.org/2022/sqlite-autoconf-3370200.tar.gz",
-              checksum='683cc5312ee74e71079c14d24b7a6d27',
+              name="SQLite 3.45.3",
+              url="https://sqlite.org/2024/sqlite-autoconf-3450300.tar.gz",
+              checksum="b2809ca53124c19c60f42bf627736eae011afdcc205bb48270a5ee9a38191531",
               extra_cflags=('-Os '
                             '-DSQLITE_ENABLE_FTS5 '
                             '-DSQLITE_ENABLE_FTS4 '
                             '-DSQLITE_ENABLE_FTS3_PARENTHESIS '
-                            '-DSQLITE_ENABLE_JSON1 '
                             '-DSQLITE_ENABLE_RTREE '
+                            '-DSQLITE_OMIT_AUTOINIT '
                             '-DSQLITE_TCL=0 '
                             ),
               configure_pre=[
@@ -373,6 +376,15 @@ def library_recipes():
                   '--enable-static=yes',
                   '--disable-readline',
                   '--disable-dependency-tracking',
+              ]
+          ),
+          dict(
+              name="libmpdec 4.0.0",
+              url="https://www.bytereef.org/software/mpdecimal/releases/mpdecimal-4.0.0.tar.gz",
+              checksum="942445c3245b22730fd41a67a7c5c231d11cb1b9936b9c0f76334fb7d0b4468c",
+              configure_pre=[
+                  "--disable-cxx",
+                  "MACHINE=universal",
               ]
           ),
         ])
@@ -393,6 +405,14 @@ def library_recipes():
 
     return result
 
+def compilerCanOptimize():
+    """
+    Return True iff the default Xcode version can use PGO and LTO
+    """
+    # bpo-42235: The version check is pretty conservative, can be
+    # adjusted after testing
+    mac_ver = tuple(map(int, platform.mac_ver()[0].split('.')))
+    return mac_ver >= (10, 15)
 
 # Instructions for building packages inside the .mpkg.
 def pkg_recipes():
@@ -717,6 +737,10 @@ def extractArchive(builddir, archiveName):
             if ((retval.startswith('tcl') or retval.startswith('tk'))
                     and retval.endswith('-src')):
                 retval = retval[:-4]
+                # Strip rcxx suffix from Tcl/Tk release candidates
+                retval_rc = retval.find('rc')
+                if retval_rc > 0:
+                    retval = retval[:retval_rc]
             if os.path.exists(retval):
                 shutil.rmtree(retval)
             fp = os.popen("tar zxf %s 2>&1"%(shellQuote(archiveName),), 'r')
@@ -782,10 +806,16 @@ def verifyThirdPartyFile(url, checksum, fname):
         print("Downloading %s"%(name,))
         downloadURL(url, fname)
         print("Archive for %s stored as %s"%(name, fname))
+    if len(checksum) == 32:
+        algo = 'md5'
+    elif len(checksum) == 64:
+        algo = 'sha256'
+    else:
+        raise ValueError(checksum)
     if os.system(
-            'MD5=$(openssl md5 %s) ; test "${MD5##*= }" = "%s"'
-                % (shellQuote(fname), checksum) ):
-        fatal('MD5 checksum mismatch for file %s' % fname)
+            'CHECKSUM=$(openssl %s %s) ; test "${CHECKSUM##*= }" = "%s"'
+                % (algo, shellQuote(fname), checksum) ):
+        fatal('%s checksum mismatch for file %s' % (algo, fname))
 
 def build_universal_openssl(basedir, archList):
     """
@@ -1126,8 +1156,12 @@ def buildPython():
     # will find them during its extension import sanity checks.
 
     print("Running configure...")
+    print(" NOTE: --with-mimalloc=no pending resolution of weak linking issues")
     runCommand("%s -C --enable-framework --enable-universalsdk=/ "
+               "--with-mimalloc=no "
+               "--with-system-libmpdec "
                "--with-universal-archs=%s "
+               "%s "
                "%s "
                "%s "
                "%s "
@@ -1141,9 +1175,10 @@ def buildPython():
         (' ', '--without-ensurepip ')[PYTHON_3],
         (' ', "--with-openssl='%s/libraries/usr/local'"%(
                             shellQuote(WORKDIR)[1:-1],))[PYTHON_3],
-        (' ', "--with-tcltk-includes='-I%s/libraries/usr/local/include'"%(
+        (' ', "--enable-optimizations --with-lto")[compilerCanOptimize()],
+        (' ', "TCLTK_CFLAGS='-I%s/libraries/usr/local/include'"%(
                             shellQuote(WORKDIR)[1:-1],))[internalTk()],
-        (' ', "--with-tcltk-libs='-L%s/libraries/usr/local/lib -ltcl8.6 -ltk8.6'"%(
+        (' ', "TCLTK_LIBS='-L%s/libraries/usr/local/lib -ltcl8.6 -ltk8.6'"%(
                             shellQuote(WORKDIR)[1:-1],))[internalTk()],
         shellQuote(WORKDIR)[1:-1],
         shellQuote(WORKDIR)[1:-1]))
@@ -1335,7 +1370,7 @@ def buildPython():
         build_time_vars = l_dict['build_time_vars']
     vars = {}
     for k, v in build_time_vars.items():
-        if type(v) == type(''):
+        if isinstance(v, str):
             for p in (include_path, lib_path):
                 v = v.replace(' ' + p, '')
                 v = v.replace(p + ' ', '')
@@ -1467,7 +1502,7 @@ def packageFromRecipe(targetDir, recipe):
                 IFPkgFlagRelocatable=False,
                 IFPkgFlagRestartAction="NoRestart",
                 IFPkgFlagRootVolumeOnly=True,
-                IFPkgFlagUpdateInstalledLangauges=False,
+                IFPkgFlagUpdateInstalledLanguages=False,
             )
         writePlist(pl, os.path.join(packageContents, 'Info.plist'))
 

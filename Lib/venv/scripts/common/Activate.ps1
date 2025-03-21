@@ -96,6 +96,11 @@ function global:deactivate ([switch]$NonDestructive) {
         Remove-Item -Path env:VIRTUAL_ENV
     }
 
+    # Just remove VIRTUAL_ENV_PROMPT altogether.
+    if (Test-Path -Path Env:VIRTUAL_ENV_PROMPT) {
+        Remove-Item -Path env:VIRTUAL_ENV_PROMPT
+    }
+
     # Just remove the _PYTHON_VENV_PROMPT_PREFIX altogether:
     if (Get-Variable -Name "_PYTHON_VENV_PROMPT_PREFIX" -ErrorAction SilentlyContinue) {
         Remove-Variable -Name _PYTHON_VENV_PROMPT_PREFIX -Scope Global -Force
@@ -213,6 +218,8 @@ deactivate -nondestructive
 # Now set the environment variable VIRTUAL_ENV, used by many tools to determine
 # that there is an activated venv.
 $env:VIRTUAL_ENV = $VenvDir
+
+$env:VIRTUAL_ENV_PROMPT = $Prompt
 
 if (-not $Env:VIRTUAL_ENV_DISABLE_PROMPT) {
 

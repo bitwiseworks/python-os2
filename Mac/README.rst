@@ -10,6 +10,19 @@ Python on macOS README
 This document provides a quick overview of some macOS specific features in
 the Python distribution.
 
+Compilers for building on macOS
+===============================
+
+The core developers primarily test builds on macOS with Apple's compiler tools,
+either Xcode or the Command Line Tools.  For these we only support building with
+a compiler that includes an SDK that targets the OS on the build machine, that is
+the version of Xcode that shipped with the OS version or one newer.
+
+For example, for macOS 12 we support Xcode 13 and Xcode 14 (or the corresponding
+Command Line Tools).
+
+Building with other compilers, such as GCC, likely works, but is not actively supported.
+
 macOS specific arguments to configure
 =====================================
 
@@ -192,7 +205,7 @@ Building and using a framework-based Python on macOS
 
 
 1. Why would I want a framework Python instead of a normal static Python?
---------------------------------------------------------------------------
+-------------------------------------------------------------------------
 
 The main reason is because you want to create GUI programs in Python. With the
 exception of X11/XDarwin-based GUI toolkits all GUI programs need to be run
@@ -206,7 +219,7 @@ only two places: "/Library/Framework/Python.framework" and
 "/Applications/Python <VERSION>" where ``<VERSION>`` can be e.g. "3.8",
 "2.7", etc.  This simplifies matters for users installing
 Python from a binary distribution if they want to get rid of it again. Moreover,
-due to the way frameworks work, usera without admin privileges can install a
+due to the way frameworks work, users without admin privileges can install a
 binary distribution in their home directory without recompilation.
 
 2. How does a framework Python differ from a normal static Python?
@@ -272,7 +285,7 @@ normal frameworkinstall which installs the Tools directory into
 distributions.
 
 What do all these programs do?
-===============================
+==============================
 
 "IDLE.app" is an integrated development environment for Python: editor,
 debugger, etc.
@@ -334,9 +347,9 @@ The configure script sometimes emits warnings like the one below::
    configure: WARNING: libintl.h:     section "Present But Cannot Be Compiled"
    configure: WARNING: libintl.h: proceeding with the preprocessor's result
    configure: WARNING: libintl.h: in the future, the compiler will take precedence
-   configure: WARNING:     ## --------------------------------------- ##
-   configure: WARNING:     ## Report this to https://bugs.python.org/ ##
-   configure: WARNING:     ## --------------------------------------- ##
+   configure: WARNING:     ## -------------------------------------------------------- ##
+   configure: WARNING:     ## Report this to https://github.com/python/cpython/issues/ ##
+   configure: WARNING:     ## -------------------------------------------------------- ##
 
 This almost always means you are trying to build a universal binary for
 Python and have libraries in ``/usr/local`` that don't contain the required
@@ -365,7 +378,7 @@ them symbolic links to files in ``/Library/Frameworks/Python.framework/Versions/
 Weak linking support
 ====================
 
-The CPython sources support building with the latest SDK while targetting deployment
+The CPython sources support building with the latest SDK while targeting deployment
 to macOS 10.9. This is done through weak linking of symbols introduced in macOS
 10.10 or later and checking for their availability at runtime.
 

@@ -4,7 +4,7 @@ When called as a script with arguments, this compiles the directories
 given as arguments recursively; the -l option prevents it from
 recursing into directories.
 
-Without arguments, if compiles all modules on sys.path, without
+Without arguments, it compiles all modules on sys.path, without
 recursing into subdirectories.  (Even though it should do so for
 packages -- for now, you'll have to deal with packages separately.)
 
@@ -84,20 +84,28 @@ def compile_dir(dir, maxlevels=None, ddir=None, force=False,
     if workers < 0:
         raise ValueError('workers must be greater or equal to 0')
     if workers != 1:
+        # Check if this is a system where ProcessPoolExecutor can function.
+        from concurrent.futures.process import _check_system_limits
         try:
-            # Only import when needed, as low resource platforms may
-            # fail to import it
-            from concurrent.futures import ProcessPoolExecutor
-        except ImportError:
+            _check_system_limits()
+        except NotImplementedError:
             workers = 1
+        else:
+            from concurrent.futures import ProcessPoolExecutor
     if maxlevels is None:
         maxlevels = sys.getrecursionlimit()
     files = _walk_dir(dir, quiet=quiet, maxlevels=maxlevels)
     success = True
     if workers != 1 and ProcessPoolExecutor is not None:
+        import multiprocessing
+        if multiprocessing.get_start_method() == 'fork':
+            mp_context = multiprocessing.get_context('forkserver')
+        else:
+            mp_context = None
         # If workers == 0, let ProcessPoolExecutor choose
         workers = workers or None
-        with ProcessPoolExecutor(max_workers=workers) as executor:
+        with ProcessPoolExecutor(max_workers=workers,
+                                 mp_context=mp_context) as executor:
             results = executor.map(partial(compile_file,
                                            ddir=ddir, force=force,
                                            rx=rx, quiet=quiet,
@@ -108,7 +116,8 @@ def compile_dir(dir, maxlevels=None, ddir=None, force=False,
                                            prependdir=prependdir,
                                            limit_sl_dest=limit_sl_dest,
                                            hardlink_dupes=hardlink_dupes),
-                                   files)
+                                   files,
+                                   chunksize=4)
             success = min(results, default=True)
     else:
         for file in files:
@@ -152,8 +161,8 @@ def compile_file(fullname, ddir=None, force=False, rx=None, quiet=0,
                           "in combination with stripdir or prependdir"))
 
     success = True
-    if quiet < 2 and isinstance(fullname, os.PathLike):
-        fullname = os.fspath(fullname)
+    fullname = os.fspath(fullname)
+    stripdir = os.fspath(stripdir) if stripdir is not None else None
     name = os.path.basename(fullname)
 
     dfile = None
@@ -164,13 +173,13 @@ def compile_file(fullname, ddir=None, force=False, rx=None, quiet=0,
     if stripdir is not None:
         fullname_parts = fullname.split(os.path.sep)
         stripdir_parts = stripdir.split(os.path.sep)
-        ddir_parts = list(fullname_parts)
 
-        for spart, opart in zip(stripdir_parts, fullname_parts):
-            if spart == opart:
-                ddir_parts.remove(spart)
-
-        dfile = os.path.join(*ddir_parts)
+        if stripdir_parts != fullname_parts[:len(stripdir_parts)]:
+            if quiet < 2:
+                print("The stripdir path {!r} is not a valid prefix for "
+                      "source path {!r}; ignoring".format(stripdir, fullname))
+        else:
+            dfile = os.path.join(*fullname_parts[len(stripdir_parts):])
 
     if prependdir is not None:
         if dfile is None:
@@ -404,7 +413,8 @@ def main():
     # if flist is provided then load it
     if args.flist:
         try:
-            with (sys.stdin if args.flist=='-' else open(args.flist)) as f:
+            with (sys.stdin if args.flist=='-' else
+                    open(args.flist, encoding="utf-8")) as f:
                 for line in f:
                     compile_dests.append(line.strip())
         except OSError:
