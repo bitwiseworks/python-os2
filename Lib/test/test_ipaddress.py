@@ -4,6 +4,7 @@
 """Unittest for ipaddress module."""
 
 
+import copy
 import unittest
 import re
 import contextlib
@@ -97,12 +98,11 @@ class CommonTestMixin_v4(CommonTestMixin):
 
     def test_leading_zeros(self):
         # bpo-36384: no leading zeros to avoid ambiguity with octal notation
-        msg = "Leading zeros are not permitted in '\d+'"
+        msg = "Leading zeros are not permitted in '\\d+'"
         addresses = [
             "000.000.000.000",
             "192.168.000.001",
             "016.016.016.016",
-            "192.168.000.001",
             "001.000.008.016",
             "01.2.3.40",
             "1.02.3.40",
@@ -302,6 +302,14 @@ class AddressTestCase_v4(BaseTestCase, CommonTestMixin_v4):
 
     def test_weakref(self):
         weakref.ref(self.factory('192.0.2.1'))
+
+    def test_ipv6_mapped(self):
+        self.assertEqual(ipaddress.IPv4Address('192.168.1.1').ipv6_mapped,
+                         ipaddress.IPv6Address('::ffff:192.168.1.1'))
+        self.assertEqual(ipaddress.IPv4Address('192.168.1.1').ipv6_mapped,
+                         ipaddress.IPv6Address('::ffff:c0a8:101'))
+        self.assertEqual(ipaddress.IPv4Address('192.168.1.1').ipv6_mapped.ipv4_mapped,
+                         ipaddress.IPv4Address('192.168.1.1'))
 
 
 class AddressTestCase_v6(BaseTestCase, CommonTestMixin_v6):
@@ -543,10 +551,16 @@ class AddressTestCase_v6(BaseTestCase, CommonTestMixin_v6):
 
     def test_pickle(self):
         self.pickle_test('2001:db8::')
+        self.pickle_test('2001:db8::%scope')
 
     def test_weakref(self):
         weakref.ref(self.factory('2001:db8::'))
         weakref.ref(self.factory('2001:db8::%scope'))
+
+    def test_copy(self):
+        addr = self.factory('2001:db8::%scope')
+        self.assertEqual(addr, copy.copy(addr))
+        self.assertEqual(addr, copy.deepcopy(addr))
 
 
 class NetmaskTestMixin_v4(CommonTestMixin_v4):
@@ -1322,6 +1336,17 @@ class IpaddrUnitTest(unittest.TestCase):
         self.assertEqual(str(self.ipv6_scoped_interface.ip),
                          '2001:658:22a:cafe:200::1')
 
+    def testIPv6IPv4MappedStringRepresentation(self):
+        long_prefix = '0000:0000:0000:0000:0000:ffff:'
+        short_prefix = '::ffff:'
+        ipv4 = '1.2.3.4'
+        ipv6_ipv4_str = short_prefix + ipv4
+        ipv6_ipv4_addr = ipaddress.IPv6Address(ipv6_ipv4_str)
+        ipv6_ipv4_iface = ipaddress.IPv6Interface(ipv6_ipv4_str)
+        self.assertEqual(str(ipv6_ipv4_addr), ipv6_ipv4_str)
+        self.assertEqual(ipv6_ipv4_addr.exploded, long_prefix + ipv4)
+        self.assertEqual(str(ipv6_ipv4_iface.ip), ipv6_ipv4_str)
+
     def testGetScopeId(self):
         self.assertEqual(self.ipv6_address.scope_id,
                          None)
@@ -1653,7 +1678,7 @@ class IpaddrUnitTest(unittest.TestCase):
         self.assertRaises(IndexError, self.ipv6_scoped_network.__getitem__, 1 << 64)
 
     def testGetitem(self):
-        # http://code.google.com/p/ipaddr-py/issues/detail?id=15
+        # https://code.google.com/p/ipaddr-py/issues/detail?id=15
         addr = ipaddress.IPv4Network('172.31.255.128/255.255.255.240')
         self.assertEqual(28, addr.prefixlen)
         addr_list = list(addr)
@@ -2283,7 +2308,7 @@ class IpaddrUnitTest(unittest.TestCase):
         self.assertEqual(True, ipaddress.ip_network('0.0.0.0').is_unspecified)
 
     def testPrivateNetworks(self):
-        self.assertEqual(True, ipaddress.ip_network("0.0.0.0/0").is_private)
+        self.assertEqual(False, ipaddress.ip_network("0.0.0.0/0").is_private)
         self.assertEqual(False, ipaddress.ip_network("1.0.0.0/8").is_private)
 
         self.assertEqual(True, ipaddress.ip_network("0.0.0.0/8").is_private)
@@ -2402,6 +2427,8 @@ class IpaddrUnitTest(unittest.TestCase):
         self.assertTrue(ipaddress.ip_address('2001:30::').is_global)
         self.assertFalse(ipaddress.ip_address('2001:40::').is_global)
         self.assertFalse(ipaddress.ip_address('2002::').is_global)
+        # gh-124217: conform with RFC 9637
+        self.assertFalse(ipaddress.ip_address('3fff::').is_global)
 
         # some generic IETF reserved addresses
         self.assertEqual(True, ipaddress.ip_address('100::').is_reserved)
@@ -2444,6 +2471,22 @@ class IpaddrUnitTest(unittest.TestCase):
                 True, ipaddress.ip_address('::ffff:192.168.1.1').is_private)
         self.assertEqual(
                 False, ipaddress.ip_address('::ffff:172.32.0.0').is_private)
+
+    def testIpv4MappedLoopbackCheck(self):
+        # test networks
+        self.assertEqual(True, ipaddress.ip_network(
+                '::ffff:127.100.200.254/128').is_loopback)
+        self.assertEqual(True, ipaddress.ip_network(
+                '::ffff:127.42.0.0/112').is_loopback)
+        self.assertEqual(False, ipaddress.ip_network(
+                '::ffff:128.0.0.0').is_loopback)
+        # test addresses
+        self.assertEqual(True, ipaddress.ip_address(
+                '::ffff:127.100.200.254').is_loopback)
+        self.assertEqual(True, ipaddress.ip_address(
+                '::ffff:127.42.0.0').is_loopback)
+        self.assertEqual(False, ipaddress.ip_address(
+                '::ffff:128.0.0.0').is_loopback)
 
     def testAddrExclude(self):
         addr1 = ipaddress.ip_network('10.1.1.0/24')
@@ -2568,12 +2611,42 @@ class IpaddrUnitTest(unittest.TestCase):
         self.assertEqual('192.168.178.1', addr4.exploded)
 
     def testReversePointer(self):
-        addr1 = ipaddress.IPv4Address('127.0.0.1')
-        addr2 = ipaddress.IPv6Address('2001:db8::1')
-        self.assertEqual('1.0.0.127.in-addr.arpa', addr1.reverse_pointer)
-        self.assertEqual('1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.' +
-                         'b.d.0.1.0.0.2.ip6.arpa',
-                         addr2.reverse_pointer)
+        for addr_v4, expected in [
+            ('127.0.0.1', '1.0.0.127.in-addr.arpa'),
+            # test vector: https://www.rfc-editor.org/rfc/rfc1035, §3.5
+            ('10.2.0.52', '52.0.2.10.in-addr.arpa'),
+        ]:
+            with self.subTest('ipv4_reverse_pointer', addr=addr_v4):
+                addr = ipaddress.IPv4Address(addr_v4)
+                self.assertEqual(addr.reverse_pointer, expected)
+
+        for addr_v6, expected in [
+            (
+                '2001:db8::1', (
+                    '1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.'
+                    '0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.'
+                    'ip6.arpa'
+                )
+            ),
+            (
+                '::FFFF:192.168.1.35', (
+                    '3.2.1.0.8.a.0.c.f.f.f.f.0.0.0.0.'
+                    '0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.'
+                    'ip6.arpa'
+                )
+            ),
+            # test vector: https://www.rfc-editor.org/rfc/rfc3596, §2.5
+            (
+                '4321:0:1:2:3:4:567:89ab', (
+                    'b.a.9.8.7.6.5.0.4.0.0.0.3.0.0.0.'
+                    '2.0.0.0.1.0.0.0.0.0.0.0.1.2.3.4.'
+                    'ip6.arpa'
+                )
+             )
+        ]:
+            with self.subTest('ipv6_reverse_pointer', addr=addr_v6):
+                addr = ipaddress.IPv6Address(addr_v6)
+                self.assertEqual(addr.reverse_pointer, expected)
 
     def testIntRepresentation(self):
         self.assertEqual(16909060, int(self.ipv4_address))

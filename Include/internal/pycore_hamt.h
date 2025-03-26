@@ -20,7 +20,18 @@ This constant is used to define a datastucture for storing iteration state.
 #define _Py_HAMT_MAX_TREE_DEPTH 8
 
 
-#define PyHamt_Check(o) Py_IS_TYPE(o, &_PyHamt_Type)
+extern PyTypeObject _PyHamt_Type;
+extern PyTypeObject _PyHamt_ArrayNode_Type;
+extern PyTypeObject _PyHamt_BitmapNode_Type;
+extern PyTypeObject _PyHamt_CollisionNode_Type;
+extern PyTypeObject _PyHamtKeys_Type;
+extern PyTypeObject _PyHamtValues_Type;
+extern PyTypeObject _PyHamtItems_Type;
+
+
+/* other API */
+
+#define PyHamt_Check(o) Py_IS_TYPE((o), &_PyHamt_Type)
 
 
 /* Abstract tree node. */
@@ -36,6 +47,13 @@ typedef struct {
     PyObject *h_weakreflist;
     Py_ssize_t h_count;
 } PyHamtObject;
+
+
+typedef struct {
+    PyObject_VAR_HEAD
+    uint32_t b_bitmap;
+    PyObject *b_array[1];
+} PyHamtNode_Bitmap;
 
 
 /* A struct to hold the state of depth-first traverse of the tree.
@@ -71,15 +89,6 @@ typedef struct {
     PyHamtIteratorState hi_iter;
     binaryfunc hi_yield;
 } PyHamtIterator;
-
-
-PyAPI_DATA(PyTypeObject) _PyHamt_Type;
-PyAPI_DATA(PyTypeObject) _PyHamt_ArrayNode_Type;
-PyAPI_DATA(PyTypeObject) _PyHamt_BitmapNode_Type;
-PyAPI_DATA(PyTypeObject) _PyHamt_CollisionNode_Type;
-PyAPI_DATA(PyTypeObject) _PyHamtKeys_Type;
-PyAPI_DATA(PyTypeObject) _PyHamtValues_Type;
-PyAPI_DATA(PyTypeObject) _PyHamtItems_Type;
 
 
 /* Create a new HAMT immutable mapping. */
@@ -121,8 +130,5 @@ PyObject * _PyHamt_NewIterValues(PyHamtObject *o);
 
 /* Return a Items iterator over "o". */
 PyObject * _PyHamt_NewIterItems(PyHamtObject *o);
-
-int _PyHamt_Init(void);
-void _PyHamt_Fini(void);
 
 #endif /* !Py_INTERNAL_HAMT_H */

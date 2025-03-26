@@ -1,5 +1,5 @@
-:mod:`email.utils`: Miscellaneous utilities
--------------------------------------------
+:mod:`!email.utils`: Miscellaneous utilities
+--------------------------------------------
 
 .. module:: email.utils
    :synopsis: Miscellaneous email package utilities.
@@ -13,19 +13,17 @@ module:
 
 .. function:: localtime(dt=None)
 
-    Return local time as an aware datetime object.  If called without
-    arguments, return current time.  Otherwise *dt* argument should be a
-    :class:`~datetime.datetime` instance, and it is converted to the local time
-    zone according to the system time zone database.  If *dt* is naive (that
-    is, ``dt.tzinfo`` is ``None``), it is assumed to be in local time.  In this
-    case, a positive or zero value for *isdst* causes ``localtime`` to presume
-    initially that summer time (for example, Daylight Saving Time) is or is not
-    (respectively) in effect for the specified time.  A negative value for
-    *isdst* causes the ``localtime`` to attempt to divine whether summer time
-    is in effect for the specified time.
+   Return local time as an aware datetime object.  If called without
+   arguments, return current time.  Otherwise *dt* argument should be a
+   :class:`~datetime.datetime` instance, and it is converted to the local time
+   zone according to the system time zone database.  If *dt* is naive (that
+   is, ``dt.tzinfo`` is ``None``), it is assumed to be in local time.  The
+   *isdst* parameter is ignored.
 
-    .. versionadded:: 3.3
+   .. versionadded:: 3.3
 
+   .. deprecated-removed:: 3.12 3.14
+      The *isdst* parameter.
 
 .. function:: make_msgid(idstring=None, domain=None)
 
@@ -69,7 +67,7 @@ of the new API.
 
    If *strict* is true, use a strict parser which rejects malformed inputs.
 
-   .. versionchanged:: 3.9.20
+   .. versionchanged:: 3.13
       Add *strict* optional parameter and reject malformed inputs by default.
 
 
@@ -107,7 +105,7 @@ of the new API.
       resent_ccs = msg.get_all('resent-cc', [])
       all_recipients = getaddresses(tos + ccs + resent_tos + resent_ccs)
 
-   .. versionchanged:: 3.9.20
+   .. versionchanged:: 3.13
       Add *strict* optional parameter and reject malformed inputs by default.
 
 
@@ -135,8 +133,10 @@ of the new API.
 .. function:: parsedate_to_datetime(date)
 
    The inverse of :func:`format_datetime`.  Performs the same function as
-   :func:`parsedate`, but on success returns a :mod:`~datetime.datetime`.  If
-   the input date has a timezone of ``-0000``, the ``datetime`` will be a naive
+   :func:`parsedate`, but on success returns a :mod:`~datetime.datetime`;
+   otherwise ``ValueError`` is raised if *date* contains an invalid value such
+   as an hour greater than 23 or a timezone offset not between -24 and 24 hours.
+   If the input date has a timezone of ``-0000``, the ``datetime`` will be a naive
    ``datetime``, and if the date is conforming to the RFCs it will represent a
    time in UTC but with no indication of the actual source timezone of the
    message the date comes from.  If the input date has any other valid timezone
@@ -159,7 +159,7 @@ of the new API.
 
       Fri, 09 Nov 2001 01:08:47 -0000
 
-   Optional *timeval* if given is a floating point time value as accepted by
+   Optional *timeval* if given is a floating-point time value as accepted by
    :func:`time.gmtime` and :func:`time.localtime`, otherwise the current time is
    used.
 

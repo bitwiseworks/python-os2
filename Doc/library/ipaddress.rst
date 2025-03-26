@@ -1,5 +1,5 @@
-:mod:`ipaddress` --- IPv4/IPv6 manipulation library
-===================================================
+:mod:`!ipaddress` --- IPv4/IPv6 manipulation library
+====================================================
 
 .. module:: ipaddress
    :synopsis: IPv4/IPv6 manipulation library.
@@ -121,21 +121,11 @@ write code that handles both IP versions correctly.  Address objects are
       Leading zeros are tolerated, even in ambiguous cases that look like
       octal notation.
 
-   .. versionchanged:: 3.10
+   .. versionchanged:: 3.9.5
 
       Leading zeros are no longer tolerated and are treated as an error.
       IPv4 address strings are now parsed as strict as glibc
       :func:`~socket.inet_pton`.
-
-   .. versionchanged:: 3.9.5
-
-      The above change was also included in Python 3.9 starting with
-      version 3.9.5.
-
-   .. versionchanged:: 3.8.12
-
-      The above change was also included in Python 3.8 starting with
-      version 3.8.12.
 
    .. attribute:: version
 
@@ -202,7 +192,7 @@ write code that handles both IP versions correctly.  Address objects are
       ``is_private`` has value opposite to :attr:`is_global`, except for the shared address space
       (``100.64.0.0/10`` range) where they are both ``False``.
 
-      .. versionchanged:: 3.9.20
+      .. versionchanged:: 3.13
 
          Fixed some false positives and false negatives.
 
@@ -231,7 +221,7 @@ write code that handles both IP versions correctly.  Address objects are
 
       .. versionadded:: 3.4
 
-      .. versionchanged:: 3.9.20
+      .. versionchanged:: 3.13
 
          Fixed some false positives and false negatives, see :attr:`is_private` for details.
 
@@ -253,6 +243,13 @@ write code that handles both IP versions correctly.  Address objects are
 
       ``True`` if the address is reserved for link-local usage.  See
       :RFC:`3927`.
+
+   .. attribute:: ipv6_mapped
+
+      :class:`IPv4Address` object representing the IPv4-mapped IPv6 address. See :RFC:`4291`.
+
+      .. versionadded:: 3.13
+
 
 .. _iana-ipv4-special-registry: https://www.iana.org/assignments/iana-ipv4-special-registry/iana-ipv4-special-registry.xhtml
 .. _iana-ipv6-special-registry: https://www.iana.org/assignments/iana-ipv6-special-registry/iana-ipv6-special-registry.xhtml
@@ -337,13 +334,13 @@ write code that handles both IP versions correctly.  Address objects are
    .. attribute:: is_multicast
    .. attribute:: is_private
    .. attribute:: is_global
+
+      .. versionadded:: 3.4
+
    .. attribute:: is_unspecified
    .. attribute:: is_reserved
    .. attribute:: is_loopback
    .. attribute:: is_link_local
-
-      .. versionadded:: 3.4
-         is_global
 
    .. attribute:: is_site_local
 
@@ -993,7 +990,7 @@ The module also provides the following module level functions:
 .. function:: collapse_addresses(addresses)
 
    Return an iterator of the collapsed :class:`IPv4Network` or
-   :class:`IPv6Network` objects.  *addresses* is an iterator of
+   :class:`IPv6Network` objects.  *addresses* is an :term:`iterable` of
    :class:`IPv4Network` or :class:`IPv6Network` objects.  A :exc:`TypeError` is
    raised if *addresses* contains mixed version objects.
 
@@ -1013,7 +1010,7 @@ The module also provides the following module level functions:
 
    doesn't make sense.  There are some times however, where you may wish to
    have :mod:`ipaddress` sort these anyway.  If you need to do this, you can use
-   this function as the *key* argument to :func:`sorted()`.
+   this function as the *key* argument to :func:`sorted`.
 
    *obj* is either a network or address object.
 

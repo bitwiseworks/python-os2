@@ -26,9 +26,11 @@ DOUBLECLICK_SEQUENCE = "<B1-Double-ButtonRelease>"
 
 class AutoCompleteWindow:
 
-    def __init__(self, widget):
+    def __init__(self, widget, tags):
         # The widget (Text) on which we place the AutoCompleteWindow
         self.widget = widget
+        # Tags to mark inserted text with
+        self.tags = tags
         # The widgets we create
         self.autocompletewindow = self.listbox = self.scrollbar = None
         # The default foreground and background of a selection. Saved because
@@ -69,7 +71,8 @@ class AutoCompleteWindow:
                                "%s+%dc" % (self.startindex, len(self.start)))
         if i < len(newstart):
             self.widget.insert("%s+%dc" % (self.startindex, i),
-                               newstart[i:])
+                               newstart[i:],
+                               self.tags)
         self.start = newstart
 
     def _binary_search(self, s):
@@ -179,16 +182,11 @@ class AutoCompleteWindow:
         self.userwantswindow = userWantsWin
         self.lasttypedstart = self.start
 
-        # Put widgets in place
         self.autocompletewindow = acw = Toplevel(self.widget)
-        # Put it in a position so that it is not seen.
-        acw.wm_geometry("+10000+10000")
-        # Make it float
+        acw.withdraw()
         acw.wm_overrideredirect(1)
         try:
-            # This command is only needed and available on Tk >= 8.4.0 for OSX
-            # Without it, call tips intrude on the typing process by grabbing
-            # the focus.
+            # Prevent grabbing focus on macOS.
             acw.tk.call("::tk::unsupported::MacWindowStyle", "style", acw._w,
                         "help", "noActivates")
         except TclError:
@@ -203,7 +201,7 @@ class AutoCompleteWindow:
         scrollbar.config(command=listbox.yview)
         scrollbar.pack(side=RIGHT, fill=Y)
         listbox.pack(side=LEFT, fill=BOTH, expand=True)
-        acw.update_idletasks() # Need for tk8.6.8 on macOS: #40128.
+        #acw.update_idletasks() # Need for tk8.6.8 on macOS: #40128.
         acw.lift()  # work around bug in Tk 8.5.18+ (issue #24570)
 
         # Initialize the listbox selection
@@ -268,6 +266,7 @@ class AutoCompleteWindow:
                 # place acw above current line
                 new_y -= acw_height
             acw.wm_geometry("+%d+%d" % (new_x, new_y))
+            acw.deiconify()
             acw.update_idletasks()
         except TclError:
             pass

@@ -15,13 +15,17 @@ import re
 import io
 import contextlib
 from test import support
+from test.support import os_helper
 from test.support import socket_helper
+from test.support import threading_helper
 from test.support import ALWAYS_EQ, LARGEST, SMALLEST
 
 try:
     import gzip
 except ImportError:
     gzip = None
+
+support.requires_working_socket(module=True)
 
 alist = [{'astring': 'foo@bar.baz.spam',
           'afloat': 7283.43,
@@ -500,9 +504,15 @@ class DateTimeTestCase(unittest.TestCase):
         self.assertEqual(str(t), time.strftime("%Y%m%dT%H:%M:%S", d))
 
     def test_datetime_datetime(self):
+        # naive (no tzinfo)
         d = datetime.datetime(2007,1,2,3,4,5)
         t = xmlrpclib.DateTime(d)
         self.assertEqual(str(t), '20070102T03:04:05')
+
+        # aware (with tzinfo): the timezone is ignored
+        d = datetime.datetime(2023, 6, 12, 13, 30, tzinfo=datetime.UTC)
+        t = xmlrpclib.DateTime(d)
+        self.assertEqual(str(t), '20230612T13:30:00')
 
     def test_repr(self):
         d = datetime.datetime(2007,1,2,3,4,5)
@@ -656,7 +666,7 @@ def http_server(evt, numrequests, requestHandler=None, encoding=None):
             serv.handle_request()
             numrequests -= 1
 
-    except socket.timeout:
+    except TimeoutError:
         pass
     finally:
         serv.socket.close()
@@ -726,7 +736,7 @@ def http_multi_server(evt, numrequests, requestHandler=None):
             serv.handle_request()
             numrequests -= 1
 
-    except socket.timeout:
+    except TimeoutError:
         pass
     finally:
         serv.socket.close()
@@ -1027,38 +1037,47 @@ class MultiPathServerTestCase(BaseServerTestCase):
         self.assertEqual(p.add(6,8), 6+8)
         self.assertRaises(xmlrpclib.Fault, p.pow, 6, 8)
 
+    @support.requires_resource('walltime')
     def test_path3(self):
         p = xmlrpclib.ServerProxy(URL+"/is/broken")
         self.assertRaises(xmlrpclib.Fault, p.add, 6, 8)
 
+    @support.requires_resource('walltime')
     def test_invalid_path(self):
         p = xmlrpclib.ServerProxy(URL+"/invalid")
         self.assertRaises(xmlrpclib.Fault, p.add, 6, 8)
 
+    @support.requires_resource('walltime')
     def test_path_query_fragment(self):
         p = xmlrpclib.ServerProxy(URL+"/foo?k=v#frag")
         self.assertEqual(p.test(), "/foo?k=v#frag")
 
+    @support.requires_resource('walltime')
     def test_path_fragment(self):
         p = xmlrpclib.ServerProxy(URL+"/foo#frag")
         self.assertEqual(p.test(), "/foo#frag")
 
+    @support.requires_resource('walltime')
     def test_path_query(self):
         p = xmlrpclib.ServerProxy(URL+"/foo?k=v")
         self.assertEqual(p.test(), "/foo?k=v")
 
+    @support.requires_resource('walltime')
     def test_empty_path(self):
         p = xmlrpclib.ServerProxy(URL)
         self.assertEqual(p.test(), "/RPC2")
 
+    @support.requires_resource('walltime')
     def test_root_path(self):
         p = xmlrpclib.ServerProxy(URL + "/")
         self.assertEqual(p.test(), "/")
 
+    @support.requires_resource('walltime')
     def test_empty_path_query(self):
         p = xmlrpclib.ServerProxy(URL + "?k=v")
         self.assertEqual(p.test(), "?k=v")
 
+    @support.requires_resource('walltime')
     def test_empty_path_fragment(self):
         p = xmlrpclib.ServerProxy(URL + "#frag")
         self.assertEqual(p.test(), "#frag")
@@ -1419,7 +1438,7 @@ class CGIHandlerTestCase(unittest.TestCase):
         self.cgi = None
 
     def test_cgi_get(self):
-        with support.EnvironmentVarGuard() as env:
+        with os_helper.EnvironmentVarGuard() as env:
             env['REQUEST_METHOD'] = 'GET'
             # if the method is GET and no request_text is given, it runs handle_get
             # get sysout output
@@ -1451,7 +1470,7 @@ class CGIHandlerTestCase(unittest.TestCase):
         </methodCall>
         """
 
-        with support.EnvironmentVarGuard() as env, \
+        with os_helper.EnvironmentVarGuard() as env, \
              captured_stdout(encoding=self.cgi.encoding) as data_out, \
              support.captured_stdin() as data_in:
             data_in.write(data)
@@ -1513,8 +1532,8 @@ class UseBuiltinTypesTestCase(unittest.TestCase):
 
 
 def setUpModule():
-    thread_info = support.threading_setup()
-    unittest.addModuleCleanup(support.threading_cleanup, *thread_info)
+    thread_info = threading_helper.threading_setup()
+    unittest.addModuleCleanup(threading_helper.threading_cleanup, *thread_info)
 
 
 if __name__ == "__main__":

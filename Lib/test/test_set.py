@@ -1,5 +1,6 @@
 import unittest
 from test import support
+from test.support import warnings_helper
 import gc
 import weakref
 import operator
@@ -226,14 +227,17 @@ class TestJointOps:
 
     def test_pickling(self):
         for i in range(pickle.HIGHEST_PROTOCOL + 1):
+            if type(self.s) not in (set, frozenset):
+                self.s.x = ['x']
+                self.s.z = ['z']
             p = pickle.dumps(self.s, i)
             dup = pickle.loads(p)
             self.assertEqual(self.s, dup, "%s != %s" % (self.s, dup))
             if type(self.s) not in (set, frozenset):
-                self.s.x = 10
-                p = pickle.dumps(self.s, i)
-                dup = pickle.loads(p)
                 self.assertEqual(self.s.x, dup.x)
+                self.assertEqual(self.s.z, dup.z)
+                self.assertFalse(hasattr(self.s, 'y'))
+                del self.s.x, self.s.z
 
     def test_iterator_pickling(self):
         for proto in range(pickle.HIGHEST_PROTOCOL + 1):
@@ -316,20 +320,6 @@ class TestJointOps:
         else:
             name = repr(s).partition('(')[0]    # strip class name
             self.assertEqual(repr(s), '%s({%s(...)})' % (name, name))
-
-    def test_cyclical_print(self):
-        w = ReprWrapper()
-        s = self.thetype([w])
-        w.value = s
-        fo = open(support.TESTFN, "w")
-        try:
-            fo.write(str(s))
-            fo.close()
-            fo = open(support.TESTFN, "r")
-            self.assertEqual(fo.read(), repr(s))
-        finally:
-            fo.close()
-            support.unlink(support.TESTFN)
 
     def test_do_not_rehash_dict_keys(self):
         n = 10
@@ -437,7 +427,7 @@ class TestSet(TestJointOps, unittest.TestCase):
         self.assertRaises(KeyError, self.s.remove, self.thetype(self.word))
 
     def test_remove_keyerror_unpacking(self):
-        # bug:  www.python.org/sf/1576657
+        # https://bugs.python.org/issue1576657
         for v1 in ['Q', (1,)]:
             try:
                 self.s.remove(v1)
@@ -645,10 +635,6 @@ class TestSet(TestJointOps, unittest.TestCase):
         myset >= myobj
         self.assertTrue(myobj.le_called)
 
-    @unittest.skipUnless(hasattr(set, "test_c_api"),
-                         'C API test only available in a debug build')
-    def test_c_api(self):
-        self.assertEqual(set().test_c_api(), True)
 
 class SetSubclass(set):
     pass
@@ -657,15 +643,37 @@ class TestSetSubclass(TestSet):
     thetype = SetSubclass
     basetype = set
 
-class SetSubclassWithKeywordArgs(set):
-    def __init__(self, iterable=[], newarg=None):
-        set.__init__(self, iterable)
-
-class TestSetSubclassWithKeywordArgs(TestSet):
-
     def test_keywords_in_subclass(self):
-        'SF bug #1486663 -- this used to erroneously raise a TypeError'
-        SetSubclassWithKeywordArgs(newarg=1)
+        class subclass(set):
+            pass
+        u = subclass([1, 2])
+        self.assertIs(type(u), subclass)
+        self.assertEqual(set(u), {1, 2})
+        with self.assertRaises(TypeError):
+            subclass(sequence=())
+
+        class subclass_with_init(set):
+            def __init__(self, arg, newarg=None):
+                super().__init__(arg)
+                self.newarg = newarg
+        u = subclass_with_init([1, 2], newarg=3)
+        self.assertIs(type(u), subclass_with_init)
+        self.assertEqual(set(u), {1, 2})
+        self.assertEqual(u.newarg, 3)
+
+        class subclass_with_new(set):
+            def __new__(cls, arg, newarg=None):
+                self = super().__new__(cls, arg)
+                self.newarg = newarg
+                return self
+        u = subclass_with_new([1, 2])
+        self.assertIs(type(u), subclass_with_new)
+        self.assertEqual(set(u), {1, 2})
+        self.assertIsNone(u.newarg)
+        # disallow kwargs in __new__ only (https://bugs.python.org/issue43413#msg402000)
+        with self.assertRaises(TypeError):
+            subclass_with_new([1, 2], newarg=3)
+
 
 class TestFrozenSet(TestJointOps, unittest.TestCase):
     thetype = frozenset
@@ -675,15 +683,6 @@ class TestFrozenSet(TestJointOps, unittest.TestCase):
         s = self.thetype(self.word)
         s.__init__(self.otherword)
         self.assertEqual(s, set(self.word))
-
-    def test_singleton_empty_frozenset(self):
-        f = frozenset()
-        efs = [frozenset(), frozenset([]), frozenset(()), frozenset(''),
-               frozenset(), frozenset([]), frozenset(()), frozenset(''),
-               frozenset(range(0)), frozenset(frozenset()),
-               frozenset(f), f]
-        # All of the empty frozensets should have just one id()
-        self.assertEqual(len(set(map(id, efs))), 1)
 
     def test_constructor_identity(self):
         s = self.thetype(range(3))
@@ -756,6 +755,33 @@ class TestFrozenSetSubclass(TestFrozenSet):
     thetype = FrozenSetSubclass
     basetype = frozenset
 
+    def test_keywords_in_subclass(self):
+        class subclass(frozenset):
+            pass
+        u = subclass([1, 2])
+        self.assertIs(type(u), subclass)
+        self.assertEqual(set(u), {1, 2})
+        with self.assertRaises(TypeError):
+            subclass(sequence=())
+
+        class subclass_with_init(frozenset):
+            def __init__(self, arg, newarg=None):
+                self.newarg = newarg
+        u = subclass_with_init([1, 2], newarg=3)
+        self.assertIs(type(u), subclass_with_init)
+        self.assertEqual(set(u), {1, 2})
+        self.assertEqual(u.newarg, 3)
+
+        class subclass_with_new(frozenset):
+            def __new__(cls, arg, newarg=None):
+                self = super().__new__(cls, arg)
+                self.newarg = newarg
+                return self
+        u = subclass_with_new([1, 2], newarg=3)
+        self.assertIs(type(u), subclass_with_new)
+        self.assertEqual(set(u), {1, 2})
+        self.assertEqual(u.newarg, 3)
+
     def test_constructor_identity(self):
         s = self.thetype(range(3))
         t = self.thetype(s)
@@ -781,6 +807,21 @@ class TestFrozenSetSubclass(TestFrozenSet):
         # All empty frozenset subclass instances should have different ids
         self.assertEqual(len(set(map(id, efs))), len(efs))
 
+
+class SetSubclassWithSlots(set):
+    __slots__ = ('x', 'y', '__dict__')
+
+class TestSetSubclassWithSlots(unittest.TestCase):
+    thetype = SetSubclassWithSlots
+    setUp = TestJointOps.setUp
+    test_pickling = TestJointOps.test_pickling
+
+class FrozenSetSubclassWithSlots(frozenset):
+    __slots__ = ('x', 'y', '__dict__')
+
+class TestFrozenSetSubclassWithSlots(TestSetSubclassWithSlots):
+    thetype = FrozenSetSubclassWithSlots
+
 # Tests taken from test_sets.py =============================================
 
 empty_set = set()
@@ -803,17 +844,6 @@ class TestBasicOps:
         sorted_repr_values = [repr(value) for value in self.values]
         sorted_repr_values.sort()
         self.assertEqual(result, sorted_repr_values)
-
-    def test_print(self):
-        try:
-            fo = open(support.TESTFN, "w")
-            fo.write(str(self.set))
-            fo.close()
-            fo = open(support.TESTFN, "r")
-            self.assertEqual(fo.read(), repr(self.set))
-        finally:
-            fo.close()
-            support.unlink(support.TESTFN)
 
     def test_length(self):
         self.assertEqual(len(self.set), self.length)
@@ -988,17 +1018,13 @@ class TestBasicOpsBytes(TestBasicOps, unittest.TestCase):
 
 class TestBasicOpsMixedStringBytes(TestBasicOps, unittest.TestCase):
     def setUp(self):
-        self._warning_filters = support.check_warnings()
-        self._warning_filters.__enter__()
+        self.enterContext(warnings_helper.check_warnings())
         warnings.simplefilter('ignore', BytesWarning)
         self.case   = "string and bytes set"
         self.values = ["a", "b", b"a", b"b"]
         self.set    = set(self.values)
         self.dup    = set(self.values)
         self.length = 4
-
-    def tearDown(self):
-        self._warning_filters.__exit__(None, None, None)
 
     def test_repr(self):
         self.check_repr_against_values()

@@ -1,5 +1,5 @@
-:mod:`urllib.parse` --- Parse URLs into components
-==================================================
+:mod:`!urllib.parse` --- Parse URLs into components
+===================================================
 
 .. module:: urllib.parse
    :synopsis: Parse URLs into or assemble them from components.
@@ -20,16 +20,29 @@ strings up in components (addressing scheme, network location, path etc.), to
 combine the components back into a URL string, and to convert a "relative URL"
 to an absolute URL given a "base URL."
 
-The module has been designed to match the Internet RFC on Relative Uniform
+The module has been designed to match the internet RFC on Relative Uniform
 Resource Locators. It supports the following URL schemes: ``file``, ``ftp``,
-``gopher``, ``hdl``, ``http``, ``https``, ``imap``, ``mailto``, ``mms``,
-``news``, ``nntp``, ``prospero``, ``rsync``, ``rtsp``, ``rtspu``, ``sftp``,
-``shttp``, ``sip``, ``sips``, ``snews``, ``svn``, ``svn+ssh``, ``telnet``,
-``wais``, ``ws``, ``wss``.
+``gopher``, ``hdl``, ``http``, ``https``, ``imap``, ``itms-services``, ``mailto``, ``mms``,
+``news``, ``nntp``, ``prospero``, ``rsync``, ``rtsp``, ``rtsps``, ``rtspu``,
+``sftp``, ``shttp``, ``sip``, ``sips``, ``snews``, ``svn``, ``svn+ssh``,
+``telnet``, ``wais``, ``ws``, ``wss``.
+
+.. impl-detail::
+
+   The inclusion of the ``itms-services`` URL scheme can prevent an app from
+   passing Apple's App Store review process for the macOS and iOS App Stores.
+   Handling for the ``itms-services`` scheme is always removed on iOS; on
+   macOS, it *may* be removed if CPython has been built with the
+   :option:`--with-app-store-compliance` option.
 
 The :mod:`urllib.parse` module defines functions that fall into two broad
 categories: URL parsing and URL quoting. These are covered in detail in
 the following sections.
+
+This module's functions use the deprecated term ``netloc`` (or ``net_loc``),
+which was introduced in :rfc:`1808`. However, this term has been obsoleted by
+:rfc:`3986`, which introduced the term ``authority`` as its replacement.
+The use of ``netloc`` is continued for backward compatibility.
 
 URL Parsing
 -----------
@@ -168,8 +181,8 @@ or on combining URL components into a URL string.
       Added IPv6 URL parsing capabilities.
 
    .. versionchanged:: 3.3
-      The fragment is now parsed for all URL schemes (unless *allow_fragment* is
-      false), in accordance with :rfc:`3986`.  Previously, a whitelist of
+      The fragment is now parsed for all URL schemes (unless *allow_fragments* is
+      false), in accordance with :rfc:`3986`.  Previously, an allowlist of
       schemes that support fragments existed.
 
    .. versionchanged:: 3.6
@@ -220,9 +233,9 @@ or on combining URL components into a URL string.
    .. versionchanged:: 3.8
       Added *max_num_fields* parameter.
 
-   .. versionchanged:: 3.9.2
+   .. versionchanged:: 3.10
       Added *separator* parameter with the default value of ``&``. Python
-      versions earlier than Python 3.9.2 allowed using both ``;`` and ``&`` as
+      versions earlier than Python 3.10 allowed using both ``;`` and ``&`` as
       query parameter separator. This has been changed to allow only a single
       separator key, with ``&`` as the default separator.
 
@@ -251,7 +264,8 @@ or on combining URL components into a URL string.
    read. If set, then throws a :exc:`ValueError` if there are more than
    *max_num_fields* fields read.
 
-   The optional argument *separator* is the symbol to use for separating the query arguments. It defaults to ``&``.
+   The optional argument *separator* is the symbol to use for separating the
+   query arguments. It defaults to ``&``.
 
    Use the :func:`urllib.parse.urlencode` function to convert such lists of pairs into
    query strings.
@@ -262,9 +276,9 @@ or on combining URL components into a URL string.
    .. versionchanged:: 3.8
       Added *max_num_fields* parameter.
 
-   .. versionchanged:: 3.9.2
+   .. versionchanged:: 3.10
       Added *separator* parameter with the default value of ``&``. Python
-      versions earlier than Python 3.9.2 allowed using both ``;`` and ``&`` as
+      versions earlier than Python 3.10 allowed using both ``;`` and ``&`` as
       query parameter separator. This has been changed to allow only a single
       separator key, with ``&`` as the default separator.
 
@@ -344,10 +358,10 @@ or on combining URL components into a URL string.
       Characters that affect netloc parsing under NFKC normalization will
       now raise :exc:`ValueError`.
 
-   .. versionchanged:: 3.9.5
+   .. versionchanged:: 3.10
       ASCII newline and tab characters are stripped from the URL.
 
-   .. versionchanged:: 3.9.17
+   .. versionchanged:: 3.12
       Leading WHATWG C0 control and space characters are stripped from the URL.
 
 .. _WHATWG spec: https://url.spec.whatwg.org/#concept-basic-url-parser
@@ -388,6 +402,15 @@ or on combining URL components into a URL string.
 
       If you do not want that behavior, preprocess the *url* with :func:`urlsplit` and
       :func:`urlunsplit`, removing possible *scheme* and *netloc* parts.
+
+   .. warning::
+
+      Because an absolute URL may be passed as the ``url`` parameter, it is
+      generally **not secure** to use ``urljoin`` with an attacker-controlled
+      ``url``. For example in,
+      ``urljoin("https://website.com/users/", username)``, if ``username`` can
+      contain an absolute URL, the result of ``urljoin`` will be the absolute
+      URL.
 
 
    .. versionchanged:: 3.5
@@ -446,6 +469,14 @@ with security implications code defensively. Do some verification within your
 code before trusting a returned component part.  Does that ``scheme`` make
 sense?  Is that a sensible ``path``?  Is there anything strange about that
 ``hostname``?  etc.
+
+What constitutes a URL is not universally well defined.  Different applications
+have different needs and desired constraints.  For instance the living `WHATWG
+spec`_ describes what user facing web clients such as a web browser require.
+While :rfc:`3986` is more general.  These functions incorporate some aspects of
+both, but cannot be claimed compliant with either.  The APIs and existing user
+code with expectations on specific behaviors predate both standards leading us
+to be very cautious about making API behavior changes.
 
 .. _parsing-ascii-encoded-bytes:
 
@@ -589,7 +620,7 @@ task isn't already covered by the URL parsing functions above.
 
 .. function:: quote(string, safe='/', encoding=None, errors=None)
 
-   Replace special characters in *string* using the ``%xx`` escape. Letters,
+   Replace special characters in *string* using the :samp:`%{xx}` escape. Letters,
    digits, and the characters ``'_.-~'`` are never quoted. By default, this
    function is intended for quoting the path section of a URL. The optional
    *safe* parameter specifies additional ASCII characters that should not be
@@ -636,7 +667,7 @@ task isn't already covered by the URL parsing functions above.
 
 .. function:: unquote(string, encoding='utf-8', errors='replace')
 
-   Replace ``%xx`` escapes with their single-character equivalent.
+   Replace :samp:`%{xx}` escapes with their single-character equivalent.
    The optional *encoding* and *errors* parameters specify how to decode
    percent-encoded sequences into Unicode characters, as accepted by the
    :meth:`bytes.decode` method.
@@ -667,7 +698,7 @@ task isn't already covered by the URL parsing functions above.
 
 .. function:: unquote_to_bytes(string)
 
-   Replace ``%xx`` escapes with their single-octet equivalent, and return a
+   Replace :samp:`%{xx}` escapes with their single-octet equivalent, and return a
    :class:`bytes` object.
 
    *string* may be either a :class:`str` or a :class:`bytes` object.
@@ -720,8 +751,8 @@ task isn't already covered by the URL parsing functions above.
    .. versionchanged:: 3.2
       *query* supports bytes and string objects.
 
-   .. versionadded:: 3.5
-      *quote_via* parameter.
+   .. versionchanged:: 3.5
+      Added the *quote_via* parameter.
 
 
 .. seealso::
