@@ -2479,7 +2479,11 @@ my_basename(PyObject *name)
     size = PyUnicode_GET_LENGTH(name);
     offset = 0;
     for(i=0; i < size; i++) {
-        if (IS_SEP(PyUnicode_READ(kind, data, i))) {
+#ifndef __OS2__
+        if (PyUnicode_READ(kind, data, i) == SEP) {
+#else
+        if (OS2_SEP(PyUnicode_READ(kind, data, i))) {
+#endif
             offset = i + 1;
         }
     }

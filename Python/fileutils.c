@@ -22,8 +22,10 @@ extern int winerror_to_errno(int);
 #endif
 #ifdef __OS2__
 #define INCL_DOS
+#define INCL_DOSERRORS
 #include <os2.h>
 #endif
+
 #ifdef HAVE_LANGINFO_H
 #  include <langinfo.h>           // nl_langinfo(CODESET)
 #endif
@@ -2183,12 +2185,13 @@ _Py_isabs(const wchar_t *path)
     return 1;
 #else
 #ifdef __OS2__
-    return (IS_ABSPATH(path));
+    return (OS2_ABSPATH(path));
 #else
     return (path[0] == SEP);
 #endif
 #endif
 }
+
 
 /* Get an absolute path.
    On error (ex: fail to get the current directory), return -1.
@@ -2325,7 +2328,7 @@ _Py_skiproot(const wchar_t *path, Py_ssize_t size, Py_ssize_t *drvsize,
 {
     assert(drvsize);
     assert(rootsize);
-#ifndef MS_WINDOWS
+#if !defined(MS_WINDOWS) && !defined(__OS2__)
 #define IS_SEP(x) (*(x) == SEP)
     *drvsize = 0;
     if (!IS_SEP(&path[0])) {

@@ -28,6 +28,10 @@ extern "C" {
 #define ALTSEP L'\\'
 #define DRVSEP L':'
 #define DELIM L';'
+#define OS2_SEP(ch) ((ch) == SEP || (ch) == ALTSEP)
+#define OS2_DRV(path) (*(path) && (path)[1] == DRVSEP)
+#define OS2_ABSPATH(path) (OS2_SEP((path)[0]) || OS2_DRV(path))
+#define OS2_ANYSEP(path) ( wcschr((path), SEP) || wcschr((path), ALTSEP) || OS2_DRV(path) )
 #endif
 
 #ifdef __VXWORKS__
@@ -37,34 +41,6 @@ extern "C" {
 /* Filename separator */
 #ifndef SEP
 #  define SEP L'/'
-#endif
-
-/* Test if `ch' is a filename separator (bird) */
-#ifdef ALTSEP
-#define IS_SEP(ch) ((ch) == SEP || (ch) == ALTSEP)
-#else
-#define IS_SEP(ch) ((ch) == SEP)
-#endif
-
-/* Test if `path' has a drive letter or not. (bird) */
-#ifdef DRVSEP
-#define HAS_DRV(path) (*(path) && (path)[1] == DRVSEP)
-#else
-#define HAS_DRV(path) 0
-#endif
-
-/* Test if `path' is absolute or not. (bird) */
-#ifdef DRVSEP
-#define IS_ABSPATH(path) (IS_SEP((path)[0]) || HAS_DRV(path))
-#else
-#define IS_ABSPATH(path) (IS_SEP((path)[0]))
-#endif
-
-/* Test if `path' contains any of the path separators including drive letter. (bird) */
-#ifdef ALTSEP
-#define HAS_ANYSEP(path) ( wcschr((path), SEP) || wcschr((path), ALTSEP) || HAS_DRV(path) )
-#else
-#define HAS_ANYSEP(path) ( wcschr((path), SEP) || HAS_DRV(path) )
 #endif
 
 /* Max pathname length */

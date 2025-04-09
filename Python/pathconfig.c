@@ -413,22 +413,29 @@ _PyPathConfig_ComputeSysPath0(const PyWideStringList *argv, PyObject **path0_p)
     if (nr > 0) {
         /* It's a symlink */
         link[nr] = '\0';
-        if (IS_ABSPATH(link)) {
+#ifndef __OS2__
+        if (link[0] == SEP) {
+#else
+        if (OS2_ABSPATH(link)) {
+#endif
             path0 = link; /* Link to absolute path */
         }
-        else if (!HAS_ANYSEP(link)) {
+#ifndef __OS2__
+        else if (wcschr(link, SEP) == NULL) {
+#else
+        else if (!OS2_ANYSEP(link)) {
+#endif
             /* Link without path */
         }
         else {
             /* Must join(dirname(path0), link) */
             wchar_t *q = wcsrchr(path0, SEP);
-#ifdef ALTSEP
+#ifdef __OS2__
             wchar_t *q2 = wcsrchr(q ? q : path0, ALTSEP);
             if (q2)
                 q = q2;
-#endif
-#ifdef DRVSEP
-            if (!q && HAS_DRV(path0))
+
+            if (!q && OS2_DRV(path0))
                 q = wcsrchr(path0, DRVSEP);
 #endif
             if (q == NULL) {
@@ -483,15 +490,13 @@ _PyPathConfig_ComputeSysPath0(const PyWideStringList *argv, PyObject **path0_p)
         }
 #endif
         p = wcsrchr(path0, SEP);
-#ifdef ALTSEP
+#ifdef __OS2__
         {
             wchar_t *p2 = wcsrchr(p ? p : path0, ALTSEP);
             if (p2 != NULL)
                 p = p2;
         }
-#endif
-#ifdef DRVSEP
-        if (p == NULL && HAS_DRV(path0))
+        if (p == NULL && OS2_DRV(path0))
             p = wcsrchr(path0, DRVSEP);
 #endif
     }

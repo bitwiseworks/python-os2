@@ -374,7 +374,11 @@ _Py_FindSourceFile(PyObject *filename, char* namebuf, size_t namelen, PyObject *
         Py_DECREF(path);
         if (strlen(namebuf) != (size_t)len)
             continue; /* v contains '\0' */
-        if (len > 0 && !IS_SEP(namebuf[len-1]))
+#ifndef __OS2__
+        if (len > 0 && namebuf[len-1] != SEP)
+#else
+        if (len > 0 && !OS2_SEP(namebuf[len-1]))
+#endif
             namebuf[len++] = SEP;
         strcpy(namebuf+len, tail);
 
