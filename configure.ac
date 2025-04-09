@@ -1194,6 +1194,7 @@ AS_CASE([$host/$ac_cv_cc_name],
   [aarch64-apple-ios*/clang],             [PY_SUPPORT_TIER=3], dnl iOS on ARM64
   [aarch64-*-linux-android/clang],   [PY_SUPPORT_TIER=3], dnl Android on ARM64
   [x86_64-*-linux-android/clang],    [PY_SUPPORT_TIER=3], dnl Android on AMD64
+  [*pc-os2-emx*/gcc],                [PY_SUPPORT_TIER=3], dnl OS/2
 
   [PY_SUPPORT_TIER=0]
 )
@@ -1335,6 +1336,7 @@ AC_ARG_WITH([suffix],
     [Emscripten/browser*], [EXEEXT=.js],
     [Emscripten/node*], [EXEEXT=.js],
     [WASI/*], [EXEEXT=.wasm],
+    [OS/2/*], [EXEEXT=.exe], 
     [EXEEXT=]
   )
 ])
@@ -1605,7 +1607,7 @@ if test $enable_shared = "yes"; then
       BLDLIBRARY='-L. -lpython$(LDVERSION)'
       RUNSHARED=BEGINLIBPATH="'`pwd`;$BEGINLIBPATH'"
       CONDENSED_VERSION=`echo "${LDVERSION}" | tr -d .,`
-      DLLLIBRARY='python$(CONDENSED_VERSION).dll'
+      DLLLIBRARY='pytho$(CONDENSED_VERSION).dll'
 	;;
 
   esac
