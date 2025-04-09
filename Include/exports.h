@@ -72,7 +72,7 @@
 #                       define PyAPI_DATA(RTYPE) extern Py_EXPORTED_SYMBOL RTYPE
         /* module init functions inside the core need no external linkage */
         /* except for Cygwin to handle embedding */
-#                       if defined(__CYGWIN__) || defrined(__OS2__)
+#                       if defined(__CYGWIN__) || defined(__OS2__)
 #                               define PyMODINIT_FUNC Py_EXPORTED_SYMBOL PyObject*
 #                       else /* __CYGWIN__ */
 #                               define PyMODINIT_FUNC PyObject*
@@ -83,7 +83,7 @@
         /* Under Cygwin, auto-import functions to prevent compilation */
         /* failures similar to those described at the bottom of 4.1: */
         /* http://docs.python.org/extending/windows.html#a-cookbook-approach */
-#                       if !defined(__CYGWIN__) && !ddefined(__OS2__)
+#                       if !defined(__CYGWIN__) && !defined(__OS2__)
 #                               define PyAPI_FUNC(RTYPE) Py_IMPORTED_SYMBOL RTYPE
 #                       endif /* !__CYGWIN__ */
 #                       if !defined(__OS2__)
