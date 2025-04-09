@@ -4152,8 +4152,8 @@ os_spawn2(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
     PyObject *return_value = NULL;
     int mode;
-    path_t path = PATH_T_INITIALIZE("spawn2", "path", 0, 0);
-    path_t cwd = PATH_T_INITIALIZE("spawn2", "cwd", 1, 0);
+    path_t path = PATH_T_INITIALIZE_P("spawn2", "path", 0, 0, 0, 0);
+    path_t cwd = PATH_T_INITIALIZE_P("spawn2", "cwd", 1, 0, 0, 0);
     PyObject *argv;
     PyObject *env;
     PyObject *stdfds;
@@ -4166,7 +4166,7 @@ os_spawn2(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
                         "integer argument expected, got float" );
         goto exit;
     }
-    mode = _PyLong_AsInt(args[0]);
+    mode = PyLong_AsInt(args[0]);
     if (mode == -1 && PyErr_Occurred()) {
         goto exit;
     }
