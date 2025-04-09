@@ -1120,6 +1120,9 @@ _PyStaticObjects_CheckRefcnt(PyInterpreterState *interp) {
     _PyStaticObject_CheckRefcnt((PyObject *)&_Py_ID(options));
     _PyStaticObject_CheckRefcnt((PyObject *)&_Py_ID(order));
     _PyStaticObject_CheckRefcnt((PyObject *)&_Py_ID(origin));
+#ifdef __OS2__
+    _PyStaticObject_CheckRefcnt((PyObject *)&_Py_ID(os2));
+#endif
     _PyStaticObject_CheckRefcnt((PyObject *)&_Py_ID(out_fd));
     _PyStaticObject_CheckRefcnt((PyObject *)&_Py_ID(outgoing));
     _PyStaticObject_CheckRefcnt((PyObject *)&_Py_ID(overlapped));

@@ -610,6 +610,9 @@ struct _Py_global_strings {
         STRUCT_FOR_ID(order)
         STRUCT_FOR_ID(origin)
         STRUCT_FOR_ID(out_fd)
+#ifdef __OS2__
+        STRUCT_FOR_ID(os2)
+#endif
         STRUCT_FOR_ID(outgoing)
         STRUCT_FOR_ID(overlapped)
         STRUCT_FOR_ID(owner)
