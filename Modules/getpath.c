@@ -149,8 +149,10 @@ getpath_hassuffix(PyObject *Py_UNUSED(self), PyObject *args)
         suffix = PyUnicode_AsWideCharString(suffixobj, &suffixLen);
         if (suffix) {
             if (suffixLen > len ||
-#if defined(MS_WINDOWS) || defined(__OS2__)
+#if defined(MS_WINDOWS)
                 wcsicmp(&path[len - suffixLen], suffix) != 0
+#elif defined(__OS2__)
+                stricmp((const char*)&path[len - suffixLen], (const char*)suffix) != 0
 #else
                 wcscmp(&path[len - suffixLen], suffix) != 0
 #endif
