@@ -171,7 +171,7 @@ AC_ARG_WITH([build-python],
       [AC_MSG_ERROR([Cross compiling requires --with-build-python])]
     )
     PYTHON_FOR_BUILD='./$(BUILDPYTHON) -E'
-    PYTHON_FOR_FREEZE="./_bootstrap_python"
+    PYTHON_FOR_FREEZE="./_bootstrap_python\$(EXE)"
   ]
 )
 AC_SUBST([PYTHON_FOR_BUILD])
@@ -194,7 +194,7 @@ AS_VAR_IF([cross_compiling], [yes],
     FREEZE_MODULE_BOOTSTRAP='./Programs/_freeze_module$(EXE)'
     FREEZE_MODULE_BOOTSTRAP_DEPS="Programs/_freeze_module\$(EXE)"
     FREEZE_MODULE='$(PYTHON_FOR_FREEZE) $(srcdir)/Programs/_freeze_module.py'
-    FREEZE_MODULE_DEPS="_bootstrap_python \$(srcdir)/Programs/_freeze_module.py"
+    FREEZE_MODULE_DEPS="_bootstrap_python\$(EXE) \$(srcdir)/Programs/_freeze_module.py"
     PYTHON_FOR_BUILD_DEPS='$(BUILDPYTHON)'
   ]
 )
