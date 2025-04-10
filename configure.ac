@@ -191,8 +191,8 @@ AS_VAR_IF([cross_compiling], [yes],
   ],
   [
     dnl internal build tools also depend on Programs/_freeze_module and _bootstrap_python.
-    FREEZE_MODULE_BOOTSTRAP='./Programs/_freeze_module'
-    FREEZE_MODULE_BOOTSTRAP_DEPS="Programs/_freeze_module"
+    FREEZE_MODULE_BOOTSTRAP='./Programs/_freeze_module$(EXE)'
+    FREEZE_MODULE_BOOTSTRAP_DEPS="Programs/_freeze_module\$(EXE)"
     FREEZE_MODULE='$(PYTHON_FOR_FREEZE) $(srcdir)/Programs/_freeze_module.py'
     FREEZE_MODULE_DEPS="_bootstrap_python \$(srcdir)/Programs/_freeze_module.py"
     PYTHON_FOR_BUILD_DEPS='$(BUILDPYTHON)'

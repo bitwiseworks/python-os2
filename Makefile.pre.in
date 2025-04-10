@@ -1548,7 +1548,7 @@ Programs/_freeze_module.o: Programs/_freeze_module.c Makefile
 
 Modules/getpath_noop.o: $(srcdir)/Modules/getpath_noop.c Makefile
 
-Programs/_freeze_module: Programs/_freeze_module.o Modules/getpath_noop.o $(LIBRARY_OBJS_OMIT_FROZEN)
+Programs/_freeze_module$(EXE): Programs/_freeze_module.o Modules/getpath_noop.o $(LIBRARY_OBJS_OMIT_FROZEN)
 	$(LINKCC) $(PY_CORE_LDFLAGS) -o $@ Programs/_freeze_module.o Modules/getpath_noop.o $(LIBRARY_OBJS_OMIT_FROZEN) $(LIBS) $(MODLIBS) $(SYSLIBS)
 
 # We manually freeze getpath.py rather than through freeze_modules
