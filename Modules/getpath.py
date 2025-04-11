@@ -204,7 +204,7 @@ elif os_name == 'nt':
 
 elif os_name == 'os2':
     BUILDDIR_TXT = 'pybuilddir.txt'
-    BUILD_LANDMARK = f'{VPATH}\\Modules\\Setup.local'
+    BUILD_LANDMARK = 'Modules\\Setup.local'
     DEFAULT_PROGRAM_NAME = f'python'
     STDLIB_SUBDIR = 'Lib'
     STDLIB_LANDMARKS = [f'{STDLIB_SUBDIR}\\os.py', f'{STDLIB_SUBDIR}\\os.pyc']
