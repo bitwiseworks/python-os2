@@ -927,13 +927,13 @@ _Py_GetLocaleEncoding(void)
     encoding[Py_ARRAY_LENGTH(encoding) - 1] = 0;
     return _PyMem_RawWcsdup(encoding);
 #elif defined(__OS2__)
-    char encoding[100];
+    wchar_t encoding[23];
     ULONG cp[3];
     ULONG cplen;
 
-    strcpy(encoding, "");
     if (DosQueryCp (sizeof (cp), cp, &cplen) == NO_ERROR)
-        PyOS_snprintf(encoding, sizeof(encoding), "cp%lu", cp[0]);
+      swprintf(encoding, Py_ARRAY_LENGTH(encoding), L"cp%lu", cp[0]);
+    encoding[Py_ARRAY_LENGTH(encoding) - 1] = 0;
     return _PyMem_RawWcsdup(encoding);
 #else
     const char *encoding = nl_langinfo(CODESET);
