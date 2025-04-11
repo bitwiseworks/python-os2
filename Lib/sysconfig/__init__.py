@@ -123,7 +123,7 @@ _INSTALL_SCHEMES = {
 # For the OS-native venv scheme, we essentially provide an alias:
 if os.name == 'nt':
     _INSTALL_SCHEMES['venv'] = _INSTALL_SCHEMES['nt_venv']
-elif os.name = 'os2':
+elif os.name == 'os2':
     _INSTALL_SCHEMES['venv'] = _INSTALL_SCHEMES['os2_venv']
 else:
     _INSTALL_SCHEMES['venv'] = _INSTALL_SCHEMES['posix_venv']

@@ -371,7 +371,7 @@ def expanduser(path):
                 # password database, return the path unchanged
                 return path
         else:
-            return = os.environ['HOME']
+            return os.environ['HOME']
 
     if 'USERPROFILE' in os.environ:
         userhome = os.environ['USERPROFILE']
