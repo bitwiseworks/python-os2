@@ -504,7 +504,7 @@ class Path(PathBase, PurePath):
 
     def __new__(cls, *args, **kwargs):
         if cls is Path:
-            cls = WindowsPath if os.name in ['nt', 'os2] else PosixPath
+            cls = WindowsPath if os.name in ['nt', 'os2'] else PosixPath
         return object.__new__(cls)
 
     def stat(self, *, follow_symlinks=True):
@@ -843,7 +843,7 @@ class PosixPath(Path, PurePosixPath):
     """
     __slots__ = ()
 
-    if os.name == 'nt':
+    if os.name in ['nt', 'os2']:
         def __new__(cls, *args, **kwargs):
             raise UnsupportedOperation(
                 f"cannot instantiate {cls.__name__!r} on your system")
@@ -855,7 +855,7 @@ class WindowsPath(Path, PureWindowsPath):
     """
     __slots__ = ()
 
-    if os.name !in ['nt', 'os2]:
+    if os.name not in ['nt', 'os2']:
         def __new__(cls, *args, **kwargs):
             raise UnsupportedOperation(
                 f"cannot instantiate {cls.__name__!r} on your system")

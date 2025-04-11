@@ -6246,8 +6246,8 @@ AC_SUBST([LIBPYTHON])
 MODULE_DEPS_SHARED='$(MODULE_DEPS_STATIC) $(EXPORTSYMS)'
 LIBPYTHON=''
 
-# On Android and Cygwin the shared libraries must be linked with libpython.
-if test "$PY_ENABLE_SHARED" = "1" && ( test -n "$ANDROID_API_LEVEL" || test "$MACHDEP" = "cygwin"); then
+# On Android, OS/2 and Cygwin the shared libraries must be linked with libpython.
+if test "$PY_ENABLE_SHARED" = "1" && ( test -n "$ANDROID_API_LEVEL" || test "$MACHDEP" = "cygwin" || test "$MACHDEP" = "os2knix"); then
   MODULE_DEPS_SHARED="$MODULE_DEPS_SHARED \$(LDLIBRARY)"
   LIBPYTHON="\$(BLDLIBRARY)"
 fi
