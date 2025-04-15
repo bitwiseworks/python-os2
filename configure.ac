@@ -6231,7 +6231,12 @@ if test "$Py_DEBUG" = 'true'; then
 fi
 
 AC_SUBST([EXT_SUFFIX])
+if test "$MACHDEP" = "os2knix"
+then
+EXT_SUFFIX=.pyd
+else
 EXT_SUFFIX=.${SOABI}${SHLIB_SUFFIX}
+fi
 
 AC_MSG_CHECKING([LDVERSION])
 LDVERSION='$(VERSION)$(ABIFLAGS)'
