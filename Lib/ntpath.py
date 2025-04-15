@@ -16,6 +16,7 @@ pathsep = ';'
 altsep = '/'
 defpath = '.;C:\\bin'
 devnull = 'nul'
+unixroot = '\\@unixroot'
 
 import os
 import sys
@@ -85,13 +86,20 @@ def isabs(s):
         altsep = b'/'
         colon_sep = b':\\'
         double_sep = b'\\\\'
+        unixroot = b'\\@unixroot'
     else:
         sep = '\\'
         altsep = '/'
         colon_sep = ':\\'
         double_sep = '\\\\'
-    s = s[:3].replace(altsep, sep)
+        unixroot = '\\@unixroot'
+    if os.name == 'os2':
+        s = s[:10].replace(altsep, sep)
+    else:
+        s = s[:3].replace(altsep, sep)
     # Absolute: UNC, device, and paths with a drive and root.
+    if os.name == 'os2':
+        return s.startswith(colon_sep, 1) or s.startswith(double_sep) or s.startswith(unixroot)
     return s.startswith(colon_sep, 1) or s.startswith(double_sep)
 
 
