@@ -54,6 +54,7 @@ config=''
 makepre=''
 noobjects=''
 doconfig=yes
+system=`uname -s`
 while :
 do
 	case $1 in
@@ -267,14 +268,43 @@ sed -e 's/[ 	]*#.*//' -e '/^[ 	]*$/d' |
 		for mod in $mods
 		do
 			file="$srcdir/$mod\$(EXT_SUFFIX)"
+			if test "$system" = "OS/2"
+			then
+				if test ${#mod} -gt 8
+				then
+					first4="`echo $mod | cut -c1-4`"
+					rand="$(mktemp --dry-run XXXX)"
+					mod83="$first4$rand"
+					file83="$srcdir/$mod83\$(EXT_SUFFIX)"
+				else
+					mod83="$mod"
+					file83="$file"
+				fi
+			fi
 			case $doconfig in
 			no)
 				SHAREDMODS="$SHAREDMODS $file"
 				BUILT_SHARED="$BUILT_SHARED $mod"
 				;;
 			esac
+			if test "$system" = "OS/2"
+			then
+				objs="$objs $srcdir/$mod.def"
+			fi
 			rule="$file: $objs"
+			if test "$system" != "OS/2"
+			then
 			rule="$rule; \$(BLDSHARED) $objs $libs \$(LIBPYTHON) -o $file"
+			else
+				rule="$rule; \$(BLDSHARED) $objs $libs \$(LIBPYTHON) -o $file83"
+				if test ${#mod} -gt 8
+				then
+					rule="$rule; rm -f $file; ln -s $mod83\$(EXT_SUFFIX) $file"
+				fi
+				rule="$rule\n$srcdir/$mod.def: \n\t echo \"LIBRARY $mod83 INITINSTANCE TERMINSTANCE\" >\$@"
+				rule="$rule\n\t echo \"DESCRIPTION \\\"@\#\$(VENDOR):\$(VERSION)\#@\$(BUILD_INFO)::::0::@@$mod\\\"\" >>\$@"
+				rule="$rule\n\t echo \"DATA MULTIPLE\" >>\$@"
+			fi
 			echo "$rule" >>$rulesf
 		done
 	done
