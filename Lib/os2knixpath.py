@@ -278,11 +278,11 @@ def relpath(path, start=None):
     """Return a relative version of a path"""
     path = os.fspath(path)
     if isinstance(path, bytes):
-        sep = b'\\'
+        sep = b'/'
         curdir = b'.'
         pardir = b'..'
     else:
-        sep = '\\'
+        sep = '/'
         curdir = '.'
         pardir = '..'
 
