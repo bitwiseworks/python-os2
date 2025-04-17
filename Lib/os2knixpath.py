@@ -304,7 +304,7 @@ def relpath(path, start=None):
                 path_drive, start_drive))
 
         start_list = start_rest.split(sep) if start_rest else []
-        path_list = path_rest.split(sep) if path_list else []
+        path_list = path_rest.split(sep) if path_rest else []
         # Work out how much of the filepath is shared by start and path.
         i = 0
         for e1, e2 in zip(start_list, path_list):
