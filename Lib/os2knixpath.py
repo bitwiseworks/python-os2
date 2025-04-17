@@ -17,9 +17,11 @@ __all__ = ["normcase","isabs","join","splitdrive","split","splitext",
            "ismount","expanduser","expandvars","normpath","abspath",
            "curdir","pardir","sep","pathsep","defpath","altsep",
            "extsep","devnull","realpath","supports_unicode_filenames","relpath",
-           "samefile","sameopenfile","samestat", "commonpath", "splitunc"]
+           "samefile","sameopenfile","samestat", "commonpath"]
 
 # strings representing various path-related bits and pieces
+# These are primarily for export; internally, they are hardcoded.
+# Should be set before imports for resolving cyclic dependency.
 curdir = '.'
 pardir = '..'
 extsep = '.'
@@ -29,7 +31,13 @@ pathsep = ';'
 defpath = '.;' + (os.environ['UNIXROOT'] + '\\usr\\bin' if 'UNIXROOT' in os.environ else 'C:\\bin')
 devnull = 'nul'
 
-# Normalize the case of a pathname and map slashes to backslashes.
+def _get_bothseps(path):
+    if isinstance(path, bytes):
+        return b'\\/'
+    else:
+        return '\\/'
+
+# Normalize the case of a pathname and map altseps to seps.
 # Other normalizations (such as optimizing '../' away) are not done
 # (this is done by normpath).
 
@@ -37,6 +45,13 @@ def normcase(s):
     """Normalize case of pathname.
 
     Makes all characters lowercase and all altseps into seps."""
+    s = os.fspath(s)
+    if isinstance(s, bytes):
+        sep = b'/'
+        altsep = b'\\'
+    else:
+        sep = '/'
+        altsep = '\\'
     return s.replace(altsep, sep).lower()
 
 
@@ -44,47 +59,34 @@ def normcase(s):
 
 def join(a, *p):
     """Join two or more pathname components, inserting sep as needed.
-
     Also replaces all altsep chars with sep in the returned string
     to make it consistent."""
+    a = os.fspath(a)
     path = a
-    for b in p:
-        if isabs(b):
-            path = b
-        elif path == '' or path[-1:] in '/\\:':
-            path = path + b
-        else:
-            path = path + '/' + b
+
+    if isinstance(path, bytes):
+        sep = b'/'
+        seps = b'\\/;'
+        altsep = b'\\'
+    else:
+        sep = '/'
+        seps = '\\/:'
+        altsep = '\\'
+
+    try:
+        if not p:
+            path[:0] + sep  #23780: Ensure compatible data type even if p is null.
+        for b in map(os.fspath, p):
+            if isabs(b):
+                path = b
+            elif not path or path.endswith(seps):
+                path = path + b
+            else:
+                path = path + sep + b
+    except (TypeError, AttributeError, BytesWarning):
+        genericpath._check_arg_types('join', a, *p)
+        raise
     return path.replace(altsep, sep)
-
-
-# Parse UNC paths
-def splitunc(p):
-    """Split a pathname into UNC mount point and relative path specifiers.
-
-    Return a 2-tuple (unc, rest); either part may be empty.
-    If unc is not empty, it has the form '//host/mount' (or similar
-    using backslashes).  unc+rest is always the input path.
-    Paths containing drive letters never have an UNC part.
-    """
-    if p[1:2] == ':':
-        return '', p # Drive letter present
-    firstTwo = p[0:2]
-    if firstTwo == '/' * 2 or firstTwo == '\\' * 2:
-        # is a UNC path:
-        # vvvvvvvvvvvvvvvvvvvv equivalent to drive letter
-        # \\machine\mountpoint\directories...
-        #           directory ^^^^^^^^^^^^^^^
-        normp = normcase(p)
-        index = normp.find('/', 2)
-        if index == -1:
-            ##raise RuntimeError, 'illegal UNC path: "' + p + '"'
-            return ("", p)
-        index = normp.find('/', index + 1)
-        if index == -1:
-            index = len(p)
-        return p[:index], p[index:]
-    return '', p
 
 
 # Return the tail (basename) part of a path.
@@ -107,39 +109,61 @@ def dirname(p):
 # or an UNC path with at most a / or \ after the mount point.
 
 def ismount(path):
-    """Test whether a path is a mount point (defined as root of drive)"""
-    unc, rest = splitunc(path)
-    if unc:
-        return rest in ("", "/", "\\")
-    p = splitdrive(path)[1]
-    return len(p) == 1 and p[0] in '/\\'
+    """Test whether a path is a mount point (a drive root, the root of a
+    share, or a mounted volume)"""
+    path = os.fspath(path)
+    seps = _get_bothseps(path)
+    path = abspath(path)
+    root, rest = splitdrive(path)
+    if root and root[0] in seps:
+        return (not rest) or (rest in seps)
+    if rest in seps:
+        return True
 
+    return False
 
 # Normalize a path, e.g. A//B, A/./B and A/foo/../B all become A/B.
 
 def normpath(path):
     """Normalize path, eliminating double slashes, etc."""
-    path = str(path).replace('\\', '/')
+    path = os.fspath(path)
+    if isinstance(path, bytes):
+        sep = b'/'
+        altsep = b'\\'
+        curdir = b'.'
+        pardir = b'..'
+    else:
+        sep = '/'
+        altsep = '\\'
+        curdir = '.'
+        pardir = '..'
+    path = path.replace(altsep, sep)
     prefix, path = splitdrive(path)
-    while path[:1] == '/':
-        prefix = prefix + '/'
-        path = path[1:]
-    comps = path.split('/')
+
+    # collapse initial backslashes
+    if path.startswith(sep):
+        prefix += sep
+        path = path.lstrip(sep)
+
+    comps = path.split(sep)
     i = 0
     while i < len(comps):
-        if comps[i] == '.':
+        if not comps[i] or comps[i] == curdir:
             del comps[i]
-        elif comps[i] == '..' and i > 0 and comps[i-1] not in ('', '..'):
-            del comps[i-1:i+1]
-            i = i - 1
-        elif comps[i] == '' and i > 0 and comps[i-1] != '':
-            del comps[i]
+        elif comps[i] == pardir:
+            if i > 0 and comps[i-1] != pardir:
+                del comps[i-1:i+1]
+                i -= 1
+            elif i == 0 and prefix.endswith(sep):
+                del comps[i]
+            else:
+                i += 1
         else:
-            i = i + 1
+            i += 1
     # If the path is now empty, substitute '.'
     if not prefix and not comps:
-        comps.append('.')
-    return prefix + '/'.join(comps)
+        comps.append(curdir)
+    return prefix + sep.join(comps)
 
 
 # Return an absolute path.
@@ -250,38 +274,51 @@ def samestat(s1, s2):
 supports_unicode_filenames = False
 
 
-def relpath(path, start=curdir):
+def relpath(path, start=None):
     """Return a relative version of a path"""
+    path = os.fspath(path)
+    if isinstance(path, bytes):
+        sep = b'\\'
+        curdir = b'.'
+        pardir = b'..'
+    else:
+        sep = '\\'
+        curdir = '.'
+        pardir = '..'
 
     if not path:
         raise ValueError("no path specified")
-    start_list = abspath(start).split(sep)
-    path_list = abspath(path).split(sep)
-    # Remove empty components after trailing slashes
-    if (start_list[-1] == ''):
-        start_list.pop()
-    if (path_list[-1] == ''):
-        path_list.pop()
-    if start_list[0].lower() != path_list[0].lower():
-        unc_path, rest = splitunc(path)
-        unc_start, rest = splitunc(start)
-        if bool(unc_path) ^ bool(unc_start):
-            raise ValueError("Cannot mix UNC and non-UNC paths (%s and %s)"
-                                                                % (path, start))
-        else:
-            raise ValueError("path is on drive %s, start on drive %s"
-                                                % (path_list[0], start_list[0]))
-    # Work out how much of the filepath is shared by start and path.
-    for i in range(min(len(start_list), len(path_list))):
-        if start_list[i].lower() != path_list[i].lower():
-            break
-    else:
-        i += 1
 
-    rel_list = [pardir] * (len(start_list)-i) + path_list[i:]
-    if not rel_list:
-        return curdir
-    return join(*rel_list)
+    if start is None:
+        start = curdir
+    else:
+        start = os.fspath(start)
+
+    try:
+        start_abs = abspath(start)
+        path_abs = abspath(path)
+        start_drive, start_rest = splitdrive(start_abs)
+        path_drive, path_rest = splitdrive(path_abs)
+        if normcase(start_drive) != normcase(path_drive):
+            raise ValueError("path is on mount %r, start on mount %r" % (
+                path_drive, start_drive))
+
+        start_list = start_rest.split(sep) if start_rest else []
+        path_list = path_rest.split(sep) if path_list else []
+        # Work out how much of the filepath is shared by start and path.
+        i = 0
+        for e1, e2 in zip(start_list, path_list):
+            if normcase(e1) != normcase(e2):
+                break
+            i += 1
+
+        rel_list = [pardir] * (len(start_list)-i) + path_list[i:]
+        if not rel_list:
+            return curdir
+        return join(*rel_list)
+    except (TypeError, ValueError, AttributeError, BytesWarning, DeprecationWarning):
+        genericpath._check_arg_types('relpath', path, start)
+        raise
 
 # Return the longest common sub-path of the sequence of paths given as input.
 # The function is case-insensitive and 'separator-insensitive', i.e. if the
