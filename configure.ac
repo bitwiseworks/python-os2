@@ -6254,7 +6254,11 @@ LIBPYTHON=''
 # On Android, OS/2 and Cygwin the shared libraries must be linked with libpython.
 if test "$PY_ENABLE_SHARED" = "1" && ( test -n "$ANDROID_API_LEVEL" || test "$MACHDEP" = "cygwin" || test "$MACHDEP" = "os2knix"); then
   MODULE_DEPS_SHARED="$MODULE_DEPS_SHARED \$(LDLIBRARY)"
+  if ( test "$MACHDEP" = "os2knix"); then
+  LIBPYTHON=`echo -lpython${VERSION}${ABIFLAGS}`
+  else
   LIBPYTHON="\$(BLDLIBRARY)"
+  fi
 fi
 
 # On iOS the shared libraries must be linked with the Python framework
