@@ -697,7 +697,7 @@ list-targets:
 
 .PHONY: build_all
 build_all:	check-clean-src check-app-store-compliance $(BUILDPYTHON) platform sharedmods \
-		gdbhooks Programs/_testembed scripts checksharedmods rundsymutil
+		gdbhooks Programs/_testembed$(EXE) scripts checksharedmods rundsymutil
 
 .PHONY: build_wasm
 build_wasm: check-clean-src $(BUILDPYTHON) platform sharedmods \
@@ -1449,7 +1449,7 @@ regen-re: $(BUILDPYTHON)
 	# using Tools/build/generate_re_casefix.py
 	$(RUNSHARED) ./$(BUILDPYTHON) $(srcdir)/Tools/build/generate_re_casefix.py $(srcdir)/Lib/re/_casefix.py
 
-Programs/_testembed: Programs/_testembed.o $(LINK_PYTHON_DEPS)
+Programs/_testembed$(EXE): Programs/_testembed.o $(LINK_PYTHON_DEPS)
 	$(LINKCC) $(PY_CORE_LDFLAGS) $(LINKFORSHARED) -o $@ Programs/_testembed.o $(LINK_PYTHON_OBJS) $(LIBS) $(MODLIBS) $(SYSLIBS)
 
 ############################################################################
@@ -1830,7 +1830,7 @@ regen-keyword:
 	$(UPDATE_FILE) $(srcdir)/Lib/keyword.py $(srcdir)/Lib/keyword.py.new
 
 .PHONY: regen-stdlib-module-names
-regen-stdlib-module-names: all Programs/_testembed
+regen-stdlib-module-names: all Programs/_testembed$(EXE)
 	# Regenerate Python/stdlib_module_names.h
 	# using Tools/build/generate_stdlib_module_names.py
 	$(RUNSHARED) ./$(BUILDPYTHON) \
@@ -2983,7 +2983,7 @@ clean-retain-profile: pycremoval
 	-rm -f _bootstrap_python$(EXE)
 	-rm -f python.html python*.js python.data python*.symbols python*.map
 	-rm -f $(WASM_STDLIB)
-	-rm -f Programs/_testembed Programs/_freeze_module$(EXE)
+	-rm -f Programs/_testembed$(EXE) Programs/_freeze_module$(EXE)
 	-rm -rf Python/deepfreeze
 	-rm -f Python/frozen_modules/*.h
 	-rm -f Python/frozen_modules/MANIFEST
