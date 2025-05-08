@@ -583,7 +583,8 @@ def _check_system_limits():
             raise NotImplementedError(_system_limited)
     _system_limits_checked = True
     if os.name == 'os2':
-        return
+        _system_limited = ("This Python build for OS/2 lacks multiprocessing.")
+        raise NotImplementedError(_system_limited)
     try:
         import multiprocessing.synchronize
     except ImportError:
