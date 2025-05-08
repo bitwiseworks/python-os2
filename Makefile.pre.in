@@ -1379,6 +1379,7 @@ sharedmods: $(SHAREDMODS) pybuilddir.txt
 	$(MKDIR_P) $$target; \
 	for mod in X $(SHAREDMODS); do \
 		if test $$mod != X; then \
+			rm -f $$target/`basename $$mod`; \
 			$(LN) -sf ../../$$mod $$target/`basename $$mod`; \
 		fi; \
 	done
