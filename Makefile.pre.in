@@ -2186,7 +2186,15 @@ sharedinstall: all
 		@for i in X $(SHAREDMODS); do \
 		  if test $$i != X; then \
 		    echo $(INSTALL_SHARED) $$i $(DESTSHARED)/`basename $$i`; \
+		    mod=`basename $$i`; \
+		    moddir=`dirname $$i`; \
+			if test $${#mod} -gt 12 ; then \
+				mod8=`paste -s $$moddir/$${mod%%$(EXT_SUFFIX)}.def | cut -d " " -f 2`; \
+				$(INSTALL_SHARED) $$moddir/$$mod8$(EXT_SUFFIX) $(DESTDIR)$(DESTSHARED)/$$mod8$(EXT_SUFFIX); \
+				$(LN) -sf $$mod8$(EXT_SUFFIX) $(DESTDIR)$(DESTSHARED)/`basename $$i`; \
+			else \
 		    $(INSTALL_SHARED) $$i $(DESTDIR)$(DESTSHARED)/`basename $$i`; \
+			fi; \
 			if test -d "$$i.dSYM"; then \
 				echo $(DSYMUTIL_PATH) $(DESTDIR)$(DESTSHARED)/`basename $$i`; \
 				$(DSYMUTIL_PATH) $(DESTDIR)$(DESTSHARED)/`basename $$i`; \
