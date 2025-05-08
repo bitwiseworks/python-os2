@@ -206,12 +206,12 @@ elif os_name == 'os2':
     BUILDDIR_TXT = 'pybuilddir.txt'
     BUILD_LANDMARK = 'Modules\\Setup.local'
     DEFAULT_PROGRAM_NAME = f'python'
-    STDLIB_SUBDIR = 'Lib'
+    STDLIB_SUBDIR = f'{platlibdir}/python{VERSION_MAJOR}.{VERSION_MINOR}'
     STDLIB_LANDMARKS = [f'{STDLIB_SUBDIR}\\os.py', f'{STDLIB_SUBDIR}\\os.pyc']
-    PLATSTDLIB_LANDMARK = f'{platlibdir}'
+    PLATSTDLIB_LANDMARK = f'{platlibdir}/python{VERSION_MAJOR}.{VERSION_MINOR}/lib-dynload'
     BUILDSTDLIB_LANDMARKS = ['Lib\\os.py']
     VENV_LANDMARK = 'pyvenv.cfg'
-    ZIP_LANDMARK = f'python{VERSION_MAJOR}{VERSION_MINOR}{PYDEBUGEXT or ""}.zip'
+    ZIP_LANDMARK = f'{platlibdir}/python{VERSION_MAJOR}{VERSION_MINOR}.zip'
     DELIM = ';'
     SEP = '\\'
 
