@@ -273,7 +273,7 @@ sed -e 's/[ 	]*#.*//' -e '/^[ 	]*$/d' |
 				if test ${#mod} -gt 8
 				then
 					first4="`echo $mod | cut -c1-4`"
-					rand="$(mktemp --dry-run XXXX)"
+					rand="`echo $mod | md5sum | cut -c1-4`"
 					mod83="$first4$rand"
 					file83="$srcdir/$mod83\$(EXT_SUFFIX)"
 				else
