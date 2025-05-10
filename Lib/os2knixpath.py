@@ -177,9 +177,10 @@ def abspath(path):
 # Return a canonical path (i.e. the absolute location of a file on the
 # filesystem).
 
-def realpath(filename):
+def realpath(filename, *, strict=False):
     """Return the canonical path of the specified filename, eliminating any
 symbolic links encountered in the path."""
+    filename = normpath(filename)
     if isabs(filename):
         bits = ['/'] + filename.split('/')[1:]
     else:
