@@ -365,22 +365,6 @@ def expanduser(path):
     while i < n and path[i] not in seps:
         i += 1
 
-    if os.name == 'os2':
-        if 'HOME' not in os.environ:
-            try:
-                import pwd
-            except ImportError:
-                # pwd module unavailable, return path unchanged
-                return path
-            try:
-                userhome = pwd.getpwuid(os.getuid()).pw_dir
-            except KeyError:
-                # bpo-10496: if the current user identifier doesn't exist in the
-                # password database, return the path unchanged
-                return path
-        else:
-            return os.environ['HOME']
-
     if 'USERPROFILE' in os.environ:
         userhome = os.environ['USERPROFILE']
     elif 'HOME' in os.environ:

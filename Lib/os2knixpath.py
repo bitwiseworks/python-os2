@@ -8,7 +8,7 @@ module as os.path.
 import os
 import stat
 from genericpath import *
-from ntpath import (expanduser, expandvars, isabs, islink, splitdrive,
+from ntpath import (expandvars, isabs, islink, splitdrive,
                     splitext, split)
 
 __all__ = ["normcase","isabs","join","splitdrive","split","splitext",
@@ -381,3 +381,66 @@ def commonpath(paths):
         genericpath._check_arg_types('commonpath', *paths)
         raise
 
+# Expand paths beginning with '~' or '~user'.
+# '~' means $HOME; '~user' means that user's home directory.
+# If the path doesn't begin with '~', or if the user or $HOME is unknown,
+# the path is returned unchanged (leaving error reporting to whatever
+# function is called with the expanded path as argument).
+# See also module 'glob' for expansion of *, ? and [...] in pathnames.
+# (A function should also be defined to do full *sh-style environment
+# variable expansion.)
+
+def expanduser(path):
+    """Expand ~ and ~user constructs.
+
+    If user or $HOME is unknown, do nothing."""
+    path = os.fspath(path)
+    if isinstance(path, bytes):
+        seps = b'\\/'
+        tilde = b'~'
+    else:
+        seps = '\\/'
+        tilde = '~'
+    if not path.startswith(tilde):
+        return path
+    i, n = 1, len(path)
+    while i < n and path[i] not in seps:
+        i += 1
+
+    if 'HOME' not in os.environ:
+        try:
+            import pwd
+        except ImportError:
+            # pwd module unavailable, return path unchanged
+            return path
+        try:
+            userhome = pwd.getpwuid(os.getuid()).pw_dir
+        except KeyError:
+            # bpo-10496: if the current user identifier doesn't exist in the
+            # password database, return the path unchanged
+            return path
+    else:
+        userhome = os.environ['HOME']
+
+    if i != 1: #~user
+        target_user = path[1:i]
+        if isinstance(target_user, bytes):
+            target_user = os.fsdecode(target_user)
+
+        try:
+            import pwd
+        except ImportError:
+            # pwd module unavailable, return path unchanged
+            return path
+
+        try:
+            userhome = pwd.getpwnam(target_user).pw_dir
+        except KeyError:
+            return path
+
+        userhome = join(dirname(userhome), target_user)
+
+    if isinstance(path, bytes):
+        userhome = os.fsencode(userhome)
+
+    return userhome + path[i:]
