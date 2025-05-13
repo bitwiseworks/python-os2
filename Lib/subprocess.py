@@ -126,6 +126,7 @@ _os2 = (os.name == "os2")
 if _os2:
     import fcntl
     import time
+    import sysconfig
 
 # Exception classes used by this module.
 class SubprocessError(Exception): pass
