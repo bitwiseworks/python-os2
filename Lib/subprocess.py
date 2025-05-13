@@ -123,10 +123,11 @@ else:
     import selectors
 
 _os2 = (os.name == "os2")
+if not _mswindows:
+    import sysconfig
 if _os2:
     import fcntl
     import time
-    import sysconfig
 
 # Exception classes used by this module.
 class SubprocessError(Exception): pass
@@ -2172,10 +2173,9 @@ class Popen:
                     self.stderr.close()
 
                 # All data exchanged.  Translate lists into strings.
-                if stdout is not None:
-                    stdout = ''.join(stdout)
-                if stderr is not None:
-                    stderr = ''.join(stderr)
+                stdout = stdout[0] if stdout else None
+                stderr = stderr[0] if stderr else None
+
             else:
                 if self.stdin and not self._communication_started:
                     # Flush stdio buffer.  This might block, if the user has
