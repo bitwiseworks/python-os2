@@ -81,7 +81,7 @@ jobs:
         if: ${{ failure() && steps.check.conclusion == 'failure' }}
         run: |
           make regen-abidump
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         name: Publish updated ABI files
         if: ${{ failure() && steps.check.conclusion == 'failure' }}
         with:
@@ -468,7 +468,7 @@ jobs:
           -x test_subprocess \
           -x test_signal \
           -x test_sysconfig
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v5
       if: always()
       with:
         name: hypothesis-example-db
@@ -588,7 +588,7 @@ jobs:
           output-sarif: true
           sanitizer: ${{ matrix.sanitizer }}
       - name: Upload crash
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         if: failure() && steps.build.outcome == 'success'
         with:
           name: ${{ matrix.sanitizer }}-artifacts
