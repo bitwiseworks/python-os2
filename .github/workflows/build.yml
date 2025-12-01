@@ -49,7 +49,7 @@ jobs:
     needs: check_source
     if: needs.check_source.outputs.run_tests == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - uses: actions/setup-python@v5
@@ -103,7 +103,7 @@ jobs:
         run: |
           apt update && apt install git -yq
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 1
           persist-credentials: false
@@ -142,7 +142,7 @@ jobs:
     needs: check_source
     if: needs.check_source.outputs.run_tests == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - uses: actions/setup-python@v5
@@ -308,7 +308,7 @@ jobs:
       OPENSSL_DIR: ${{ github.workspace }}/multissl/openssl/${{ matrix.openssl_ver }}
       LD_LIBRARY_PATH: ${{ github.workspace }}/multissl/openssl/${{ matrix.openssl_ver }}/lib
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         persist-credentials: false
     - name: Runner image version
@@ -370,7 +370,7 @@ jobs:
       OPENSSL_VER: 3.0.15
       PYTHONSTRICTEXTENSIONBUILD: 1
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         persist-credentials: false
     - name: Register gcc problem matcher
@@ -489,7 +489,7 @@ jobs:
       PYTHONSTRICTEXTENSIONBUILD: 1
       ASAN_OPTIONS: detect_leaks=0:allocator_may_return_null=1:handle_segv=0
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         persist-credentials: false
     - name: Runner image version
