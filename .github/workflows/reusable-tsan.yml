@@ -79,7 +79,7 @@ jobs:
       run: find ${GITHUB_WORKSPACE} -name 'tsan_log.*' | xargs head -n 1000
     - name: Archive TSAN logs
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: ${{ inputs.tsan_logs_artifact_name }}
         path: tsan_log.*
