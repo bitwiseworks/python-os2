@@ -37,7 +37,7 @@ jobs:
     - name: Runner image version
       run: echo "IMAGE_VERSION=${ImageVersion}" >> $GITHUB_ENV
     - name: Restore config.cache
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: config.cache
         key: ${{ github.job }}-${{ inputs.os }}-${{ env.IMAGE_VERSION }}-${{ inputs.config_hash }}
