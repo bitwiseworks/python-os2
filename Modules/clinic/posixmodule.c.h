@@ -11229,7 +11229,7 @@ exit:
 
 #endif /* (defined(HAVE_EVENTFD) && defined(EFD_CLOEXEC)) */
 
-#if (defined(TERMSIZE_USE_CONIO) || defined(TERMSIZE_USE_IOCTL))
+#if (defined(TERMSIZE_USE_CONIO) || defined(TERMSIZE_USE_IOCTL) || defined(__OS2__))
 
 PyDoc_STRVAR(os_get_terminal_size__doc__,
 "get_terminal_size($module, fd=<unrepresentable>, /)\n"

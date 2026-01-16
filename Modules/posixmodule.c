@@ -15719,7 +15719,7 @@ static PyStructSequence_Desc TerminalSize_desc = {
     2,
 };
 
-#if defined(TERMSIZE_USE_CONIO) || defined(TERMSIZE_USE_IOCTL)
+#if defined(TERMSIZE_USE_CONIO) || defined(TERMSIZE_USE_IOCTL) || defined(__OS2__)
 /*[clinic input]
 os.get_terminal_size
 
@@ -15781,6 +15781,15 @@ os_get_terminal_size_impl(PyObject *module, int fd)
         lines = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
     }
 #endif /* TERMSIZE_USE_CONIO */
+
+#ifdef __OS2__
+    {
+        int dst[2];
+        _scrsize(dst);
+        columns = dst[0];
+        lines = dst[1];
+    }
+#endif /* TERMSIZE_USE_IOCTL */
 
     PyObject *TerminalSizeType = get_posix_state(module)->TerminalSizeType;
     termsize = PyStructSequence_New((PyTypeObject *)TerminalSizeType);
