@@ -152,7 +152,7 @@ getpath_hassuffix(PyObject *Py_UNUSED(self), PyObject *args)
 #if defined(MS_WINDOWS)
                 wcsicmp(&path[len - suffixLen], suffix) != 0
 #elif defined(__OS2__)
-                stricmp((const char*)&path[len - suffixLen], (const char*)suffix) != 0
+                wcscasecmp(&path[len - suffixLen], suffix) != 0
 #else
                 wcscmp(&path[len - suffixLen], suffix) != 0
 #endif
