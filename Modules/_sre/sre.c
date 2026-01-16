@@ -43,6 +43,7 @@ static const char copyright[] =
 #include "pycore_dict.h"             // _PyDict_Next()
 #include "pycore_long.h"             // _PyLong_GetZero()
 #include "pycore_moduleobject.h"     // _PyModule_GetState()
+#include "pycore_weakref.h"          // FT_CLEAR_WEAKREFS()
 
 #include "sre.h"                     // SRE_CODE
 
@@ -729,9 +730,7 @@ pattern_dealloc(PatternObject* self)
     PyTypeObject *tp = Py_TYPE(self);
 
     PyObject_GC_UnTrack(self);
-    if (self->weakreflist != NULL) {
-        PyObject_ClearWeakRefs((PyObject *) self);
-    }
+    FT_CLEAR_WEAKREFS((PyObject *) self, self->weakreflist);
     (void)pattern_clear(self);
     tp->tp_free(self);
     Py_DECREF(tp);
@@ -1160,13 +1159,21 @@ compile_template(_sremodulestate *module_state,
                  PatternObject *pattern, PyObject *template)
 {
     /* delegate to Python code */
-    PyObject *func = module_state->compile_template;
+    PyObject *func = FT_ATOMIC_LOAD_PTR(module_state->compile_template);
     if (func == NULL) {
         func = _PyImport_GetModuleAttrString("re", "_compile_template");
         if (func == NULL) {
             return NULL;
         }
+#ifdef Py_GIL_DISABLED
+        PyObject *other_func = NULL;
+        if (!_Py_atomic_compare_exchange_ptr(&module_state->compile_template, &other_func, func))  {
+            Py_DECREF(func);
+            func = other_func;
+        }
+#else
         Py_XSETREF(module_state->compile_template, func);
+#endif
     }
 
     PyObject *args[] = {(PyObject *)pattern, template};
@@ -1925,7 +1932,7 @@ _validate_inner(SRE_CODE *code, SRE_CODE *end, Py_ssize_t groups)
                sre_match() code is robust even if they don't, and the worst
                you can get is nonsensical match results. */
             GET_ARG;
-            if (arg > 2 * (size_t)groups + 1) {
+            if (arg >= 2 * (size_t)groups) {
                 VTRACE(("arg=%d, groups=%d\n", (int)arg, (int)groups));
                 FAIL;
             }

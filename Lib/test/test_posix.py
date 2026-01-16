@@ -568,10 +568,38 @@ class PosixTester(unittest.TestCase):
 
     @unittest.skipUnless(hasattr(posix, 'confstr'),
                          'test needs posix.confstr()')
-    @unittest.skipIf(support.is_apple_mobile, "gh-118201: Test is flaky on iOS")
     def test_confstr(self):
-        self.assertRaises(ValueError, posix.confstr, "CS_garbage")
-        self.assertEqual(len(posix.confstr("CS_PATH")) > 0, True)
+        with self.assertRaisesRegex(
+            ValueError, "unrecognized configuration name"
+        ):
+            posix.confstr("CS_garbage")
+
+        with self.assertRaisesRegex(
+            TypeError, "configuration names must be strings or integers"
+        ):
+            posix.confstr(1.23)
+
+        path = posix.confstr("CS_PATH")
+        self.assertGreater(len(path), 0)
+        self.assertEqual(posix.confstr(posix.confstr_names["CS_PATH"]), path)
+
+    @unittest.skipUnless(hasattr(posix, 'sysconf'),
+                         'test needs posix.sysconf()')
+    def test_sysconf(self):
+        with self.assertRaisesRegex(
+            ValueError, "unrecognized configuration name"
+        ):
+            posix.sysconf("SC_garbage")
+
+        with self.assertRaisesRegex(
+            TypeError, "configuration names must be strings or integers"
+        ):
+            posix.sysconf(1.23)
+
+        arg_max = posix.sysconf("SC_ARG_MAX")
+        self.assertGreater(arg_max, 0)
+        self.assertEqual(
+            posix.sysconf(posix.sysconf_names["SC_ARG_MAX"]), arg_max)
 
     @unittest.skipUnless(hasattr(posix, 'dup2'),
                          'test needs posix.dup2()')
@@ -729,7 +757,7 @@ class PosixTester(unittest.TestCase):
             self.assertRaises((ValueError, OverflowError), posix.makedev, x, minor)
             self.assertRaises((ValueError, OverflowError), posix.makedev, major, x)
 
-        if sys.platform == 'linux':
+        if sys.platform == 'linux' and not support.linked_to_musl():
             NODEV = -1
             self.assertEqual(posix.major(NODEV), NODEV)
             self.assertEqual(posix.minor(NODEV), NODEV)
@@ -1337,6 +1365,14 @@ class PosixTester(unittest.TestCase):
         newparam = copy.replace(param, sched_priority=0)
         self.assertNotEqual(newparam, param)
         self.assertEqual(newparam.sched_priority, 0)
+
+    @requires_sched
+    def test_bug_140634(self):
+        sched_priority = float('inf')  # any new reference
+        param = posix.sched_param(sched_priority)
+        param.__reduce__()
+        del sched_priority, param  # should not crash
+        support.gc_collect()  # just to be sure
 
     @unittest.skipUnless(hasattr(posix, "sched_rr_get_interval"), "no function")
     def test_sched_rr_get_interval(self):
@@ -1963,6 +1999,11 @@ class _PosixSpawnMixin:
     @requires_sched
     @unittest.skipIf(sys.platform.startswith(('freebsd', 'netbsd')),
                      "bpo-34685: test can fail on BSD")
+    @unittest.skipIf(platform.libc_ver()[0] == 'glibc' and
+                     os.sched_getscheduler(0) in [
+                        os.SCHED_BATCH,
+                        os.SCHED_IDLE],
+                     "Skip test due to glibc posix_spawn policy")
     def test_setscheduler_with_policy(self):
         policy = os.sched_getscheduler(0)
         priority = os.sched_get_priority_min(policy)

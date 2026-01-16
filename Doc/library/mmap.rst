@@ -200,7 +200,8 @@ To map anonymous memory, -1 should be passed as the fileno along with the length
          Writable :term:`bytes-like object` is now accepted.
 
 
-   .. method:: flush([offset[, size]])
+   .. method:: flush()
+               flush(offset, size, /)
 
       Flushes changes made to the in-memory copy of a file back to disk. Without
       use of this call there is no guarantee that changes are written back before
@@ -269,7 +270,7 @@ To map anonymous memory, -1 should be passed as the fileno along with the length
 
       Resizing a map created with *access* of :const:`ACCESS_READ` or
       :const:`ACCESS_COPY`, will raise a :exc:`TypeError` exception.
-      Resizing a map created with with *trackfd* set to ``False``,
+      Resizing a map created with *trackfd* set to ``False``,
       will raise a :exc:`ValueError` exception.
 
       **On Windows**: Resizing the map will raise an :exc:`OSError` if there are other

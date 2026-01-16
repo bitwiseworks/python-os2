@@ -8,7 +8,7 @@
 .github/**                    @ezio-melotti @hugovk
 
 # pre-commit
-.pre-commit-config.yaml       @hugovk @AlexWaygood
+.pre-commit-config.yaml       @hugovk
 .ruff.toml                    @hugovk @AlexWaygood
 
 # Build system
@@ -22,6 +22,7 @@ configure*                    @erlend-aasland @corona10
 **/*genobject*                @markshannon
 **/*hamt*                     @1st1
 **/*jit*                      @brandtbucher
+Python/perf_jit_trampoline.c  # Exclude the owners of "**/*jit*", above.
 Objects/set*                  @rhettinger
 Objects/dict*                 @methane @markshannon
 Objects/typevarobject.c       @JelleZijlstra
@@ -194,7 +195,6 @@ Doc/c-api/stable.rst          @encukou
 **/*itertools*                @rhettinger
 **/*collections*              @rhettinger
 **/*random*                   @rhettinger
-**/*queue*                    @rhettinger
 **/*bisect*                   @rhettinger
 **/*heapq*                    @rhettinger
 **/*functools*                @rhettinger
@@ -245,8 +245,8 @@ Modules/_interp*module.c      @ericsnowcurrently
 Lib/test/test_interpreters/   @ericsnowcurrently
 
 # Android
-**/*Android*                  @mhsmith
-**/*android*                  @mhsmith
+**/*Android*                  @mhsmith @freakboy3742
+**/*android*                  @mhsmith @freakboy3742
 
 # iOS (but not termios)
 **/iOS*                       @freakboy3742

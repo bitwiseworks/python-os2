@@ -526,7 +526,8 @@ class ThreadTests(BaseTestCase):
         finally:
             sys.setswitchinterval(old_interval)
 
-    def test_join_from_multiple_threads(self):
+    @support.bigmemtest(size=20, memuse=72*2**20, dry_run=False)
+    def test_join_from_multiple_threads(self, size):
         # Thread.join() should be thread-safe
         errors = []
 
@@ -1207,6 +1208,106 @@ class ThreadTests(BaseTestCase):
         self.assertEqual(err, b'')
 
 
+    @skip_unless_reliable_fork
+    @unittest.skipUnless(hasattr(threading, 'get_native_id'), "test needs threading.get_native_id()")
+    def test_native_id_after_fork(self):
+        script = """if True:
+            import threading
+            import os
+            from test import support
+
+            parent_thread_native_id = threading.current_thread().native_id
+            print(parent_thread_native_id, flush=True)
+            assert parent_thread_native_id == threading.get_native_id()
+            childpid = os.fork()
+            if childpid == 0:
+                print(threading.current_thread().native_id, flush=True)
+                assert threading.current_thread().native_id == threading.get_native_id()
+            else:
+                try:
+                    assert parent_thread_native_id == threading.current_thread().native_id
+                    assert parent_thread_native_id == threading.get_native_id()
+                finally:
+                    support.wait_process(childpid, exitcode=0)
+            """
+        rc, out, err = assert_python_ok('-c', script)
+        self.assertEqual(rc, 0)
+        self.assertEqual(err, b"")
+        native_ids = out.strip().splitlines()
+        self.assertEqual(len(native_ids), 2)
+        self.assertNotEqual(native_ids[0], native_ids[1])
+
+    @cpython_only
+    def test_finalize_daemon_thread_hang(self):
+        if support.check_sanitizer(thread=True, memory=True):
+            # the thread running `time.sleep(100)` below will still be alive
+            # at process exit
+            self.skipTest(
+                    "https://github.com/python/cpython/issues/124878 - Known"
+                    " race condition that TSAN identifies.")
+        # gh-87135: tests that daemon threads hang during finalization
+        script = textwrap.dedent('''
+            import os
+            import sys
+            import threading
+            import time
+            import _testcapi
+
+            lock = threading.Lock()
+            lock.acquire()
+            thread_started_event = threading.Event()
+            def thread_func():
+                try:
+                    thread_started_event.set()
+                    _testcapi.finalize_thread_hang(lock.acquire)
+                finally:
+                    # Control must not reach here.
+                    os._exit(2)
+
+            t = threading.Thread(target=thread_func)
+            t.daemon = True
+            t.start()
+            thread_started_event.wait()
+            # Sleep to ensure daemon thread is blocked on `lock.acquire`
+            #
+            # Note: This test is designed so that in the unlikely case that
+            # `0.1` seconds is not sufficient time for the thread to become
+            # blocked on `lock.acquire`, the test will still pass, it just
+            # won't be properly testing the thread behavior during
+            # finalization.
+            time.sleep(0.1)
+
+            def run_during_finalization():
+                # Wake up daemon thread
+                lock.release()
+                # Sleep to give the daemon thread time to crash if it is going
+                # to.
+                #
+                # Note: If due to an exceptionally slow execution this delay is
+                # insufficient, the test will still pass but will simply be
+                # ineffective as a test.
+                time.sleep(0.1)
+                # If control reaches here, the test succeeded.
+                os._exit(0)
+
+            # Replace sys.stderr.flush as a way to run code during finalization
+            orig_flush = sys.stderr.flush
+            def do_flush(*args, **kwargs):
+                orig_flush(*args, **kwargs)
+                if not sys.is_finalizing:
+                    return
+                sys.stderr.flush = orig_flush
+                run_during_finalization()
+
+            sys.stderr.flush = do_flush
+
+            # If the follow exit code is retained, `run_during_finalization`
+            # did not run.
+            sys.exit(1)
+        ''')
+        assert_python_ok("-c", script)
+
+
 class ThreadJoinOnShutdown(BaseTestCase):
 
     def _run_and_join(self, script):
@@ -1287,7 +1388,8 @@ class ThreadJoinOnShutdown(BaseTestCase):
         self._run_and_join(script)
 
     @unittest.skipIf(sys.platform in platforms_to_skip, "due to known OS bug")
-    def test_4_daemon_threads(self):
+    @support.bigmemtest(size=40, memuse=70*2**20, dry_run=False)
+    def test_4_daemon_threads(self, size):
         # Check that a daemon thread cannot crash the interpreter on shutdown
         # by manipulating internal structures that are being disposed of in
         # the main thread.
@@ -1817,6 +1919,23 @@ class ThreadingExceptionTests(BaseTestCase):
         for t in threads:
             t.start()
             t.join()
+
+    def test_dummy_thread_on_interpreter_shutdown(self):
+        # GH-130522: When `threading` held a reference to itself and then a
+        # _DummyThread() object was created, destruction of the dummy thread
+        # would emit an unraisable exception at shutdown, due to a lock being
+        # destroyed.
+        code = """if True:
+        import sys
+        import threading
+
+        threading.x = sys.modules[__name__]
+        x = threading._DummyThread()
+        """
+        rc, out, err = assert_python_ok("-c", code)
+        self.assertEqual(rc, 0)
+        self.assertEqual(out, b"")
+        self.assertEqual(err, b"")
 
 
 class ThreadRunFail(threading.Thread):

@@ -32,7 +32,7 @@ import warnings
 from dataclasses import dataclass, field
 
 import os
-from site import gethistoryfile   # type: ignore[attr-defined]
+from site import gethistoryfile
 import sys
 from rlcompleter import Completer as RLCompleter
 
@@ -42,10 +42,11 @@ from .console import Console as ConsoleType
 
 Console: type[ConsoleType]
 _error: tuple[type[Exception], ...] | type[Exception]
-try:
-    from .unix_console import UnixConsole as Console, _error
-except ImportError:
+
+if os.name == "nt":
     from .windows_console import WindowsConsole as Console, _error
+else:
+    from .unix_console import UnixConsole as Console, _error
 
 ENCODING = sys.getdefaultencoding() or "latin1"
 

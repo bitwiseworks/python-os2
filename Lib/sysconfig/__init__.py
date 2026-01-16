@@ -220,8 +220,15 @@ if "_PYTHON_PROJECT_BASE" in os.environ:
 def is_python_build(check_home=None):
     if check_home is not None:
         import warnings
-        warnings.warn("check_home argument is deprecated and ignored.",
-                      DeprecationWarning, stacklevel=2)
+        warnings.warn(
+            (
+                'The check_home argument of sysconfig.is_python_build is '
+                'deprecated and its value is ignored. '
+                'It will be removed in Python 3.15.'
+            ),
+            DeprecationWarning,
+            stacklevel=2,
+        )
     for fn in ("Setup", "Setup.local"):
         if os.path.isfile(os.path.join(_PROJECT_BASE, "Modules", fn)):
             return True
@@ -589,18 +596,22 @@ def get_platform():
     isn't particularly important.
 
     Examples of returned values:
-       linux-i586
-       linux-alpha (?)
-       solaris-2.6-sun4u
 
-    Windows will return one of:
-       win-amd64 (64-bit Windows on AMD64 (aka x86_64, Intel64, EM64T, etc)
-       win-arm64 (64-bit Windows on ARM64 (aka AArch64)
-       win32 (all others - specifically, sys.platform is returned)
 
-    For other non-POSIX platforms, currently just returns 'sys.platform'.
+    Windows:
 
-    """
+    - win-amd64 (64-bit Windows on AMD64, aka x86_64, Intel64, and EM64T)
+    - win-arm64 (64-bit Windows on ARM64, aka AArch64)
+    - win32 (all others - specifically, sys.platform is returned)
+
+    POSIX based OS:
+
+    - linux-x86_64
+    - macosx-15.5-arm64
+    - macosx-26.0-universal2 (macOS on Apple Silicon or Intel)
+    - android-24-arm64_v8a
+
+    For other non-POSIX platforms, currently just returns :data:`sys.platform`."""
     if os.name == 'nt':
         if 'amd64' in sys.version.lower():
             return 'win-amd64'

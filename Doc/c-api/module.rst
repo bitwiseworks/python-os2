@@ -13,7 +13,7 @@ Module Objects
    .. index:: single: ModuleType (in module types)
 
    This instance of :c:type:`PyTypeObject` represents the Python module type.  This
-   is exposed to Python programs as ``types.ModuleType``.
+   is exposed to Python programs as :py:class:`types.ModuleType`.
 
 
 .. c:function:: int PyModule_Check(PyObject *p)
@@ -71,6 +71,9 @@ Module Objects
    ``PyObject_*`` functions rather than directly manipulate a module's
    :attr:`~object.__dict__`.
 
+   The returned reference is borrowed from the module; it is valid until
+   the module is destroyed.
+
 
 .. c:function:: PyObject* PyModule_GetNameObject(PyObject *module)
 
@@ -90,6 +93,10 @@ Module Objects
    Similar to :c:func:`PyModule_GetNameObject` but return the name encoded to
    ``'utf-8'``.
 
+   The returned buffer is only valid until the module is renamed or destroyed.
+   Note that Python code may rename a module by setting its :py:attr:`~module.__name__`
+   attribute.
+
 .. c:function:: void* PyModule_GetState(PyObject *module)
 
    Return the "state" of the module, that is, a pointer to the block of memory
@@ -101,6 +108,10 @@ Module Objects
 
    Return a pointer to the :c:type:`PyModuleDef` struct from which the module was
    created, or ``NULL`` if the module wasn't created from a definition.
+
+   On error, return ``NULL`` with an exception set.
+   Use :c:func:`PyErr_Occurred` to tell this case apart from a missing
+   :c:type:`!PyModuleDef`.
 
 
 .. c:function:: PyObject* PyModule_GetFilenameObject(PyObject *module)
@@ -121,6 +132,9 @@ Module Objects
 
    Similar to :c:func:`PyModule_GetFilenameObject` but return the filename
    encoded to 'utf-8'.
+
+   The returned buffer is only valid until the module's :py:attr:`~module.__file__` attribute
+   is reassigned or the module is destroyed.
 
    .. deprecated:: 3.2
       :c:func:`PyModule_GetFilename` raises :exc:`UnicodeEncodeError` on
@@ -288,22 +302,40 @@ An alternate way to specify extensions is to request "multi-phase initialization
 Extension modules created this way behave more like Python modules: the
 initialization is split between the *creation phase*, when the module object
 is created, and the *execution phase*, when it is populated.
-The distinction is similar to the :py:meth:`!__new__` and :py:meth:`!__init__` methods
-of classes.
+The distinction is similar to the :py:meth:`~object.__new__` and
+:py:meth:`~object.__init__` methods of classes.
 
 Unlike modules created using single-phase initialization, these modules are not
-singletons: if the *sys.modules* entry is removed and the module is re-imported,
-a new module object is created, and the old module is subject to normal garbage
-collection -- as with Python modules.
-By default, multiple modules created from the same definition should be
-independent: changes to one should not affect the others.
-This means that all state should be specific to the module object (using e.g.
-using :c:func:`PyModule_GetState`), or its contents (such as the module's
-:attr:`~object.__dict__` or individual classes created with :c:func:`PyType_FromSpec`).
+singletons.
+For example, if the :py:attr:`sys.modules` entry is removed and the module
+is re-imported, a new module object is created, and typically populated with
+fresh method and type objects.
+The old module is subject to normal garbage collection.
+This mirrors the behavior of pure-Python modules.
+
+Additional module instances may be created in
+:ref:`sub-interpreters <sub-interpreter-support>`
+or after after Python runtime reinitialization
+(:c:func:`Py_Finalize` and :c:func:`Py_Initialize`).
+In these cases, sharing Python objects between module instances would likely
+cause crashes or undefined behavior.
+
+To avoid such issues, each instance of an extension module should
+be *isolated*: changes to one instance should not implicitly affect the others,
+and all state, including references to Python objects, should be specific to
+a particular module instance.
+See :ref:`isolating-extensions-howto` for more details and a practical guide.
+
+A simpler way to avoid these issues is
+:ref:`raising an error on repeated initialization <isolating-extensions-optout>`.
 
 All modules created using multi-phase initialization are expected to support
-:ref:`sub-interpreters <sub-interpreter-support>`. Making sure multiple modules
-are independent is typically enough to achieve this.
+:ref:`sub-interpreters <sub-interpreter-support>`, or otherwise explicitly
+signal a lack of support.
+This is usually achieved by isolation or blocking repeated initialization,
+as above.
+A module may also be limited to the main interpreter using
+the :c:data:`Py_mod_multiple_interpreters` slot.
 
 To request multi-phase initialization, the initialization function
 (PyInit_modulename) returns a :c:type:`PyModuleDef` instance with non-empty
@@ -372,6 +404,8 @@ The available slot types are:
    ``PyModuleDef`` has non-``NULL`` ``m_traverse``, ``m_clear``,
    ``m_free``; non-zero ``m_size``; or slots other than ``Py_mod_create``.
 
+   .. versionadded:: 3.5
+
 .. c:macro:: Py_mod_exec
 
    Specifies a function that is called to *execute* the module.
@@ -385,6 +419,8 @@ The available slot types are:
 
    If multiple ``Py_mod_exec`` slots are specified, they are processed in the
    order they appear in the *m_slots* array.
+
+   .. versionadded:: 3.5
 
 .. c:macro:: Py_mod_multiple_interpreters
 
@@ -415,7 +451,7 @@ The available slot types are:
    in one module definition.
 
    If ``Py_mod_multiple_interpreters`` is not specified, the import
-   machinery defaults to ``Py_MOD_MULTIPLE_INTERPRETERS_NOT_SUPPORTED``.
+   machinery defaults to ``Py_MOD_MULTIPLE_INTERPRETERS_SUPPORTED``.
 
    .. versionadded:: 3.12
 
@@ -505,6 +541,9 @@ objects dynamically. Note that both ``PyModule_FromDefAndSpec`` and
    This function is called automatically when creating a module from
    ``PyModuleDef``, using either ``PyModule_Create`` or
    ``PyModule_FromDefAndSpec``.
+
+   The *functions* array must be statically allocated (or otherwise guaranteed
+   to outlive the module object).
 
    .. versionadded:: 3.5
 

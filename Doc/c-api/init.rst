@@ -203,7 +203,7 @@ to 1 and ``-bb`` sets :c:data:`Py_BytesWarningFlag` to 2.
 
    Set by the :option:`-i` option.
 
-   .. deprecated:: 3.12
+   .. deprecated-removed:: 3.12 3.15
 
 .. c:var:: int Py_IsolatedFlag
 
@@ -447,7 +447,11 @@ Initializing and finalizing the interpreter
    freed.  Some memory allocated by extension modules may not be freed.  Some
    extensions may not work properly if their initialization routine is called more
    than once; this can happen if an application calls :c:func:`Py_Initialize` and
-   :c:func:`Py_FinalizeEx` more than once.
+   :c:func:`Py_FinalizeEx` more than once.  :c:func:`Py_FinalizeEx` must not be
+   called recursively from within itself.  Therefore, it must not be called by
+   any code that may be run as part of the interpreter shutdown process, such
+   as :py:mod:`atexit` handlers, object finalizers, or any code that may be run
+   while flushing the stdout and stderr files.
 
    .. audit-event:: cpython._PySys_ClearAuditHooks "" c.Py_FinalizeEx
 
@@ -488,17 +492,8 @@ Initializing and finalizing the interpreter
    strings other than those passed in (however, the contents of the strings
    pointed to by the argument list are not modified).
 
-   The return value will be ``0`` if the interpreter exits normally (i.e.,
-   without an exception), ``1`` if the interpreter exits due to an exception,
-   or ``2`` if the argument list does not represent a valid Python command
-   line.
-
-   Note that if an otherwise unhandled :exc:`SystemExit` is raised, this
-   function will not return ``1``, but exit the process, as long as
-   ``Py_InspectFlag`` is not set. If ``Py_InspectFlag`` is set, execution will
-   drop into the interactive Python prompt, at which point a second otherwise
-   unhandled :exc:`SystemExit` will still exit the process, while any other
-   means of exiting will set the return value as described above.
+   The return value is ``2`` if the argument list does not represent a valid
+   Python command line, and otherwise the same as :c:func:`Py_RunMain`.
 
    In terms of the CPython runtime configuration APIs documented in the
    :ref:`runtime configuration <init-config>` section (and without accounting
@@ -535,23 +530,18 @@ Initializing and finalizing the interpreter
 
    If :c:member:`PyConfig.inspect` is not set (the default), the return value
    will be ``0`` if the interpreter exits normally (that is, without raising
-   an exception), or ``1`` if the interpreter exits due to an exception. If an
-   otherwise unhandled :exc:`SystemExit` is raised, the function will immediately
-   exit the process instead of returning ``1``.
+   an exception), the exit status of an unhandled :exc:`SystemExit`, or ``1``
+   for any other unhandled exception.
 
    If :c:member:`PyConfig.inspect` is set (such as when the :option:`-i` option
    is used), rather than returning when the interpreter exits, execution will
    instead resume in an interactive Python prompt (REPL) using the ``__main__``
    module's global namespace. If the interpreter exited with an exception, it
    is immediately raised in the REPL session. The function return value is
-   then determined by the way the *REPL session* terminates: returning ``0``
-   if the session terminates without raising an unhandled exception, exiting
-   immediately for an unhandled :exc:`SystemExit`, and returning ``1`` for
-   any other unhandled exception.
+   then determined by the way the *REPL session* terminates: ``0``, ``1``, or
+   the status of a :exc:`SystemExit`, as specified above.
 
-   This function always finalizes the Python interpreter regardless of whether
-   it returns a value or immediately exits the process due to an unhandled
-   :exc:`SystemExit` exception.
+   This function always finalizes the Python interpreter before it returns.
 
    See :ref:`Python Configuration <init-python-config>` for an example of a
    customized Python that always runs in isolated mode using
@@ -594,7 +584,7 @@ Process-wide parameters
    interpreter will change the contents of this storage.
 
    Use :c:func:`Py_DecodeLocale` to decode a bytes string to get a
-   :c:expr:`wchar_*` string.
+   :c:expr:`wchar_t*` string.
 
    .. deprecated:: 3.11
 
@@ -836,7 +826,7 @@ Process-wide parameters
      directory (``"."``).
 
    Use :c:func:`Py_DecodeLocale` to decode a bytes string to get a
-   :c:expr:`wchar_*` string.
+   :c:expr:`wchar_t*` string.
 
    See also :c:member:`PyConfig.orig_argv` and :c:member:`PyConfig.argv`
    members of the :ref:`Python Initialization Configuration <init-config>`.
@@ -872,7 +862,7 @@ Process-wide parameters
    :option:`-I`.
 
    Use :c:func:`Py_DecodeLocale` to decode a bytes string to get a
-   :c:expr:`wchar_*` string.
+   :c:expr:`wchar_t*` string.
 
    See also :c:member:`PyConfig.orig_argv` and :c:member:`PyConfig.argv`
    members of the :ref:`Python Initialization Configuration <init-config>`.
@@ -898,7 +888,7 @@ Process-wide parameters
    this storage.
 
    Use :c:func:`Py_DecodeLocale` to decode a bytes string to get a
-   :c:expr:`wchar_*` string.
+   :c:expr:`wchar_t*` string.
 
    .. deprecated:: 3.11
 
@@ -1088,6 +1078,37 @@ thread, where the CPython global runtime was originally initialized.
 The only exception is if :c:func:`exec` will be called immediately
 after.
 
+.. _cautions-regarding-runtime-finalization:
+
+Cautions regarding runtime finalization
+---------------------------------------
+
+In the late stage of :term:`interpreter shutdown`, after attempting to wait for
+non-daemon threads to exit (though this can be interrupted by
+:class:`KeyboardInterrupt`) and running the :mod:`atexit` functions, the runtime
+is marked as *finalizing*: :c:func:`Py_IsFinalizing` and
+:func:`sys.is_finalizing` return true.  At this point, only the *finalization
+thread* that initiated finalization (typically the main thread) is allowed to
+acquire the :term:`GIL`.
+
+If any thread, other than the finalization thread, attempts to acquire the GIL
+during finalization, either explicitly via :c:func:`PyGILState_Ensure`,
+:c:macro:`Py_END_ALLOW_THREADS`, :c:func:`PyEval_AcquireThread`, or
+:c:func:`!PyEval_AcquireLock`, or implicitly when the interpreter attempts to
+reacquire it after having yielded it, the thread enters **a permanently blocked
+state** where it remains until the program exits.  In most cases this is
+harmless, but this can result in deadlock if a later stage of finalization
+attempts to acquire a lock owned by the blocked thread, or otherwise waits on
+the blocked thread.
+
+Gross? Yes. This prevents random crashes and/or unexpectedly skipped C++
+finalizations further up the call stack when such threads were forcibly exited
+here in CPython 3.13.7 and earlier. The CPython runtime GIL acquiring C APIs
+have never had any error reporting or handling expectations at GIL acquisition
+time that would've allowed for graceful exit from this situation. Changing that
+would require new stable C APIs and rewriting the majority of C code in the
+CPython ecosystem to use those with error handling.
+
 
 High-level API
 --------------
@@ -1106,6 +1127,12 @@ code, or when embedding the Python interpreter:
    process state like available memory, open file descriptors and such.  The global
    interpreter lock is also shared by all threads, regardless of to which
    interpreter they belong.
+
+   .. versionchanged:: 3.12
+
+      :pep:`684` introduced the possibility
+      of a :ref:`per-interpreter GIL <per-interpreter-gil>`.
+      See :c:func:`Py_NewInterpreterFromConfig`.
 
 
 .. c:type:: PyThreadState
@@ -1161,11 +1188,14 @@ code, or when embedding the Python interpreter:
    ensues.
 
    .. note::
-      Calling this function from a thread when the runtime is finalizing
-      will terminate the thread, even if the thread was not created by Python.
-      You can use :c:func:`Py_IsFinalizing` or :func:`sys.is_finalizing` to
-      check if the interpreter is in process of being finalized before calling
-      this function to avoid unwanted termination.
+      Calling this function from a thread when the runtime is finalizing will
+      hang the thread until the program exits, even if the thread was not
+      created by Python.  Refer to
+      :ref:`cautions-regarding-runtime-finalization` for more details.
+
+   .. versionchanged:: 3.13.8
+      Hangs the current thread, rather than terminating it, if called while the
+      interpreter is finalizing.
 
 .. c:function:: PyThreadState* PyThreadState_Get()
 
@@ -1190,12 +1220,26 @@ code, or when embedding the Python interpreter:
 .. c:function:: PyThreadState* PyThreadState_Swap(PyThreadState *tstate)
 
    Swap the current thread state with the thread state given by the argument
-   *tstate*, which may be ``NULL``.  The global interpreter lock must be held
-   and is not released.
+   *tstate*, which may be ``NULL``.
 
+   The :term:`GIL` does not need to be held, but will be held upon returning
+   if *tstate* is non-``NULL``.
 
 The following functions use thread-local storage, and are not compatible
 with sub-interpreters:
+
+.. c:type:: PyGILState_STATE
+
+   The type of the value returned by :c:func:`PyGILState_Ensure` and passed to
+   :c:func:`PyGILState_Release`.
+
+   .. c:enumerator:: PyGILState_LOCKED
+
+      The GIL was already held when :c:func:`PyGILState_Ensure` was called.
+
+   .. c:enumerator:: PyGILState_UNLOCKED
+
+      The GIL was not held when :c:func:`PyGILState_Ensure` was called.
 
 .. c:function:: PyGILState_STATE PyGILState_Ensure()
 
@@ -1220,11 +1264,14 @@ with sub-interpreters:
    to call arbitrary Python code.  Failure is a fatal error.
 
    .. note::
-      Calling this function from a thread when the runtime is finalizing
-      will terminate the thread, even if the thread was not created by Python.
-      You can use :c:func:`Py_IsFinalizing` or :func:`sys.is_finalizing` to
-      check if the interpreter is in process of being finalized before calling
-      this function to avoid unwanted termination.
+      Calling this function from a thread when the runtime is finalizing will
+      hang the thread until the program exits, even if the thread was not
+      created by Python.  Refer to
+      :ref:`cautions-regarding-runtime-finalization` for more details.
+
+   .. versionchanged:: 3.13.8
+      Hangs the current thread, rather than terminating it, if called while the
+      interpreter is finalizing.
 
 .. c:function:: void PyGILState_Release(PyGILState_STATE)
 
@@ -1338,11 +1385,11 @@ All of the following functions must be called after :c:func:`Py_Initialize`.
    must be held.
 
    .. versionchanged:: 3.9
-      This function now calls the :c:member:`PyThreadState.on_delete` callback.
+      This function now calls the :c:member:`!PyThreadState.on_delete` callback.
       Previously, that happened in :c:func:`PyThreadState_Delete`.
 
    .. versionchanged:: 3.13
-      The :c:member:`PyThreadState.on_delete` callback was removed.
+      The :c:member:`!PyThreadState.on_delete` callback was removed.
 
 
 .. c:function:: void PyThreadState_Delete(PyThreadState *tstate)
@@ -1443,12 +1490,15 @@ All of the following functions must be called after :c:func:`Py_Initialize`.
    This is not a replacement for :c:func:`PyModule_GetState()`, which
    extensions should use to store interpreter-specific state information.
 
+   The returned dictionary is borrowed from the interpreter and is valid until
+   interpreter shutdown.
+
    .. versionadded:: 3.8
 
 
 .. c:function:: PyObject* PyUnstable_InterpreterState_GetMainModule(PyInterpreterState *interp)
 
-   Return a :term:`strong reference` to the ``__main__`` `module object <moduleobjects>`_
+   Return a :term:`strong reference` to the ``__main__`` :ref:`module object <moduleobjects>`
    for the given interpreter.
 
    The caller must hold the GIL.
@@ -1516,16 +1566,19 @@ All of the following functions must be called after :c:func:`Py_Initialize`.
    If this thread already has the lock, deadlock ensues.
 
    .. note::
-      Calling this function from a thread when the runtime is finalizing
-      will terminate the thread, even if the thread was not created by Python.
-      You can use :c:func:`Py_IsFinalizing` or :func:`sys.is_finalizing` to
-      check if the interpreter is in process of being finalized before calling
-      this function to avoid unwanted termination.
+      Calling this function from a thread when the runtime is finalizing will
+      hang the thread until the program exits, even if the thread was not
+      created by Python.  Refer to
+      :ref:`cautions-regarding-runtime-finalization` for more details.
 
    .. versionchanged:: 3.8
       Updated to be consistent with :c:func:`PyEval_RestoreThread`,
       :c:func:`Py_END_ALLOW_THREADS`, and :c:func:`PyGILState_Ensure`,
       and terminate the current thread if called while the interpreter is finalizing.
+
+   .. versionchanged:: 3.13.8
+      Hangs the current thread, rather than terminating it, if called while the
+      interpreter is finalizing.
 
    :c:func:`PyEval_RestoreThread` is a higher-level function which is always
    available (even when threads have not been initialized).
@@ -1786,6 +1839,8 @@ function. You can create and destroy them using the following functions:
    haven't been explicitly destroyed at that point.
 
 
+.. _per-interpreter-gil:
+
 A Per-Interpreter GIL
 ---------------------
 
@@ -1797,7 +1852,7 @@ being blocked by other interpreters or blocking any others.  Thus a
 single Python process can truly take advantage of multiple CPU cores
 when running Python code.  The isolation also encourages a different
 approach to concurrency than that of just using threads.
-(See :pep:`554`.)
+(See :pep:`554` and :pep:`684`.)
 
 Using an isolated interpreter requires vigilance in preserving that
 isolation.  That especially means not sharing any objects or mutable
@@ -1904,6 +1959,29 @@ pointer and a void pointer argument.
       now scheduled to be called from the subinterpreter, rather than being
       called from the main interpreter. Each subinterpreter now has its own
       list of scheduled calls.
+
+   .. versionchanged:: 3.12
+      This function now always schedules *func* to be run in the main
+      interpreter.
+
+
+.. c:function:: int Py_MakePendingCalls(void)
+
+   Execute all pending calls. This is usually executed automatically by the
+   interpreter.
+
+   This function returns ``0`` on success, and returns ``-1`` with an exception
+   set on failure.
+
+   If this is not called in the main thread of the main
+   interpreter, this function does nothing and returns ``0``.
+   The caller must hold the :term:`GIL`.
+
+   .. versionadded:: 3.1
+
+   .. versionchanged:: 3.12
+      This function only runs pending calls in the main interpreter.
+
 
 .. _profiling:
 
@@ -2365,12 +2443,20 @@ per-object locks for :term:`free-threaded <free threading>` CPython.  They are
 intended to replace reliance on the :term:`global interpreter lock`, and are
 no-ops in versions of Python with the global interpreter lock.
 
+Critical sections are intended to be used for custom types implemented
+in C-API extensions. They should generally not be used with built-in types like
+:class:`list` and :class:`dict` because their public C-APIs
+already use critical sections internally, with the notable
+exception of :c:func:`PyDict_Next`, which requires critical section
+to be acquired externally.
+
 Critical sections avoid deadlocks by implicitly suspending active critical
-sections and releasing the locks during calls to :c:func:`PyEval_SaveThread`.
-When :c:func:`PyEval_RestoreThread` is called, the most recent critical section
-is resumed, and its locks reacquired.  This means the critical section API
-provides weaker guarantees than traditional locks -- they are useful because
-their behavior is similar to the :term:`GIL`.
+sections, hence, they do not provide exclusive access such as provided by
+traditional locks like :c:type:`PyMutex`.  When a critical section is started,
+the per-object lock for the object is acquired. If the code executed inside the
+critical section calls C-API functions then it can suspend the critical section thereby
+releasing the per-object lock, so other threads can acquire the per-object lock
+for the same object.
 
 The functions and structs used by the macros are exposed for cases
 where C macros are not available. They should only be used as in the
@@ -2458,3 +2544,218 @@ code triggered by the finalizer blocks and calls :c:func:`PyEval_SaveThread`.
    In the default build, this macro expands to ``}``.
 
    .. versionadded:: 3.13
+
+
+Legacy Locking APIs
+-------------------
+
+These APIs are obsolete since Python 3.13 with the introduction of
+:c:type:`PyMutex`.
+
+.. versionchanged:: 3.15
+   These APIs are now a simple wrapper around ``PyMutex``.
+
+
+.. c:type:: PyThread_type_lock
+
+   A pointer to a mutual exclusion lock.
+
+
+.. c:type:: PyLockStatus
+
+   The result of acquiring a lock with a timeout.
+
+   .. c:namespace:: NULL
+
+   .. c:enumerator:: PY_LOCK_FAILURE
+
+      Failed to acquire the lock.
+
+   .. c:enumerator:: PY_LOCK_ACQUIRED
+
+      The lock was successfully acquired.
+
+   .. c:enumerator:: PY_LOCK_INTR
+
+      The lock was interrupted by a signal.
+
+
+.. c:function:: PyThread_type_lock PyThread_allocate_lock(void)
+
+   Allocate a new lock.
+
+   On success, this function returns a lock; on failure, this
+   function returns ``0`` without an exception set.
+
+   The caller does not need to hold the :term:`GIL`.
+
+   .. versionchanged:: 3.15
+      This function now always uses :c:type:`PyMutex`. In prior versions, this
+      would use a lock provided by the operating system.
+
+
+.. c:function:: void PyThread_free_lock(PyThread_type_lock lock)
+
+   Destroy *lock*. The lock should not be held by any thread when calling
+   this.
+
+   The caller does not need to hold the :term:`GIL`.
+
+
+.. c:function:: PyLockStatus PyThread_acquire_lock_timed(PyThread_type_lock lock, long long microseconds, int intr_flag)
+
+   Acquire *lock* with a timeout.
+
+   This will wait for *microseconds* microseconds to acquire the lock. If the
+   timeout expires, this function returns :c:enumerator:`PY_LOCK_FAILURE`.
+   If *microseconds* is ``-1``, this will wait indefinitely until the lock has
+   been released.
+
+   If *intr_flag* is ``1``, acquiring the lock may be interrupted by a signal,
+   in which case this function returns :c:enumerator:`PY_LOCK_INTR`. Upon
+   interruption, it's generally expected that the caller makes a call to
+   :c:func:`Py_MakePendingCalls` to propagate an exception to Python code.
+
+   If the lock is successfully acquired, this function returns
+   :c:enumerator:`PY_LOCK_ACQUIRED`.
+
+   The caller does not need to hold the :term:`GIL`.
+
+
+.. c:function:: int PyThread_acquire_lock(PyThread_type_lock lock, int waitflag)
+
+   Acquire *lock*.
+
+   If *waitflag* is ``1`` and another thread currently holds the lock, this
+   function will wait until the lock can be acquired and will always return
+   ``1``.
+
+   If *waitflag* is ``0`` and another thread holds the lock, this function will
+   not wait and instead return ``0``. If the lock is not held by any other
+   thread, then this function will acquire it and return ``1``.
+
+   Unlike :c:func:`PyThread_acquire_lock_timed`, acquiring the lock cannot be
+   interrupted by a signal.
+
+   The caller does not need to hold the :term:`GIL`.
+
+
+.. c:function:: int PyThread_release_lock(PyThread_type_lock lock)
+
+   Release *lock*. If *lock* is not held, then this function issues a
+   fatal error.
+
+   The caller does not need to hold the :term:`GIL`.
+
+
+Operating System Thread APIs
+============================
+
+.. c:macro:: PYTHREAD_INVALID_THREAD_ID
+
+   Sentinel value for an invalid thread ID.
+
+   This is currently equivalent to ``(unsigned long)-1``.
+
+
+.. c:function:: unsigned long PyThread_start_new_thread(void (*func)(void *), void *arg)
+
+   Start function *func* in a new thread with argument *arg*.
+   The resulting thread is not intended to be joined.
+
+   *func* must not be ``NULL``, but *arg* may be ``NULL``.
+
+   On success, this function returns the identifier of the new thread; on failure,
+   this returns :c:macro:`PYTHREAD_INVALID_THREAD_ID`.
+
+   The caller does not need to hold the :term:`GIL`.
+
+
+.. c:function:: unsigned long PyThread_get_thread_ident(void)
+
+   Return the identifier of the current thread, which will never be zero.
+
+   This function cannot fail, and the caller does not need to hold the
+   :term:`GIL`.
+
+   .. seealso::
+      :py:func:`threading.get_ident`
+
+
+.. c:function:: PyObject *PyThread_GetInfo(void)
+
+   Get general information about the current thread in the form of a
+   :ref:`struct sequence <struct-sequence-objects>` object. This information is
+   accessible as :py:attr:`sys.thread_info` in Python.
+
+   On success, this returns a new :term:`strong reference` to the thread
+   information; on failure, this returns ``NULL`` with an exception set.
+
+   The caller must hold the :term:`GIL`.
+
+
+.. c:macro:: PY_HAVE_THREAD_NATIVE_ID
+
+   This macro is defined when the system supports native thread IDs.
+
+
+.. c:function:: unsigned long PyThread_get_thread_native_id(void)
+
+   Get the native identifier of the current thread as it was assigned by the operating
+   system's kernel, which will never be less than zero.
+
+   This function is only available when :c:macro:`PY_HAVE_THREAD_NATIVE_ID` is
+   defined.
+
+   This function cannot fail, and the caller does not need to hold the
+   :term:`GIL`.
+
+   .. seealso::
+      :py:func:`threading.get_native_id`
+
+
+.. c:function:: void PyThread_exit_thread(void)
+
+   Terminate the current thread. This function is generally considered unsafe
+   and should be avoided. It is kept solely for backwards compatibility.
+
+   This function is only safe to call if all functions in the full call
+   stack are written to safely allow it.
+
+   .. warning::
+
+      If the current system uses POSIX threads (also known as "pthreads"),
+      this calls :manpage:`pthread_exit(3)`, which attempts to unwind the stack
+      and call C++ destructors on some libc implementations. However, if a
+      ``noexcept`` function is reached, it may terminate the process.
+      Other systems, such as macOS, do unwinding.
+
+      On Windows, this function calls ``_endthreadex()``, which kills the thread
+      without calling C++ destructors.
+
+      In any case, there is a risk of corruption on the thread's stack.
+
+
+.. c:function:: void PyThread_init_thread(void)
+
+   Initialize ``PyThread*`` APIs. Python executes this function automatically,
+   so there's little need to call it from an extension module.
+
+
+.. c:function:: int PyThread_set_stacksize(size_t size)
+
+   Set the stack size of the current thread to *size* bytes.
+
+   This function returns ``0`` on success, ``-1`` if *size* is invalid, or
+   ``-2`` if the system does not support changing the stack size. This function
+   does not set exceptions.
+
+   The caller does not need to hold the :term:`GIL`.
+
+
+.. c:function:: size_t PyThread_get_stacksize(void)
+
+   Return the stack size of the current thread in bytes, or ``0`` if the system's
+   default stack size is in use.
+
+   The caller does not need to hold the :term:`GIL`.

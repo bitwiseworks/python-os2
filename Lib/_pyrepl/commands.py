@@ -411,14 +411,17 @@ class delete(EditCommand):
     def do(self) -> None:
         r = self.reader
         b = r.buffer
-        if (
-            r.pos == 0
-            and len(b) == 0  # this is something of a hack
-            and self.event[-1] == "\004"
-        ):
-            r.update_screen()
-            r.console.finish()
-            raise EOFError
+        if self.event[-1] == "\004":
+            if b and b[-1].endswith("\n"):
+                self.finish = True
+            elif (
+                r.pos == 0
+                and len(b) == 0  # this is something of a hack
+            ):
+                r.update_screen()
+                r.console.finish()
+                raise EOFError
+
         for i in range(r.get_arg()):
             if r.pos != len(b):
                 del b[r.pos]
@@ -437,7 +440,7 @@ class help(Command):
         import _sitebuiltins
 
         with self.reader.suspend():
-            self.reader.msg = _sitebuiltins._Helper()()  # type: ignore[assignment, call-arg]
+            self.reader.msg = _sitebuiltins._Helper()()  # type: ignore[assignment]
 
 
 class invalid_key(Command):
@@ -456,7 +459,7 @@ class invalid_command(Command):
 class show_history(Command):
     def do(self) -> None:
         from .pager import get_pager
-        from site import gethistoryfile  # type: ignore[attr-defined]
+        from site import gethistoryfile
 
         history = os.linesep.join(self.reader.history[:])
         self.reader.console.restore()

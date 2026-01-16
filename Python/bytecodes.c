@@ -148,7 +148,15 @@ dummy_func(
 
         tier1 inst(RESUME, (--)) {
             assert(frame == tstate->current_frame);
-            if (tstate->tracing == 0) {
+            #ifdef Py_GIL_DISABLED
+            // For thread-safety, we need to check instrumentation version
+            // even when tracing. Otherwise, another thread may concurrently
+            // re-write the bytecode while we are executing this function.
+            int check_instrumentation = 1;
+            #else
+            int check_instrumentation = (tstate->tracing == 0);
+            #endif
+            if (check_instrumentation) {
                 uintptr_t global_version =
                     _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) &
                     ~_PY_EVAL_EVENTS_MASK;
@@ -2149,7 +2157,8 @@ dummy_func(
             assert(tp->tp_flags & Py_TPFLAGS_MANAGED_DICT);
             PyDictObject *dict = _PyObject_GetManagedDict(owner);
             DEOPT_IF(dict == NULL);
-            assert(PyDict_CheckExact((PyObject *)dict));
+            DEOPT_IF(!PyDict_CheckExact((PyObject *)dict));
+
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             DEOPT_IF(hint >= (size_t)dict->ma_keys->dk_nentries);
             PyObject *old_value;
@@ -3204,6 +3213,7 @@ dummy_func(
             unused/1 + // Skip over the counter
             _CHECK_PEP_523 +
             _CHECK_FUNCTION_VERSION +
+            _CHECK_RECURSION_REMAINING +
             _PY_FRAME_GENERAL +
             _SAVE_RETURN_OFFSET +
             _PUSH_FRAME;
@@ -3233,6 +3243,7 @@ dummy_func(
             _CHECK_PEP_523 +
             _CHECK_METHOD_VERSION +
             _EXPAND_METHOD +
+            _CHECK_RECURSION_REMAINING +
             _PY_FRAME_GENERAL +
             _SAVE_RETURN_OFFSET +
             _PUSH_FRAME;
@@ -3301,6 +3312,9 @@ dummy_func(
             PyFunctionObject *func = (PyFunctionObject *)callable;
             PyCodeObject *code = (PyCodeObject *)func->func_code;
             DEOPT_IF(!_PyThreadState_HasStackSpace(tstate, code->co_framesize));
+        }
+
+        op(_CHECK_RECURSION_REMAINING, (--)) {
             DEOPT_IF(tstate->py_recursion_remaining <= 1);
         }
 
@@ -3338,6 +3352,7 @@ dummy_func(
             _INIT_CALL_BOUND_METHOD_EXACT_ARGS +
             _CHECK_FUNCTION_EXACT_ARGS +
             _CHECK_STACK_SPACE +
+            _CHECK_RECURSION_REMAINING +
             _INIT_CALL_PY_EXACT_ARGS +
             _SAVE_RETURN_OFFSET +
             _PUSH_FRAME;
@@ -3347,6 +3362,7 @@ dummy_func(
             _CHECK_PEP_523 +
             _CHECK_FUNCTION_EXACT_ARGS +
             _CHECK_STACK_SPACE +
+            _CHECK_RECURSION_REMAINING +
             _INIT_CALL_PY_EXACT_ARGS +
             _SAVE_RETURN_OFFSET +
             _PUSH_FRAME;
@@ -3631,7 +3647,7 @@ dummy_func(
             assert(oparg == 1);
             PyInterpreterState *interp = tstate->interp;
             DEOPT_IF(callable != interp->callable_cache.list_append);
-            assert(self != NULL);
+            DEOPT_IF(self == NULL);
             DEOPT_IF(!PyList_Check(self));
             STAT_INC(CALL, hit);
             if (_PyList_AppendTakeRef((PyListObject *)self, arg) < 0) {
@@ -3686,12 +3702,14 @@ dummy_func(
                 args--;
                 total_args++;
             }
+            DEOPT_IF(total_args == 0);
             PyMethodDescrObject *method = (PyMethodDescrObject *)callable;
             DEOPT_IF(!Py_IS_TYPE(method, &PyMethodDescr_Type));
             PyMethodDef *meth = method->d_method;
             DEOPT_IF(meth->ml_flags != (METH_FASTCALL|METH_KEYWORDS));
             PyTypeObject *d_type = method->d_common.d_type;
             PyObject *self = args[0];
+            assert(self != NULL);
             DEOPT_IF(!Py_IS_TYPE(self, d_type));
             STAT_INC(CALL, hit);
             int nargs = total_args - 1;
@@ -3754,11 +3772,13 @@ dummy_func(
                 total_args++;
             }
             PyMethodDescrObject *method = (PyMethodDescrObject *)callable;
+            DEOPT_IF(total_args == 0);
             /* Builtin METH_FASTCALL methods, without keywords */
             DEOPT_IF(!Py_IS_TYPE(method, &PyMethodDescr_Type));
             PyMethodDef *meth = method->d_method;
             DEOPT_IF(meth->ml_flags != METH_FASTCALL);
             PyObject *self = args[0];
+            assert(self != NULL);
             DEOPT_IF(!Py_IS_TYPE(self, method->d_common.d_type));
             STAT_INC(CALL, hit);
             PyCFunctionFast cfunc =

@@ -70,19 +70,19 @@ jobs:
         include:
           - target: i686-pc-windows-msvc/msvc
             architecture: Win32
-            runner: windows-latest
+            runner: windows-2022
             compiler: msvc
           - target: x86_64-pc-windows-msvc/msvc
             architecture: x64
-            runner: windows-latest
+            runner: windows-2022
             compiler: msvc
           - target: aarch64-pc-windows-msvc/msvc
             architecture: ARM64
-            runner: windows-latest
+            runner: windows-2022
             compiler: msvc
           - target: x86_64-apple-darwin/clang
             architecture: x86_64
-            runner: macos-13
+            runner: macos-15-intel
             compiler: clang
           - target: aarch64-apple-darwin/clang
             architecture: aarch64
@@ -172,6 +172,7 @@ jobs:
     name: Free-Threaded (Debug)
     needs: interpreter
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:

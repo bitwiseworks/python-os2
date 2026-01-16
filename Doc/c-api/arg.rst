@@ -5,7 +5,7 @@
 Parsing arguments and building values
 =====================================
 
-These functions are useful when creating your own extensions functions and
+These functions are useful when creating your own extension functions and
 methods.  Additional information and examples are available in
 :ref:`extending-index`.
 
@@ -160,7 +160,7 @@ There are three ways strings and buffers can be converted to C:
 ``w*`` (read-write :term:`bytes-like object`) [Py_buffer]
    This format accepts any object which implements the read-write buffer
    interface. It fills a :c:type:`Py_buffer` structure provided by the caller.
-   The buffer may contain embedded null bytes. The caller have to call
+   The buffer may contain embedded null bytes. The caller has to call
    :c:func:`PyBuffer_Release` when it is done with the buffer.
 
 ``es`` (:class:`str`) [const char \*encoding, char \*\*buffer]
@@ -638,6 +638,8 @@ Building values
 
    ``L`` (:class:`int`) [long long]
       Convert a C :c:expr:`long long` to a Python integer object.
+
+   .. _capi-py-buildvalue-format-K:
 
    ``K`` (:class:`int`) [unsigned long long]
       Convert a C :c:expr:`unsigned long long` to a Python integer object.

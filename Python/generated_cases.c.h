@@ -961,6 +961,9 @@
                 PyFunctionObject *func = (PyFunctionObject *)callable;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
                 DEOPT_IF(!_PyThreadState_HasStackSpace(tstate, code->co_framesize), CALL);
+            }
+            // _CHECK_RECURSION_REMAINING
+            {
                 DEOPT_IF(tstate->py_recursion_remaining <= 1, CALL);
             }
             // _INIT_CALL_PY_EXACT_ARGS
@@ -1043,6 +1046,10 @@
                 assert(PyFunction_Check(method));
                 Py_INCREF(method);
                 Py_DECREF(callable);
+            }
+            // _CHECK_RECURSION_REMAINING
+            {
+                DEOPT_IF(tstate->py_recursion_remaining <= 1, CALL);
             }
             // _PY_FRAME_GENERAL
             args = &stack_pointer[-oparg];
@@ -1590,7 +1597,7 @@
             assert(oparg == 1);
             PyInterpreterState *interp = tstate->interp;
             DEOPT_IF(callable != interp->callable_cache.list_append, CALL);
-            assert(self != NULL);
+            DEOPT_IF(self == NULL, CALL);
             DEOPT_IF(!PyList_Check(self), CALL);
             STAT_INC(CALL, hit);
             if (_PyList_AppendTakeRef((PyListObject *)self, arg) < 0) {
@@ -1627,11 +1634,13 @@
                     total_args++;
                 }
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable;
+                DEOPT_IF(total_args == 0, CALL);
                 /* Builtin METH_FASTCALL methods, without keywords */
                 DEOPT_IF(!Py_IS_TYPE(method, &PyMethodDescr_Type), CALL);
                 PyMethodDef *meth = method->d_method;
                 DEOPT_IF(meth->ml_flags != METH_FASTCALL, CALL);
                 PyObject *self = args[0];
+                assert(self != NULL);
                 DEOPT_IF(!Py_IS_TYPE(self, method->d_common.d_type), CALL);
                 STAT_INC(CALL, hit);
                 PyCFunctionFast cfunc =
@@ -1676,12 +1685,14 @@
                     args--;
                     total_args++;
                 }
+                DEOPT_IF(total_args == 0, CALL);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable;
                 DEOPT_IF(!Py_IS_TYPE(method, &PyMethodDescr_Type), CALL);
                 PyMethodDef *meth = method->d_method;
                 DEOPT_IF(meth->ml_flags != (METH_FASTCALL|METH_KEYWORDS), CALL);
                 PyTypeObject *d_type = method->d_common.d_type;
                 PyObject *self = args[0];
+                assert(self != NULL);
                 DEOPT_IF(!Py_IS_TYPE(self, d_type), CALL);
                 STAT_INC(CALL, hit);
                 int nargs = total_args - 1;
@@ -1886,6 +1897,9 @@
                 PyFunctionObject *func = (PyFunctionObject *)callable;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
                 DEOPT_IF(!_PyThreadState_HasStackSpace(tstate, code->co_framesize), CALL);
+            }
+            // _CHECK_RECURSION_REMAINING
+            {
                 DEOPT_IF(tstate->py_recursion_remaining <= 1, CALL);
             }
             // _INIT_CALL_PY_EXACT_ARGS
@@ -1950,6 +1964,10 @@
                 DEOPT_IF(!PyFunction_Check(callable), CALL);
                 PyFunctionObject *func = (PyFunctionObject *)callable;
                 DEOPT_IF(func->func_version != func_version, CALL);
+            }
+            // _CHECK_RECURSION_REMAINING
+            {
+                DEOPT_IF(tstate->py_recursion_remaining <= 1, CALL);
             }
             // _PY_FRAME_GENERAL
             args = &stack_pointer[-oparg];
@@ -5133,7 +5151,15 @@
             _Py_CODEUNIT *this_instr = next_instr - 1;
             (void)this_instr;
             assert(frame == tstate->current_frame);
-            if (tstate->tracing == 0) {
+            #ifdef Py_GIL_DISABLED
+            // For thread-safety, we need to check instrumentation version
+            // even when tracing. Otherwise, another thread may concurrently
+            // re-write the bytecode while we are executing this function.
+            int check_instrumentation = 1;
+            #else
+            int check_instrumentation = (tstate->tracing == 0);
+            #endif
+            if (check_instrumentation) {
                 uintptr_t global_version =
                 _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) &
                 ~_PY_EVAL_EVENTS_MASK;
@@ -5587,7 +5613,7 @@
             assert(tp->tp_flags & Py_TPFLAGS_MANAGED_DICT);
             PyDictObject *dict = _PyObject_GetManagedDict(owner);
             DEOPT_IF(dict == NULL, STORE_ATTR);
-            assert(PyDict_CheckExact((PyObject *)dict));
+            DEOPT_IF(!PyDict_CheckExact((PyObject *)dict), STORE_ATTR);
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             DEOPT_IF(hint >= (size_t)dict->ma_keys->dk_nentries, STORE_ATTR);
             PyObject *old_value;

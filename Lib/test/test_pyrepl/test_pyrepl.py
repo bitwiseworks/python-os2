@@ -10,19 +10,19 @@ import sys
 import tempfile
 from unittest import TestCase, skipUnless, skipIf
 from unittest.mock import patch
-from test.support import force_not_colorized, make_clean_env
-from test.support import SHORT_TIMEOUT
+from test.support import force_not_colorized, make_clean_env, Py_DEBUG
+from test.support import SHORT_TIMEOUT, STDLIB_DIR
 from test.support.import_helper import import_module
-from test.support.os_helper import unlink
+from test.support.os_helper import EnvironmentVarGuard, unlink
 
 from .support import (
     FakeConsole,
+    ScreenEqualMixin,
     handle_all_events,
     handle_events_narrow_console,
     more_lines,
     multiline_input,
     code_to_events,
-    clean_screen,
 )
 from _pyrepl.console import Event
 from _pyrepl.readline import (ReadlineAlikeReader, ReadlineConfig,
@@ -43,6 +43,7 @@ class ReplTestCase(TestCase):
         *,
         cmdline_args: list[str] | None = None,
         cwd: str | None = None,
+        skip: bool = False,
     ) -> tuple[str, int]:
         temp_dir = None
         if cwd is None:
@@ -50,7 +51,7 @@ class ReplTestCase(TestCase):
             cwd = temp_dir.name
         try:
             return self._run_repl(
-                repl_input, env=env, cmdline_args=cmdline_args, cwd=cwd
+                repl_input, env=env, cmdline_args=cmdline_args, cwd=cwd, skip=skip,
             )
         finally:
             if temp_dir is not None:
@@ -63,6 +64,7 @@ class ReplTestCase(TestCase):
         env: dict | None,
         cmdline_args: list[str] | None,
         cwd: str,
+        skip: bool,
     ) -> tuple[str, int]:
         assert pty
         master_fd, slave_fd = pty.openpty()
@@ -119,7 +121,10 @@ class ReplTestCase(TestCase):
         except subprocess.TimeoutExpired:
             process.kill()
             exit_code = process.wait()
-        return "".join(output), exit_code
+        output = "".join(output)
+        if skip and "can't use pyrepl" in output:
+            self.skipTest("pyrepl not available")
+        return output, exit_code
 
 
 class TestCursorPosition(TestCase):
@@ -438,6 +443,11 @@ class TestPyReplAutoindent(TestCase):
         )
         # fmt: on
 
+        events = code_to_events(input_code)
+        reader = self.prepare_reader(events)
+        output = multiline_input(reader)
+        self.assertEqual(output, output_code)
+
     def test_auto_indent_continuation(self):
         # auto indenting according to previous user indentation
         # fmt: off
@@ -587,7 +597,7 @@ class TestPyReplAutoindent(TestCase):
         self.assertEqual(output, output_code)
 
 
-class TestPyReplOutput(TestCase):
+class TestPyReplOutput(ScreenEqualMixin, TestCase):
     def prepare_reader(self, events):
         console = FakeConsole(events)
         config = ReadlineConfig(readline_completer=None)
@@ -620,7 +630,7 @@ class TestPyReplOutput(TestCase):
 
         output = multiline_input(reader)
         self.assertEqual(output, "1+1")
-        self.assertEqual(clean_screen(reader.screen), "1+1")
+        self.assert_screen_equal(reader, "1+1", clean=True)
 
     def test_get_line_buffer_returns_str(self):
         reader = self.prepare_reader(code_to_events("\n"))
@@ -654,11 +664,13 @@ class TestPyReplOutput(TestCase):
         reader = self.prepare_reader(events)
 
         output = multiline_input(reader)
-        self.assertEqual(output, "def f():\n    ...\n    ")
-        self.assertEqual(clean_screen(reader.screen), "def f():\n    ...")
+        expected = "def f():\n    ...\n    "
+        self.assertEqual(output, expected)
+        self.assert_screen_equal(reader, expected, clean=True)
         output = multiline_input(reader)
-        self.assertEqual(output, "def g():\n    pass\n    ")
-        self.assertEqual(clean_screen(reader.screen), "def g():\n    pass")
+        expected = "def g():\n    pass\n    "
+        self.assertEqual(output, expected)
+        self.assert_screen_equal(reader, expected, clean=True)
 
     def test_history_navigation_with_up_arrow(self):
         events = itertools.chain(
@@ -677,16 +689,16 @@ class TestPyReplOutput(TestCase):
 
         output = multiline_input(reader)
         self.assertEqual(output, "1+1")
-        self.assertEqual(clean_screen(reader.screen), "1+1")
+        self.assert_screen_equal(reader, "1+1", clean=True)
         output = multiline_input(reader)
         self.assertEqual(output, "2+2")
-        self.assertEqual(clean_screen(reader.screen), "2+2")
+        self.assert_screen_equal(reader, "2+2", clean=True)
         output = multiline_input(reader)
         self.assertEqual(output, "2+2")
-        self.assertEqual(clean_screen(reader.screen), "2+2")
+        self.assert_screen_equal(reader, "2+2", clean=True)
         output = multiline_input(reader)
         self.assertEqual(output, "1+1")
-        self.assertEqual(clean_screen(reader.screen), "1+1")
+        self.assert_screen_equal(reader, "1+1", clean=True)
 
     def test_history_with_multiline_entries(self):
         code = "def foo():\nx = 1\ny = 2\nz = 3\n\ndef bar():\nreturn 42\n\n"
@@ -705,11 +717,9 @@ class TestPyReplOutput(TestCase):
         output = multiline_input(reader)
         output = multiline_input(reader)
         output = multiline_input(reader)
-        self.assertEqual(
-            clean_screen(reader.screen),
-            'def foo():\n    x = 1\n    y = 2\n    z = 3'
-        )
-        self.assertEqual(output, "def foo():\n    x = 1\n    y = 2\n    z = 3\n    ")
+        expected = "def foo():\n    x = 1\n    y = 2\n    z = 3\n    "
+        self.assert_screen_equal(reader, expected, clean=True)
+        self.assertEqual(output, expected)
 
 
     def test_history_navigation_with_down_arrow(self):
@@ -728,7 +738,7 @@ class TestPyReplOutput(TestCase):
 
         output = multiline_input(reader)
         self.assertEqual(output, "1+1")
-        self.assertEqual(clean_screen(reader.screen), "1+1")
+        self.assert_screen_equal(reader, "1+1", clean=True)
 
     def test_history_search(self):
         events = itertools.chain(
@@ -745,23 +755,23 @@ class TestPyReplOutput(TestCase):
 
         output = multiline_input(reader)
         self.assertEqual(output, "1+1")
-        self.assertEqual(clean_screen(reader.screen), "1+1")
+        self.assert_screen_equal(reader, "1+1", clean=True)
         output = multiline_input(reader)
         self.assertEqual(output, "2+2")
-        self.assertEqual(clean_screen(reader.screen), "2+2")
+        self.assert_screen_equal(reader, "2+2", clean=True)
         output = multiline_input(reader)
         self.assertEqual(output, "3+3")
-        self.assertEqual(clean_screen(reader.screen), "3+3")
+        self.assert_screen_equal(reader, "3+3", clean=True)
         output = multiline_input(reader)
         self.assertEqual(output, "1+1")
-        self.assertEqual(clean_screen(reader.screen), "1+1")
+        self.assert_screen_equal(reader, "1+1", clean=True)
 
     def test_control_character(self):
         events = code_to_events("c\x1d\n")
         reader = self.prepare_reader(events)
         output = multiline_input(reader)
         self.assertEqual(output, "c\x1d")
-        self.assertEqual(clean_screen(reader.screen), "c")
+        self.assert_screen_equal(reader, "c\x1d", clean=True)
 
     def test_history_search_backward(self):
         # Test <page up> history search backward with "imp" input
@@ -781,7 +791,7 @@ class TestPyReplOutput(TestCase):
         # search for "imp" in history
         output = multiline_input(reader)
         self.assertEqual(output, "import os")
-        self.assertEqual(clean_screen(reader.screen), "import os")
+        self.assert_screen_equal(reader, "import os", clean=True)
 
     def test_history_search_backward_empty(self):
         # Test <page up> history search backward with an empty input
@@ -800,7 +810,7 @@ class TestPyReplOutput(TestCase):
         # search backward in history
         output = multiline_input(reader)
         self.assertEqual(output, "import os")
-        self.assertEqual(clean_screen(reader.screen), "import os")
+        self.assert_screen_equal(reader, "import os", clean=True)
 
 
 class TestPyReplCompleter(TestCase):
@@ -1059,6 +1069,9 @@ class TestPasteEvent(TestCase):
 class TestDumbTerminal(ReplTestCase):
     def test_dumb_terminal_exits_cleanly(self):
         env = os.environ.copy()
+        # Ignore PYTHONSTARTUP to not pollute the output
+        # with an unrelated traceback. See GH-137568.
+        env.pop('PYTHONSTARTUP', None)
         env.update({"TERM": "dumb"})
         output, exit_code = self.run_repl("exit()\n", env=env)
         self.assertEqual(exit_code, 0)
@@ -1082,9 +1095,7 @@ class TestMain(ReplTestCase):
     def test_exposed_globals_in_repl(self):
         pre = "['__annotations__', '__builtins__'"
         post = "'__loader__', '__name__', '__package__', '__spec__']"
-        output, exit_code = self.run_repl(["sorted(dir())", "exit()"])
-        if "can't use pyrepl" in output:
-            self.skipTest("pyrepl not available")
+        output, exit_code = self.run_repl(["sorted(dir())", "exit()"], skip=True)
         self.assertEqual(exit_code, 0)
 
         # if `__main__` is not a file (impossible with pyrepl)
@@ -1136,6 +1147,7 @@ class TestMain(ReplTestCase):
                     commands,
                     cmdline_args=[str(mod)],
                     env=clean_env,
+                    skip=True,
                 )
             elif as_module:
                 output, exit_code = self.run_repl(
@@ -1143,12 +1155,10 @@ class TestMain(ReplTestCase):
                     cmdline_args=["-m", "blue.calx"],
                     env=clean_env,
                     cwd=td,
+                    skip=True,
                 )
             else:
                 self.fail("Choose one of as_file or as_module")
-
-        if "can't use pyrepl" in output:
-            self.skipTest("pyrepl not available")
 
         self.assertEqual(exit_code, 0)
         for var, expected in expectations.items():
@@ -1187,9 +1197,7 @@ class TestMain(ReplTestCase):
                     "exit()\n")
 
         env.pop("PYTHON_BASIC_REPL", None)
-        output, exit_code = self.run_repl(commands, env=env)
-        if "can\'t use pyrepl" in output:
-            self.skipTest("pyrepl not available")
+        output, exit_code = self.run_repl(commands, env=env, skip=True)
         self.assertEqual(exit_code, 0)
         self.assertIn("True", output)
         self.assertNotIn("False", output)
@@ -1217,6 +1225,31 @@ class TestMain(ReplTestCase):
         self.assertNotIn("Traceback", output)
 
     @force_not_colorized
+    def test_no_pyrepl_source_in_exc(self):
+        # Avoid using _pyrepl/__main__.py in traceback reports
+        # See https://github.com/python/cpython/issues/129098.
+        pyrepl_main_file = os.path.join(STDLIB_DIR, "_pyrepl", "__main__.py")
+        self.assertTrue(os.path.exists(pyrepl_main_file), pyrepl_main_file)
+        with open(pyrepl_main_file) as fp:
+            excluded_lines = fp.readlines()
+        excluded_lines = list(filter(None, map(str.strip, excluded_lines)))
+
+        for filename in ['?', 'unknown-filename', '<foo>', '<...>']:
+            self._test_no_pyrepl_source_in_exc(filename, excluded_lines)
+
+    def _test_no_pyrepl_source_in_exc(self, filename, excluded_lines):
+        with EnvironmentVarGuard() as env, self.subTest(filename=filename):
+            env.unset("PYTHON_BASIC_REPL")
+            commands = (f"eval(compile('spam', {filename!r}, 'eval'))\n"
+                        f"exit()\n")
+            output, _ = self.run_repl(commands, env=env)
+            self.assertIn("Traceback (most recent call last)", output)
+            self.assertIn("NameError: name 'spam' is not defined", output)
+            for line in excluded_lines:
+                with self.subTest(line=line):
+                    self.assertNotIn(line, output)
+
+    @force_not_colorized
     def test_bad_sys_excepthook_doesnt_crash_pyrepl(self):
         env = os.environ.copy()
         commands = ("import sys\n"
@@ -1231,9 +1264,7 @@ class TestMain(ReplTestCase):
             self.assertIn("division by zero", output)
             self.assertEqual(exitcode, 0)
         env.pop("PYTHON_BASIC_REPL", None)
-        output, exit_code = self.run_repl(commands, env=env)
-        if "can\'t use pyrepl" in output:
-            self.skipTest("pyrepl not available")
+        output, exit_code = self.run_repl(commands, env=env, skip=True)
         check(output, exit_code)
 
         env["PYTHON_BASIC_REPL"] = "1"
@@ -1271,9 +1302,7 @@ class TestMain(ReplTestCase):
     def test_correct_filename_in_syntaxerrors(self):
         env = os.environ.copy()
         commands = "a b c\nexit()\n"
-        output, exit_code = self.run_repl(commands, env=env)
-        if "can't use pyrepl" in output:
-            self.skipTest("pyrepl not available")
+        output, exit_code = self.run_repl(commands, env=env, skip=True)
         self.assertIn("SyntaxError: invalid syntax", output)
         self.assertIn("<python-input-0>", output)
         commands = " b\nexit()\n"
@@ -1300,9 +1329,7 @@ class TestMain(ReplTestCase):
                     env.pop("PYTHON_BASIC_REPL", None)
                 with self.subTest(set_tracebacklimit=set_tracebacklimit,
                                   basic_repl=basic_repl):
-                    output, exit_code = self.run_repl(commands, env=env)
-                    if "can't use pyrepl" in output:
-                        self.skipTest("pyrepl not available")
+                    output, exit_code = self.run_repl(commands, env=env, skip=True)
                     self.assertIn("in x1", output)
                     if set_tracebacklimit:
                         self.assertNotIn("in x2", output)
@@ -1317,6 +1344,17 @@ class TestMain(ReplTestCase):
         output, exit_code = self.run_repl("\x00\nexit()\n")
         self.assertEqual(exit_code, 0)
         self.assertNotIn("TypeError", output)
+
+    @force_not_colorized
+    def test_non_string_suggestion_candidates(self):
+        commands = ("import runpy\n"
+                    "runpy._run_module_code('blech', {0: '', 'bluch': ''}, '')\n"
+                    "exit()\n")
+
+        output, exit_code = self.run_repl(commands)
+        self.assertEqual(exit_code, 0)
+        self.assertNotIn("all elements in 'candidates' must be strings", output)
+        self.assertIn("bluch", output)
 
     def test_readline_history_file(self):
         # skip, if readline module is not available
@@ -1356,3 +1394,100 @@ class TestMain(ReplTestCase):
         # Extra stuff (newline and `exit` rewrites) are necessary
         # because of how run_repl works.
         self.assertNotIn(">>> \n>>> >>>", cleaned_output)
+
+    @skipUnless(Py_DEBUG, '-X showrefcount requires a Python debug build')
+    def test_showrefcount(self):
+        env = os.environ.copy()
+        env.pop("PYTHON_BASIC_REPL", "")
+        output, _ = self.run_repl("1\n1+2\nexit()\n", cmdline_args=['-Xshowrefcount'], env=env)
+        matches = re.findall(r'\[-?\d+ refs, \d+ blocks\]', output)
+        self.assertEqual(len(matches), 3)
+
+        env["PYTHON_BASIC_REPL"] = "1"
+        output, _ = self.run_repl("1\n1+2\nexit()\n", cmdline_args=['-Xshowrefcount'], env=env)
+        matches = re.findall(r'\[-?\d+ refs, \d+ blocks\]', output)
+        self.assertEqual(len(matches), 3)
+
+
+class TestPyReplCtrlD(TestCase):
+    """Test Ctrl+D behavior in _pyrepl to match old pre-3.13 REPL behavior.
+
+    Ctrl+D should:
+    - Exit on empty buffer (raises EOFError)
+    - Delete character when cursor is in middle of line
+    - Perform no operation when cursor is at end of line without newline
+    - Exit multiline mode when cursor is at end with trailing newline
+    - Run code up to that point when pressed on blank line with preceding lines
+    """
+    def prepare_reader(self, events):
+        console = FakeConsole(events)
+        config = ReadlineConfig(readline_completer=None)
+        reader = ReadlineAlikeReader(console=console, config=config)
+        return reader
+
+    def test_ctrl_d_empty_line(self):
+        """Test that pressing Ctrl+D on empty line exits the program"""
+        events = [
+            Event(evt="key", data="\x04", raw=bytearray(b"\x04")),  # Ctrl+D
+        ]
+        reader = self.prepare_reader(events)
+        with self.assertRaises(EOFError):
+            multiline_input(reader)
+
+    def test_ctrl_d_multiline_with_new_line(self):
+        """Test that pressing Ctrl+D in multiline mode with trailing newline exits multiline mode"""
+        events = itertools.chain(
+            code_to_events("def f():\n    pass\n"),  # Enter multiline mode with trailing newline
+            [
+                Event(evt="key", data="\x04", raw=bytearray(b"\x04")),  # Ctrl+D
+            ],
+        )
+        reader, _ = handle_all_events(events)
+        self.assertTrue(reader.finished)
+        self.assertEqual("def f():\n    pass\n", "".join(reader.buffer))
+
+    def test_ctrl_d_multiline_middle_of_line(self):
+        """Test that pressing Ctrl+D in multiline mode with cursor in middle deletes character"""
+        events = itertools.chain(
+            code_to_events("def f():\n    hello world"),  # Enter multiline mode
+            [
+                Event(evt="key", data="left", raw=bytearray(b"\x1bOD"))
+            ] * 5,  # move cursor to 'w' in "world"
+            [
+                Event(evt="key", data="\x04", raw=bytearray(b"\x04"))
+            ], # Ctrl+D should delete 'w'
+        )
+        reader, _ = handle_all_events(events)
+        self.assertFalse(reader.finished)
+        self.assertEqual("def f():\n    hello orld", "".join(reader.buffer))
+
+    def test_ctrl_d_multiline_end_of_line_no_newline(self):
+        """Test that pressing Ctrl+D at end of line without newline performs no operation"""
+        events = itertools.chain(
+            code_to_events("def f():\n    hello"),  # Enter multiline mode, no trailing newline
+            [
+                Event(evt="key", data="\x04", raw=bytearray(b"\x04"))
+            ],  # Ctrl+D should be no-op
+        )
+        reader, _ = handle_all_events(events)
+        self.assertFalse(reader.finished)
+        self.assertEqual("def f():\n    hello", "".join(reader.buffer))
+
+    def test_ctrl_d_single_line_middle_of_line(self):
+        """Test that pressing Ctrl+D in single line mode deletes current character"""
+        events = itertools.chain(
+            code_to_events("hello"),
+            [Event(evt="key", data="left", raw=bytearray(b"\x1bOD"))],  # move left
+            [Event(evt="key", data="\x04", raw=bytearray(b"\x04"))],    # Ctrl+D
+        )
+        reader, _ = handle_all_events(events)
+        self.assertEqual("hell", "".join(reader.buffer))
+
+    def test_ctrl_d_single_line_end_no_newline(self):
+        """Test that pressing Ctrl+D at end of single line without newline does nothing"""
+        events = itertools.chain(
+            code_to_events("hello"),  # cursor at end of line
+            [Event(evt="key", data="\x04", raw=bytearray(b"\x04"))],  # Ctrl+D
+        )
+        reader, _ = handle_all_events(events)
+        self.assertEqual("hello", "".join(reader.buffer))

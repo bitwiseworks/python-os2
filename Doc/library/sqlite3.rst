@@ -290,9 +290,6 @@ Module functions
        :const:`PARSE_DECLTYPES` and :const:`PARSE_COLNAMES`
        to enable this.
        Column names takes precedence over declared types if both flags are set.
-       Types cannot be detected for generated fields (for example ``max(data)``),
-       even when the *detect_types* parameter is set; :class:`str` will be
-       returned instead.
        By default (``0``), type detection is disabled.
 
    :param isolation_level:
@@ -436,21 +433,6 @@ Module constants
    old style (pre-Python 3.12) transaction control behaviour.
    See :ref:`sqlite3-transaction-control-isolation-level` for more information.
 
-.. data:: PARSE_COLNAMES
-
-   Pass this flag value to the *detect_types* parameter of
-   :func:`connect` to look up a converter function by
-   using the type name, parsed from the query column name,
-   as the converter dictionary key.
-   The type name must be wrapped in square brackets (``[]``).
-
-   .. code-block:: sql
-
-      SELECT p as "p [point]" FROM test;  ! will look up converter "point"
-
-   This flag may be combined with :const:`PARSE_DECLTYPES` using the ``|``
-   (bitwise or) operator.
-
 .. data:: PARSE_DECLTYPES
 
    Pass this flag value to the *detect_types* parameter of
@@ -470,6 +452,27 @@ Module constants
        )
 
    This flag may be combined with :const:`PARSE_COLNAMES` using the ``|``
+   (bitwise or) operator.
+
+   .. note::
+
+      Generated fields (for example ``MAX(p)``) are returned as :class:`str`.
+      Use :const:`!PARSE_COLNAMES` to enforce types for such queries.
+
+.. data:: PARSE_COLNAMES
+
+   Pass this flag value to the *detect_types* parameter of
+   :func:`connect` to look up a converter function by
+   using the type name, parsed from the query column name,
+   as the converter dictionary key.
+   The query column name must be wrapped in double quotes (``"``)
+   and the type name must be wrapped in square brackets (``[]``).
+
+   .. code-block:: sql
+
+      SELECT MAX(p) as "p [point]" FROM test;  ! will look up converter "point"
+
+   This flag may be combined with :const:`PARSE_DECLTYPES` using the ``|``
    (bitwise or) operator.
 
 .. data:: SQLITE_OK
@@ -629,7 +632,7 @@ Connection objects
       supplied, this must be a :term:`callable` returning
       an instance of :class:`Cursor` or its subclasses.
 
-   .. method:: blobopen(table, column, row, /, *, readonly=False, name="main")
+   .. method:: blobopen(table, column, rowid, /, *, readonly=False, name="main")
 
       Open a :class:`Blob` handle to an existing
       :abbr:`BLOB (Binary Large OBject)`.
@@ -640,8 +643,8 @@ Connection objects
       :param str column:
           The name of the column where the blob is located.
 
-      :param str row:
-          The name of the row where the blob is located.
+      :param int rowid:
+          The row id where the blob is located.
 
       :param bool readonly:
           Set to ``True`` if the blob should be opened without write
@@ -1627,6 +1630,9 @@ Cursor objects
       If the *size* parameter is used, then it is best for it to retain the same
       value from one :meth:`fetchmany` call to the next.
 
+      .. versionchanged:: 3.13.8
+         Negative *size* values are rejected by raising :exc:`ValueError`.
+
    .. method:: fetchall()
 
       Return all (remaining) rows of a query result as a :class:`list`.
@@ -1653,6 +1659,9 @@ Cursor objects
 
       Read/write attribute that controls the number of rows returned by :meth:`fetchmany`.
       The default value is 1 which means a single row would be fetched per call.
+
+      .. versionchanged:: 3.13.8
+         Negative values are rejected by raising :exc:`ValueError`.
 
    .. attribute:: connection
 
@@ -2304,7 +2313,7 @@ This section shows recipes for common adapters and converters.
 
    def adapt_datetime_iso(val):
        """Adapt datetime.datetime to timezone-naive ISO 8601 date."""
-       return val.isoformat()
+       return val.replace(tzinfo=None).isoformat()
 
    def adapt_datetime_epoch(val):
        """Adapt datetime.datetime to Unix timestamp."""

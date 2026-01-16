@@ -75,10 +75,17 @@ The debugger's prompt is ``(Pdb)``, which is the indicator that you are in debug
    arguments of the ``p`` command.
 
 
+.. _pdb-cli:
+
+Command-line interface
+----------------------
+
+.. program:: pdb
+
 You can also invoke :mod:`pdb` from the command line to debug other scripts.  For
 example::
 
-   python -m pdb myscript.py
+   python -m pdb [-c command] (-m module | pyfile) [args ...]
 
 When invoked as a module, pdb will automatically enter post-mortem debugging if
 the program being debugged exits abnormally.  After post-mortem debugging (or
@@ -86,14 +93,21 @@ after normal exit of the program), pdb will restart the program.  Automatic
 restarting preserves pdb's state (such as breakpoints) and in most cases is more
 useful than quitting the debugger upon program's exit.
 
-.. versionchanged:: 3.2
-   Added the ``-c`` option to execute commands as if given
-   in a :file:`.pdbrc` file; see :ref:`debugger-commands`.
+.. option:: -c, --command <command>
 
-.. versionchanged:: 3.7
-   Added the ``-m`` option to execute modules similar to the way
-   ``python -m`` does. As with a script, the debugger will pause execution just
-   before the first line of the module.
+   To execute commands as if given in a :file:`.pdbrc` file; see
+   :ref:`debugger-commands`.
+
+   .. versionchanged:: 3.2
+      Added the ``-c`` option.
+
+.. option:: -m <module>
+
+   To execute modules similar to the way ``python -m`` does. As with a script,
+   the debugger will pause execution just before the first line of the module.
+
+   .. versionchanged:: 3.7
+      Added the ``-m`` option.
 
 Typical usage to execute a statement under control of the debugger is::
 
@@ -239,7 +253,7 @@ access further features, you have to do this yourself:
 
 .. _debugger-commands:
 
-Debugger Commands
+Debugger commands
 -----------------
 
 The commands recognized by the debugger are listed below.  Most commands can be
@@ -686,7 +700,7 @@ can be overridden by the local file.
    When using ``pdb.pm()``  or ``Pdb.post_mortem(...)`` with a chained exception
    instead of a traceback, it allows the user to move between the
    chained exceptions using ``exceptions`` command to list exceptions, and
-   ``exception <number>`` to switch to that exception.
+   ``exceptions <number>`` to switch to that exception.
 
 
    Example::

@@ -21,7 +21,9 @@ Glossary
         right delimiters (parentheses, square brackets, curly braces or triple
         quotes), or after specifying a decorator.
 
-      * The :const:`Ellipsis` built-in constant.
+      .. index:: single: ...; ellipsis literal
+
+      * The three dots form of the :ref:`Ellipsis <bltin-ellipsis-object>` object.
 
    abstract base class
       Abstract base classes complement :term:`duck-typing` by
@@ -102,7 +104,7 @@ Glossary
       statements.
 
    asynchronous generator iterator
-      An object created by a :term:`asynchronous generator` function.
+      An object created by an :term:`asynchronous generator` function.
 
       This is an :term:`asynchronous iterator` which when called using the
       :meth:`~object.__anext__` method returns an awaitable object which will execute
@@ -401,6 +403,11 @@ Glossary
       :func:`isinstance`.  (Note, however, that duck-typing can be complemented
       with :term:`abstract base classes <abstract base class>`.)  Instead, it
       typically employs :func:`hasattr` tests or :term:`EAFP` programming.
+
+   dunder
+      An informal short-hand for "double underscore", used when talking about a
+      :term:`special method`. For example, ``__init__`` is often pronounced
+      "dunder init".
 
    EAFP
       Easier to ask for forgiveness than permission.  This common Python coding
@@ -706,7 +713,7 @@ Glossary
       iterables include all sequence types (such as :class:`list`, :class:`str`,
       and :class:`tuple`) and some non-sequence types like :class:`dict`,
       :term:`file objects <file object>`, and objects of any classes you define
-      with an :meth:`~iterator.__iter__` method or with a
+      with an :meth:`~object.__iter__` method or with a
       :meth:`~object.__getitem__` method
       that implements :term:`sequence` semantics.
 
@@ -786,6 +793,10 @@ Glossary
       code, ``if key in mapping: return mapping[key]`` can fail if another
       thread removes *key* from *mapping* after the test, but before the lookup.
       This issue can be solved with locks or by using the EAFP approach.
+
+   lexical analyzer
+
+      Formal name for the *tokenizer*; see :term:`token`.
 
    list
       A built-in Python :term:`sequence`.  Despite its name it is more akin
@@ -926,10 +937,15 @@ Glossary
       modules, respectively.
 
    namespace package
-      A :pep:`420` :term:`package` which serves only as a container for
-      subpackages.  Namespace packages may have no physical representation,
+      A :term:`package` which serves only as a container for subpackages.
+      Namespace packages may have no physical representation,
       and specifically are not like a :term:`regular package` because they
       have no ``__init__.py`` file.
+
+      Namespace packages allow several individually installable packages to have a common parent package.
+      Otherwise, it is recommended to use a :term:`regular package`.
+
+      For more information, see :pep:`420` and :ref:`reference-namespace-package`.
 
       See also :term:`module`.
 
@@ -1154,6 +1170,11 @@ Glossary
       :func:`sys.getrefcount` function to return the
       reference count for a particular object.
 
+      In :term:`CPython`, reference counts are not considered to be stable
+      or well-defined values; the number of references to an object, and how
+      that number is affected by Python code, may be different between
+      versions.
+
    regular package
       A traditional :term:`package`, such as a directory containing an
       ``__init__.py`` file.
@@ -1184,8 +1205,9 @@ Glossary
       The :class:`collections.abc.Sequence` abstract base class
       defines a much richer interface that goes beyond just
       :meth:`~object.__getitem__` and :meth:`~object.__len__`, adding
-      :meth:`!count`, :meth:`!index`, :meth:`~object.__contains__`, and
-      :meth:`~object.__reversed__`. Types that implement this expanded
+      :meth:`~sequence.count`, :meth:`~sequence.index`,
+      :meth:`~object.__contains__`, and :meth:`~object.__reversed__`.
+      Types that implement this expanded
       interface can be registered explicitly using
       :func:`~abc.ABCMeta.register`. For more documentation on sequence
       methods generally, see
@@ -1226,6 +1248,16 @@ Glossary
       and ending with double underscores.  Special methods are documented in
       :ref:`specialnames`.
 
+   standard library
+      The collection of :term:`packages <package>`, :term:`modules <module>`
+      and :term:`extension modules <extension module>` distributed as a part
+      of the official Python interpreter package.  The exact membership of the
+      collection may vary based on platform, available system libraries, or
+      other criteria.  Documentation can be found at :ref:`library-index`.
+
+      See also :data:`sys.stdlib_module_names` for a list of all possible
+      standard library module names.
+
    statement
       A statement is part of a suite (a "block" of code).  A statement is either
       an :term:`expression` or one of several constructs with a keyword, such
@@ -1235,6 +1267,9 @@ Glossary
       An external tool that reads Python code and analyzes it, looking for
       issues such as incorrect types. See also :term:`type hints <type hint>`
       and the :mod:`typing` module.
+
+   stdlib
+      An abbreviation of :term:`standard library`.
 
    strong reference
       In Python's C API, a strong reference is a reference to an object
@@ -1272,6 +1307,17 @@ Glossary
 
       See also :term:`binary file` for a file object able to read and write
       :term:`bytes-like objects <bytes-like object>`.
+
+   token
+
+      A small unit of source code, generated by the
+      :ref:`lexical analyzer <lexical>` (also called the *tokenizer*).
+      Names, numbers, strings, operators,
+      newlines and similar are represented by tokens.
+
+      The :mod:`tokenize` module exposes Python's lexical analyzer.
+      The :mod:`token` module contains information on the various types
+      of tokens.
 
    triple-quoted string
       A string which is bound by three instances of either a quotation mark
@@ -1360,6 +1406,11 @@ Glossary
    virtual machine
       A computer defined entirely in software.  Python's virtual machine
       executes the :term:`bytecode` emitted by the bytecode compiler.
+
+   walrus operator
+      A light-hearted way to refer to the :ref:`assignment expression
+      <assignment-expressions>` operator ``:=`` because it looks a bit like a
+      walrus if you turn your head.
 
    Zen of Python
       Listing of Python design principles and philosophies that are helpful in
