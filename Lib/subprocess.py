@@ -1879,7 +1879,7 @@ class Popen:
 
                 if close_fds:
                   mode |= os.P_2_NOINHERIT
-                if threadsafe:
+                if threadsafe or cwd is not None:
                   mode |= os.P_2_THREADSAFE
                 stdfds = [ p2cread, c2pwrite, errwrite ]
 
