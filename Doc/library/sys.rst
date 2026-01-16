@@ -764,8 +764,8 @@ always available. Unless explicitly noted otherwise, all variables are read-only
 
 .. function:: getdefaultencoding()
 
-   Return the name of the current default string encoding used by the Unicode
-   implementation.
+   Return ``'utf-8'``. This is the name of the default string encoding, used
+   in methods like :meth:`str.encode`.
 
 
 .. function:: getdlopenflags()
@@ -883,7 +883,7 @@ always available. Unless explicitly noted otherwise, all variables are read-only
 
 .. function:: getswitchinterval()
 
-   Return the interpreter's "thread switch interval"; see
+   Return the interpreter's "thread switch interval" in seconds; see
    :func:`setswitchinterval`.
 
    .. versionadded:: 3.2
@@ -918,6 +918,8 @@ always available. Unless explicitly noted otherwise, all variables are read-only
 
       This function should be used for internal and specialized purposes only.
       It is not guaranteed to exist in all implementations of Python.
+
+   .. versionadded:: 3.12
 
 
 .. function:: getobjects(limit[, type])
@@ -1094,10 +1096,14 @@ always available. Unless explicitly noted otherwise, all variables are read-only
 
       The size of the seed key of the hash algorithm
 
+   .. attribute:: hash_info.cutoff
+
+      Cutoff for small string DJBX33A optimization in range ``[1, cutoff)``.
+
    .. versionadded:: 3.2
 
    .. versionchanged:: 3.4
-      Added *algorithm*, *hash_bits* and *seed_bits*
+      Added *algorithm*, *hash_bits*, *seed_bits*, and *cutoff*.
 
 
 .. data:: hexversion
@@ -1235,6 +1241,9 @@ always available. Unless explicitly noted otherwise, all variables are read-only
 
    .. versionadded:: 3.13
 
+   .. impl-detail::
+
+      It is not guaranteed to exist in all implementations of Python.
 
 .. function:: is_finalizing()
 
@@ -1621,7 +1630,7 @@ always available. Unless explicitly noted otherwise, all variables are read-only
    :func:`settrace` for each thread being debugged or use :func:`threading.settrace`.
 
    Trace functions should have three arguments: *frame*, *event*, and
-   *arg*. *frame* is the current stack frame.  *event* is a string: ``'call'``,
+   *arg*. *frame* is the :ref:`current stack frame <frame-objects>`. *event* is a string: ``'call'``,
    ``'line'``, ``'return'``, ``'exception'`` or ``'opcode'``.  *arg* depends on
    the event type.
 

@@ -351,6 +351,13 @@ class TestSysConfig(unittest.TestCase):
 
             self.assertEqual(get_platform(), 'macosx-10.4-%s' % arch)
 
+        for macver in range(11, 16):
+            _osx_support._remove_original_values(get_config_vars())
+            get_config_vars()['CFLAGS'] = ('-fno-strict-overflow -Wsign-compare -Wunreachable-code'
+                                        '-arch arm64 -fno-common -dynamic -DNDEBUG -g -O3 -Wall')
+            get_config_vars()['MACOSX_DEPLOYMENT_TARGET'] = f"{macver}.0"
+            self.assertEqual(get_platform(), 'macosx-%d.0-arm64' % macver)
+
         # linux debian sarge
         os.name = 'posix'
         sys.version = ('2.3.5 (#1, Jul  4 2007, 17:28:59) '
@@ -687,6 +694,27 @@ class MakefileTests(unittest.TestCase):
             'var5': 'dollar$5',
             'var6': '42/lib/python3.5/config-b42dollar$5-x86_64-linux-gnu',
         })
+
+
+class DeprecationTests(unittest.TestCase):
+    def deprecated(self, removal_version, deprecation_msg=None, error=Exception, error_msg=None):
+        if sys.version_info >= removal_version:
+            return self.assertRaises(error, msg=error_msg)
+        else:
+            return self.assertWarns(DeprecationWarning, msg=deprecation_msg)
+
+    def test_is_python_build_check_home(self):
+        with self.deprecated(
+            removal_version=(3, 15),
+            deprecation_msg=(
+                'The check_home argument of sysconfig.is_python_build is '
+                'deprecated and its value is ignored. '
+                'It will be removed in Python 3.15.'
+            ),
+            error=TypeError,
+            error_msg="is_python_build() takes 0 positional arguments but 1 were given",
+        ):
+            sysconfig.is_python_build('foo')
 
 
 if __name__ == "__main__":

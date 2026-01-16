@@ -30,7 +30,7 @@ __all__ = ["normcase","isabs","join","splitdrive","splitroot","split","splitext"
            "abspath","curdir","pardir","sep","pathsep","defpath","altsep",
            "extsep","devnull","realpath","supports_unicode_filenames","relpath",
            "samefile", "sameopenfile", "samestat", "commonpath", "isjunction",
-           "isdevdrive"]
+           "isdevdrive", "ALLOW_MISSING"]
 
 def _get_bothseps(path):
     if isinstance(path, bytes):
@@ -410,17 +410,23 @@ def expanduser(path):
 # XXX With COMMAND.COM you can use any characters in a variable name,
 # XXX except '^|<>='.
 
+_varpattern = r"'[^']*'?|%(%|[^%]*%?)|\$(\$|[-\w]+|\{[^}]*\}?)"
+_varsub = None
+_varsubb = None
+
 def expandvars(path):
     """Expand shell variables of the forms $var, ${var} and %var%.
 
     Unknown variables are left unchanged."""
     path = os.fspath(path)
+    global _varsub, _varsubb
     if isinstance(path, bytes):
         if b'$' not in path and b'%' not in path:
             return path
-        import string
-        varchars = bytes(string.ascii_letters + string.digits + '_-', 'ascii')
-        quote = b'\''
+        if not _varsubb:
+            import re
+            _varsubb = re.compile(_varpattern.encode(), re.ASCII).sub
+        sub = _varsubb
         percent = b'%'
         brace = b'{'
         rbrace = b'}'
@@ -429,94 +435,44 @@ def expandvars(path):
     else:
         if '$' not in path and '%' not in path:
             return path
-        import string
-        varchars = string.ascii_letters + string.digits + '_-'
-        quote = '\''
+        if not _varsub:
+            import re
+            _varsub = re.compile(_varpattern, re.ASCII).sub
+        sub = _varsub
         percent = '%'
         brace = '{'
         rbrace = '}'
         dollar = '$'
         environ = os.environ
-    res = path[:0]
-    index = 0
-    pathlen = len(path)
-    while index < pathlen:
-        c = path[index:index+1]
-        if c == quote:   # no expansion within single quotes
-            path = path[index + 1:]
-            pathlen = len(path)
-            try:
-                index = path.index(c)
-                res += c + path[:index + 1]
-            except ValueError:
-                res += c + path
-                index = pathlen - 1
-        elif c == percent:  # variable or '%'
-            if path[index + 1:index + 2] == percent:
-                res += c
-                index += 1
-            else:
-                path = path[index+1:]
-                pathlen = len(path)
-                try:
-                    index = path.index(percent)
-                except ValueError:
-                    res += percent + path
-                    index = pathlen - 1
-                else:
-                    var = path[:index]
-                    try:
-                        if environ is None:
-                            value = os.fsencode(os.environ[os.fsdecode(var)])
-                        else:
-                            value = environ[var]
-                    except KeyError:
-                        value = percent + var + percent
-                    res += value
-        elif c == dollar:  # variable or '$$'
-            if path[index + 1:index + 2] == dollar:
-                res += c
-                index += 1
-            elif path[index + 1:index + 2] == brace:
-                path = path[index+2:]
-                pathlen = len(path)
-                try:
-                    index = path.index(rbrace)
-                except ValueError:
-                    res += dollar + brace + path
-                    index = pathlen - 1
-                else:
-                    var = path[:index]
-                    try:
-                        if environ is None:
-                            value = os.fsencode(os.environ[os.fsdecode(var)])
-                        else:
-                            value = environ[var]
-                    except KeyError:
-                        value = dollar + brace + var + rbrace
-                    res += value
-            else:
-                var = path[:0]
-                index += 1
-                c = path[index:index + 1]
-                while c and c in varchars:
-                    var += c
-                    index += 1
-                    c = path[index:index + 1]
-                try:
-                    if environ is None:
-                        value = os.fsencode(os.environ[os.fsdecode(var)])
-                    else:
-                        value = environ[var]
-                except KeyError:
-                    value = dollar + var
-                res += value
-                if c:
-                    index -= 1
+
+    def repl(m):
+        lastindex = m.lastindex
+        if lastindex is None:
+            return m[0]
+        name = m[lastindex]
+        if lastindex == 1:
+            if name == percent:
+                return name
+            if not name.endswith(percent):
+                return m[0]
+            name = name[:-1]
         else:
-            res += c
-        index += 1
-    return res
+            if name == dollar:
+                return name
+            if name.startswith(brace):
+                if not name.endswith(rbrace):
+                    return m[0]
+                name = name[1:-1]
+
+        try:
+            if environ is None:
+                return os.fsencode(os.environ[os.fsdecode(name)])
+            else:
+                return environ[name]
+        except KeyError:
+            return m[0]
+
+    return sub(repl, path)
 
 
 # Normalize a path, e.g. A//B, A/./B and A/foo/../B all become A\B.
@@ -611,9 +567,10 @@ try:
     from nt import _findfirstfile, _getfinalpathname, readlink as _nt_readlink
 except ImportError:
     # realpath is a no-op on systems without _getfinalpathname support.
-    realpath = abspath
+    def realpath(path, *, strict=False):
+        return abspath(path)
 else:
-    def _readlink_deep(path):
+    def _readlink_deep(path, ignored_error=OSError):
         # These error codes indicate that we should stop reading links and
         # return the path we currently have.
         # 1: ERROR_INVALID_FUNCTION
@@ -646,7 +603,7 @@ else:
                         path = old_path
                         break
                     path = normpath(join(dirname(old_path), path))
-            except OSError as ex:
+            except ignored_error as ex:
                 if ex.winerror in allowed_winerror:
                     break
                 raise
@@ -655,7 +612,7 @@ else:
                 break
         return path
 
-    def _getfinalpathname_nonstrict(path):
+    def _getfinalpathname_nonstrict(path, ignored_error=OSError):
         # These error codes indicate that we should stop resolving the path
         # and return the value we currently have.
         # 1: ERROR_INVALID_FUNCTION
@@ -671,9 +628,10 @@ else:
         # 87: ERROR_INVALID_PARAMETER
         # 123: ERROR_INVALID_NAME
         # 161: ERROR_BAD_PATHNAME
+        # 1005: ERROR_UNRECOGNIZED_VOLUME
         # 1920: ERROR_CANT_ACCESS_FILE
         # 1921: ERROR_CANT_RESOLVE_FILENAME (implies unfollowable symlink)
-        allowed_winerror = 1, 2, 3, 5, 21, 32, 50, 53, 65, 67, 87, 123, 161, 1920, 1921
+        allowed_winerror = 1, 2, 3, 5, 21, 32, 50, 53, 65, 67, 87, 123, 161, 1005, 1920, 1921
 
         # Non-strict algorithm is to find as much of the target directory
         # as we can and join the rest.
@@ -682,17 +640,18 @@ else:
             try:
                 path = _getfinalpathname(path)
                 return join(path, tail) if tail else path
-            except OSError as ex:
+            except ignored_error as ex:
                 if ex.winerror not in allowed_winerror:
                     raise
                 try:
                     # The OS could not resolve this path fully, so we attempt
                     # to follow the link ourselves. If we succeed, join the tail
                     # and return.
-                    new_path = _readlink_deep(path)
+                    new_path = _readlink_deep(path,
+                                              ignored_error=ignored_error)
                     if new_path != path:
                         return join(new_path, tail) if tail else new_path
-                except OSError:
+                except ignored_error:
                     # If we fail to readlink(), let's keep traversing
                     pass
                 # If we get these errors, try to get the real name of the file without accessing it.
@@ -700,7 +659,7 @@ else:
                     try:
                         name = _findfirstfile(path)
                         path, _ = split(path)
-                    except OSError:
+                    except ignored_error:
                         path, name = split(path)
                 else:
                     path, name = split(path)
@@ -730,6 +689,15 @@ else:
             if normcase(path) == devnull:
                 return '\\\\.\\NUL'
         had_prefix = path.startswith(prefix)
+
+        if strict is ALLOW_MISSING:
+            ignored_error = FileNotFoundError
+            strict = True
+        elif strict:
+            ignored_error = ()
+        else:
+            ignored_error = OSError
+
         if not had_prefix and not isabs(path):
             path = join(cwd, path)
         try:
@@ -737,17 +705,16 @@ else:
             initial_winerror = 0
         except ValueError as ex:
             # gh-106242: Raised for embedded null characters
-            # In strict mode, we convert into an OSError.
+            # In strict modes, we convert into an OSError.
             # Non-strict mode returns the path as-is, since we've already
             # made it absolute.
             if strict:
                 raise OSError(str(ex)) from None
             path = normpath(path)
-        except OSError as ex:
-            if strict:
-                raise
+        except ignored_error as ex:
             initial_winerror = ex.winerror
-            path = _getfinalpathname_nonstrict(path)
+            path = _getfinalpathname_nonstrict(path,
+                                               ignored_error=ignored_error)
         # The path returned by _getfinalpathname will always start with \\?\ -
         # strip off that prefix unless it was already provided on the original
         # path.

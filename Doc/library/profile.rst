@@ -123,23 +123,32 @@ them in various ways.
 
 .. _profile-cli:
 
+.. program:: cProfile
+
 The files :mod:`cProfile` and :mod:`profile` can also be invoked as a script to
 profile another script.  For example::
 
    python -m cProfile [-o output_file] [-s sort_order] (-m module | myscript.py)
 
-``-o`` writes the profile results to a file instead of to stdout
+.. option:: -o <output_file>
 
-``-s`` specifies one of the :func:`~pstats.Stats.sort_stats` sort values to sort
-the output by. This only applies when ``-o`` is not supplied.
+   Writes the profile results to a file instead of to stdout.
 
-``-m`` specifies that a module is being profiled instead of a script.
+.. option:: -s <sort_order>
 
-.. versionadded:: 3.7
-   Added the ``-m`` option to :mod:`cProfile`.
+   Specifies one of the :func:`~pstats.Stats.sort_stats` sort values
+   to sort the output by.
+   This only applies when :option:`-o <cProfile -o>` is not supplied.
 
-.. versionadded:: 3.8
-   Added the ``-m`` option to :mod:`profile`.
+.. option:: -m <module>
+
+   Specifies that a module is being profiled instead of a script.
+
+   .. versionadded:: 3.7
+      Added the ``-m`` option to :mod:`cProfile`.
+
+   .. versionadded:: 3.8
+      Added the ``-m`` option to :mod:`profile`.
 
 The :mod:`pstats` module's :class:`~pstats.Stats` class has a variety of methods
 for manipulating and printing the data saved into a profile results file::
@@ -490,7 +499,7 @@ Analysis of the profiler data is done using the :class:`~pstats.Stats` class.
       significant entries.  Initially, the list is taken to be the complete set
       of profiled functions.  Each restriction is either an integer (to select a
       count of lines), or a decimal fraction between 0.0 and 1.0 inclusive (to
-      select a percentage of lines), or a string that will interpreted as a
+      select a percentage of lines), or a string that will be interpreted as a
       regular expression (to pattern match the standard name that is printed).
       If several restrictions are provided, then they are applied sequentially.
       For example::

@@ -43,8 +43,10 @@ getstatusoutput(...): Runs a command in the shell, waits for it to complete,
 import builtins
 import errno
 import io
+import locale
 import os
 import time
+import signal
 import sys
 import threading
 import warnings
@@ -148,8 +150,6 @@ class CalledProcessError(SubprocessError):
 
     def __str__(self):
         if self.returncode and self.returncode < 0:
-            # Lazy import to improve module import time
-            import signal
             try:
                 return "Command '%s' died with %r." % (
                         self.cmd, signal.Signals(-self.returncode))
@@ -387,8 +387,6 @@ def _text_encoding():
     if sys.flags.utf8_mode:
         return "utf-8"
     else:
-        # Lazy import to improve module import time
-        import locale
         return locale.getencoding()
 
 
@@ -722,6 +720,9 @@ def _use_posix_spawn():
     if _mswindows or not hasattr(os, 'posix_spawn'):
         # os.posix_spawn() is not available
         return False
+
+    if ((_env := os.environ.get('_PYTHON_SUBPROCESS_USE_POSIX_SPAWN')) in ('0', '1')):
+        return bool(int(_env))
 
     if sys.platform in ('darwin', 'sunos5'):
         # posix_spawn() is a syscall on both macOS and Solaris,
@@ -1249,8 +1250,11 @@ class Popen:
 
             finally:
                 self._communication_started = True
-
-            sts = self.wait(timeout=self._remaining_time(endtime))
+            try:
+                sts = self.wait(timeout=self._remaining_time(endtime))
+            except TimeoutExpired as exc:
+                exc.timeout = timeout
+                raise
 
         return (stdout, stderr)
 
@@ -1625,6 +1629,10 @@ class Popen:
             fh.close()
 
 
+        def _writerthread(self, input):
+            self._stdin_write(input)
+
+
         def _communicate(self, input, endtime, orig_timeout):
             # Start reader threads feeding into a list hanging off of this
             # object, unless they've already been started.
@@ -1643,8 +1651,23 @@ class Popen:
                 self.stderr_thread.daemon = True
                 self.stderr_thread.start()
 
-            if self.stdin:
-                self._stdin_write(input)
+            # Start writer thread to send input to stdin, unless already
+            # started.  The thread writes input and closes stdin when done,
+            # or continues in the background on timeout.
+            if self.stdin and not hasattr(self, "_stdin_thread"):
+                self._stdin_thread = \
+                        threading.Thread(target=self._writerthread,
+                                         args=(input,))
+                self._stdin_thread.daemon = True
+                self._stdin_thread.start()
+
+            # Wait for the writer thread, or time out.  If we time out, the
+            # thread remains writing and the fd left open in case the user
+            # calls communicate again.
+            if hasattr(self, "_stdin_thread"):
+                self._stdin_thread.join(self._remaining_time(endtime))
+                if self._stdin_thread.is_alive():
+                    raise TimeoutExpired(self.args, orig_timeout)
 
             # Wait for the reader threads, or time out.  If we time out, the
             # threads remain reading and the fds left open in case the user
@@ -1680,9 +1703,6 @@ class Popen:
             # Don't signal a process that we know has already died.
             if self.returncode is not None:
                 return
-
-            # Lazy import to improve module import time
-            import signal
             if sig == signal.SIGTERM:
                 self.terminate()
             elif sig == signal.CTRL_C_EVENT:
@@ -1784,9 +1804,6 @@ class Popen:
             """Execute program using os.posix_spawn()."""
             kwargs = {}
             if restore_signals:
-                # Lazy import to improve module import time
-                import signal
-
                 # See _Py_RestoreSignals() in Python/pylifecycle.c
                 sigset = []
                 for signame in ('SIGPIPE', 'SIGXFZ', 'SIGXFSZ'):
@@ -2184,6 +2201,10 @@ class Popen:
                         self.stdin.flush()
                     except BrokenPipeError:
                         pass  # communicate() must ignore BrokenPipeError.
+                    except ValueError:
+                        # ignore ValueError: I/O operation on closed file.
+                        if not self.stdin.closed:
+                            raise
                     if not input:
                         try:
                             self.stdin.close()
@@ -2211,8 +2232,14 @@ class Popen:
                 if self._input:
                     input_view = memoryview(self._input)
 
+                if self._input:
+                    if not isinstance(self._input, memoryview):
+                        input_view = memoryview(self._input)
+                    else:
+                        input_view = self._input.cast("b")  # byte input required
+
                 with _PopenSelector() as selector:
-                    if self.stdin and input:
+                    if self.stdin and not self.stdin.closed and self._input:
                         selector.register(self.stdin, selectors.EVENT_WRITE)
                     if self.stdout and not self.stdout.closed:
                         selector.register(self.stdout, selectors.EVENT_READ)
@@ -2235,7 +2262,7 @@ class Popen:
                         # XXX Rewrite these to use non-blocking I/O on the file
                         # objects; they are no longer using C stdio!
 
-                        for key, events in ready:
+                        for key, events in ready:                            if key.fileobj is self.stdin:
                             if key.fileobj is self.stdin:
                                 chunk = input_view[self._input_offset :
                                                    self._input_offset + _PIPE_BUF]
@@ -2245,7 +2272,7 @@ class Popen:
                                     selector.unregister(key.fileobj)
                                     key.fileobj.close()
                                 else:
-                                    if self._input_offset >= len(self._input):
+                                    if self._input_offset >= len(input_view):
                                         selector.unregister(key.fileobj)
                                         key.fileobj.close()
                             elif key.fileobj in (self.stdout, self.stderr):
@@ -2255,7 +2282,11 @@ class Popen:
                                     key.fileobj.close()
                                 self._fileobj2output[key.fileobj].append(data)
 
-                self.wait(timeout=self._remaining_time(endtime))
+                try:
+                    self.wait(timeout=self._remaining_time(endtime))
+                except TimeoutExpired as exc:
+                    exc.timeout = orig_timeout
+                    raise
 
                 # All data exchanged.  Translate lists into strings.
                 if stdout is not None:
@@ -2325,13 +2356,9 @@ class Popen:
         def terminate(self):
             """Terminate the process with SIGTERM
             """
-            # Lazy import to improve module import time
-            import signal
             self.send_signal(signal.SIGTERM)
 
         def kill(self):
             """Kill the process with SIGKILL
             """
-            # Lazy import to improve module import time
-            import signal
             self.send_signal(signal.SIGKILL)

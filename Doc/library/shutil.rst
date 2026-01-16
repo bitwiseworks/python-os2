@@ -83,6 +83,13 @@ Directory and files operations
       copy the file more efficiently. See
       :ref:`shutil-platform-dependent-efficient-copy-operations` section.
 
+.. exception:: SpecialFileError
+
+   This exception is raised when :func:`copyfile` or :func:`copytree` attempt
+   to copy a named pipe.
+
+   .. versionadded:: 2.7
+
 .. exception:: SameFileError
 
    This exception is raised if source and destination in :func:`copyfile`
@@ -327,6 +334,10 @@ Directory and files operations
    The deprecated *onerror* is similar to *onexc*, except that the third
    parameter it receives is the tuple returned from :func:`sys.exc_info`.
 
+   .. seealso::
+      :ref:`shutil-rmtree-example` for an example of handling the removal
+      of a directory tree that contains read-only files.
+
    .. audit-event:: shutil.rmtree path,dir_fd shutil.rmtree
 
    .. versionchanged:: 3.3
@@ -454,6 +465,10 @@ Directory and files operations
    :envvar:`PATH` environment variable is read from :data:`os.environ`,
    falling back to :data:`os.defpath` if it is not set.
 
+   If *cmd* contains a directory component, :func:`!which` only checks the
+   specified path directly and does not search the directories listed in
+   *path* or in the system's :envvar:`PATH` environment variable.
+
    On Windows, the current directory is prepended to the *path* if *mode* does
    not include ``os.X_OK``. When the *mode* does include ``os.X_OK``, the
    Windows API ``NeedCurrentDirectoryForExePathW`` will be consulted to
@@ -473,7 +488,7 @@ Directory and files operations
    This is also applied when *cmd* is a path that contains a directory
    component::
 
-      >> shutil.which("C:\\Python33\\python")
+      >>> shutil.which("C:\\Python33\\python")
       'C:\\Python33\\python.EXE'
 
    .. versionadded:: 3.3
@@ -827,7 +842,7 @@ In the final archive, :file:`please_add.txt` should be included, but
     ...     root_dir='tmp/root',
     ...     base_dir='structure/content',
     ... )
-    '/Users/tarek/my_archive.tar'
+    '/Users/tarek/myarchive.tar'
 
 Listing the files in the resulting archive gives us:
 

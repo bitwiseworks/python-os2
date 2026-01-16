@@ -36,7 +36,7 @@ __all__ = ["normcase","isabs","join","splitdrive","splitroot","split","splitext"
            "samefile","sameopenfile","samestat",
            "curdir","pardir","sep","pathsep","defpath","altsep","extsep",
            "devnull","realpath","supports_unicode_filenames","relpath",
-           "commonpath", "isjunction","isdevdrive"]
+           "commonpath", "isjunction","isdevdrive","ALLOW_MISSING"]
 
 
 def _get_sep(path):
@@ -284,42 +284,41 @@ def expanduser(path):
 # This expands the forms $variable and ${variable} only.
 # Non-existent variables are left unchanged.
 
-_varprog = None
-_varprogb = None
+_varpattern = r'\$(\w+|\{[^}]*\}?)'
+_varsub = None
+_varsubb = None
 
 def expandvars(path):
     """Expand shell variables of form $var and ${var}.  Unknown variables
     are left unchanged."""
     path = os.fspath(path)
-    global _varprog, _varprogb
+    global _varsub, _varsubb
     if isinstance(path, bytes):
         if b'$' not in path:
             return path
-        if not _varprogb:
+        if not _varsubb:
             import re
-            _varprogb = re.compile(br'\$(\w+|\{[^}]*\})', re.ASCII)
-        search = _varprogb.search
+            _varsubb = re.compile(_varpattern.encode(), re.ASCII).sub
+        sub = _varsubb
         start = b'{'
         end = b'}'
         environ = getattr(os, 'environb', None)
     else:
         if '$' not in path:
             return path
-        if not _varprog:
+        if not _varsub:
             import re
-            _varprog = re.compile(r'\$(\w+|\{[^}]*\})', re.ASCII)
-        search = _varprog.search
+            _varsub = re.compile(_varpattern, re.ASCII).sub
+        sub = _varsub
         start = '{'
         end = '}'
         environ = os.environ
-    i = 0
-    while True:
-        m = search(path, i)
-        if not m:
-            break
-        i, j = m.span(0)
-        name = m.group(1)
-        if name.startswith(start) and name.endswith(end):
+
+    def repl(m):
+        name = m[1]
+        if name.startswith(start):
+            if not name.endswith(end):
+                return m[0]
             name = name[1:-1]
         try:
             if environ is None:
@@ -327,13 +326,11 @@ def expandvars(path):
             else:
                 value = environ[name]
         except KeyError:
-            i = j
+            return m[0]
         else:
-            tail = path[j:]
-            path = path[:i] + value
-            i = len(path)
-            path += tail
-    return path
+            return value
+
+    return sub(repl, path)
 
 
 # Normalize a path, e.g. A//B, A/./B and A/foo/../B all become A/B.
@@ -402,6 +399,15 @@ symbolic links encountered in the path."""
         curdir = '.'
         pardir = '..'
         getcwd = os.getcwd
+    if strict is ALLOW_MISSING:
+        ignored_error = FileNotFoundError
+        strict = True
+    elif strict:
+        ignored_error = ()
+    else:
+        ignored_error = OSError
+
+    maxlinks = None
 
     # The stack of unresolved path parts. When popped, a special value of None
     # indicates that a symlink target has been resolved, and that the original
@@ -462,25 +468,28 @@ symbolic links encountered in the path."""
                 path = newpath
                 continue
             target = os.readlink(newpath)
-        except OSError:
-            if strict:
-                raise
-            path = newpath
+        except ignored_error:
+            pass
+        else:
+            # Resolve the symbolic link
+            if target.startswith(sep):
+                # Symlink target is absolute; reset resolved path.
+                path = sep
+            if maxlinks is None:
+                # Mark this symlink as seen but not fully resolved.
+                seen[newpath] = None
+                # Push the symlink path onto the stack, and signal its specialness
+                # by also pushing None. When these entries are popped, we'll
+                # record the fully-resolved symlink target in the 'seen' mapping.
+                rest.append(newpath)
+                rest.append(None)
+            # Push the unresolved symlink target parts onto the stack.
+            target_parts = target.split(sep)[::-1]
+            rest.extend(target_parts)
+            part_count += len(target_parts)
             continue
-        # Resolve the symbolic link
-        seen[newpath] = None # not resolved symlink
-        if target.startswith(sep):
-            # Symlink target is absolute; reset resolved path.
-            path = sep
-        # Push the symlink path onto the stack, and signal its specialness by
-        # also pushing None. When these entries are popped, we'll record the
-        # fully-resolved symlink target in the 'seen' mapping.
-        rest.append(newpath)
-        rest.append(None)
-        # Push the unresolved symlink target parts onto the stack.
-        target_parts = target.split(sep)[::-1]
-        rest.extend(target_parts)
-        part_count += len(target_parts)
+        # An error occurred and was ignored.
+        path = newpath
 
     return path
 

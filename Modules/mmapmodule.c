@@ -26,6 +26,7 @@
 #include "pycore_abstract.h"      // _Py_convert_optional_to_ssize_t()
 #include "pycore_bytesobject.h"   // _PyBytes_Find()
 #include "pycore_fileutils.h"     // _Py_stat_struct
+#include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
 #include <stddef.h>               // offsetof()
 #ifndef MS_WINDOWS
@@ -119,6 +120,7 @@ typedef struct {
 #ifdef UNIX
     int fd;
     _Bool trackfd;
+    int flags;
 #endif
 
     PyObject *weakreflist;
@@ -161,8 +163,7 @@ mmap_object_dealloc(mmap_object *m_obj)
     Py_END_ALLOW_THREADS
 #endif /* UNIX */
 
-    if (m_obj->weakreflist != NULL)
-        PyObject_ClearWeakRefs((PyObject *) m_obj);
+    FT_CLEAR_WEAKREFS((PyObject *) m_obj, m_obj->weakreflist);
 
     tp->tp_free(m_obj);
     Py_DECREF(tp);
@@ -871,6 +872,13 @@ mmap_resize_method(mmap_object *self,
 #else
         void *newmap;
 
+#ifdef __linux__
+        if (self->fd == -1 && !(self->flags & MAP_PRIVATE) && new_size > self->size) {
+            PyErr_Format(PyExc_ValueError,
+                "mmap: can't expand a shared anonymous mapping on Linux");
+            return NULL;
+        }
+#endif
         if (self->fd != -1 && ftruncate(self->fd, self->offset + new_size) == -1) {
             PyErr_SetFromErrno(PyExc_OSError);
             return NULL;
@@ -1651,6 +1659,7 @@ new_mmap_object(PyTypeObject *type, PyObject *args, PyObject *kwdict)
     else {
         m_obj->fd = -1;
     }
+    m_obj->flags = flags;
 
     Py_BEGIN_ALLOW_THREADS
     m_obj->data = mmap(NULL, map_size, prot, flags, fd, offset);

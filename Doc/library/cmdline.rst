@@ -13,22 +13,22 @@ The following modules have a command-line interface.
 * :mod:`cProfile`: see :ref:`profile <profile-cli>`
 * :ref:`difflib <difflib-interface>`
 * :ref:`dis <dis-cli>`
-* :mod:`doctest`
+* :ref:`doctest <doctest-cli>`
 * :mod:`!encodings.rot_13`
-* :mod:`ensurepip`
+* :ref:`ensurepip <ensurepip-cli>`
 * :mod:`filecmp`
 * :mod:`fileinput`
 * :mod:`ftplib`
 * :ref:`gzip <gzip-cli>`
 * :ref:`http.server <http-server-cli>`
-* :mod:`!idlelib`
+* :ref:`idlelib <idlelib-cli>`
 * :ref:`inspect <inspect-module-cli>`
 * :ref:`json.tool <json-commandline>`
 * :mod:`mimetypes`
-* :mod:`pdb`
+* :ref:`pdb <pdb-cli>`
 * :mod:`pickle`
 * :ref:`pickletools <pickletools-cli>`
-* :mod:`platform`
+* :ref:`platform <platform-cli>`
 * :mod:`poplib`
 * :ref:`profile <profile-cli>`
 * :mod:`pstats`
@@ -51,8 +51,8 @@ The following modules have a command-line interface.
 * :mod:`turtledemo`
 * :ref:`unittest <unittest-command-line-interface>`
 * :ref:`uuid <uuid-cli>`
-* :mod:`venv`
-* :mod:`webbrowser`
+* :ref:`venv <venv-cli>`
+* :ref:`webbrowser <webbrowser-cli>`
 * :ref:`zipapp <zipapp-command-line-interface>`
 * :ref:`zipfile <zipfile-commandline>`
 

@@ -6,6 +6,7 @@
 #include "pycore_object.h"        // _PyObject_GC_TRACK
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
 
 #include "clinic/_functoolsmodule.c.h"
@@ -189,9 +190,7 @@ partial_dealloc(partialobject *pto)
     PyTypeObject *tp = Py_TYPE(pto);
     /* bpo-31095: UnTrack is needed before calling any callbacks */
     PyObject_GC_UnTrack(pto);
-    if (pto->weakreflist != NULL) {
-        PyObject_ClearWeakRefs((PyObject *) pto);
-    }
+    FT_CLEAR_WEAKREFS((PyObject*)pto, pto->weakreflist);
     (void)partial_clear(pto);
     tp->tp_free(pto);
     Py_DECREF(tp);
@@ -472,7 +471,8 @@ partial_setstate(partialobject *pto, PyObject *state)
         !PyArg_ParseTuple(state, "OOOO", &fn, &fnargs, &kw, &dict) ||
         !PyCallable_Check(fn) ||
         !PyTuple_Check(fnargs) ||
-        (kw != Py_None && !PyDict_Check(kw)))
+        (kw != Py_None && !PyDict_Check(kw)) ||
+        (dict != Py_None && !PyDict_Check(dict)))
     {
         PyErr_SetString(PyExc_TypeError, "invalid partial state");
         return NULL;
@@ -1317,9 +1317,7 @@ lru_cache_dealloc(lru_cache_object *obj)
     PyTypeObject *tp = Py_TYPE(obj);
     /* bpo-31095: UnTrack is needed before calling any callbacks */
     PyObject_GC_UnTrack(obj);
-    if (obj->weakreflist != NULL) {
-        PyObject_ClearWeakRefs((PyObject*)obj);
-    }
+    FT_CLEAR_WEAKREFS((PyObject*)obj, obj->weakreflist);
 
     (void)lru_cache_tp_clear(obj);
     tp->tp_free(obj);

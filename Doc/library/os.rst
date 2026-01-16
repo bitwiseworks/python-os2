@@ -299,7 +299,8 @@ process and user.
 
    .. versionadded:: 3.6
 
-   .. abstractmethod:: __fspath__()
+   .. method:: __fspath__()
+      :abstractmethod:
 
       Return the file system path representation of the object.
 
@@ -538,7 +539,7 @@ process and user.
 
 .. function:: initgroups(username, gid, /)
 
-   Call the system initgroups() to initialize the group access list with all of
+   Call the system ``initgroups()`` to initialize the group access list with all of
    the groups of which the specified username is a member, plus the specified
    group id.
 
@@ -1936,8 +1937,8 @@ features:
   must be a string specifying a file path.  However, some functions now
   alternatively accept an open file descriptor for their *path* argument.
   The function will then operate on the file referred to by the descriptor.
-  (For POSIX systems, Python will call the variant of the function prefixed
-  with ``f`` (e.g. call ``fchdir`` instead of ``chdir``).)
+  For POSIX systems, Python will call the variant of the function prefixed
+  with ``f`` (e.g. call ``fchdir`` instead of ``chdir``).
 
   You can check whether or not *path* can be specified as a file descriptor
   for a particular function on your platform using :data:`os.supports_fd`.
@@ -1952,7 +1953,7 @@ features:
 * **paths relative to directory descriptors:** If *dir_fd* is not ``None``, it
   should be a file descriptor referring to a directory, and the path to operate
   on should be relative; path will then be relative to that directory.  If the
-  path is absolute, *dir_fd* is ignored.  (For POSIX systems, Python will call
+  path is absolute, *dir_fd* is ignored.  For POSIX systems, Python will call
   the variant of the function with an ``at`` suffix and possibly prefixed with
   ``f`` (e.g. call ``faccessat`` instead of ``access``).
 
@@ -1965,8 +1966,8 @@ features:
 * **not following symlinks:** If *follow_symlinks* is
   ``False``, and the last element of the path to operate on is a symbolic link,
   the function will operate on the symbolic link itself rather than the file
-  pointed to by the link.  (For POSIX systems, Python will call the ``l...``
-  variant of the function.)
+  pointed to by the link.  For POSIX systems, Python will call the ``l...``
+  variant of the function.
 
   You can check whether or not *follow_symlinks* is supported for a particular
   function on your platform using :data:`os.supports_follow_symlinks`.
@@ -3431,6 +3432,9 @@ features:
 
    Create a symbolic link pointing to *src* named *dst*.
 
+   The *src* parameter refers to the target of the link (the file or directory being linked to),
+   and *dst* is the name of the link being created.
+
    On Windows, a symlink represents either a file or a directory, and does not
    morph to the target dynamically.  If the target is present, the type of the
    symlink will be created to match. Otherwise, the symlink will be created
@@ -3620,16 +3624,16 @@ features:
 
    This example displays the number of bytes taken by non-directory files in each
    directory under the starting directory, except that it doesn't look under any
-   CVS subdirectory::
+   ``__pycache__`` subdirectory::
 
       import os
       from os.path import join, getsize
-      for root, dirs, files in os.walk('python/Lib/email'):
+      for root, dirs, files in os.walk('python/Lib/xml'):
           print(root, "consumes", end=" ")
           print(sum(getsize(join(root, name)) for name in files), end=" ")
           print("bytes in", len(files), "non-directory files")
-          if 'CVS' in dirs:
-              dirs.remove('CVS')  # don't visit CVS directories
+          if '__pycache__' in dirs:
+              dirs.remove('__pycache__')  # don't visit __pycache__ directories
 
    In the next example (simple implementation of :func:`shutil.rmtree`),
    walking the tree bottom-up is essential, :func:`rmdir` doesn't allow
@@ -3682,16 +3686,16 @@ features:
 
    This example displays the number of bytes taken by non-directory files in each
    directory under the starting directory, except that it doesn't look under any
-   CVS subdirectory::
+   ``__pycache__`` subdirectory::
 
       import os
-      for root, dirs, files, rootfd in os.fwalk('python/Lib/email'):
-          print(root, "consumes", end="")
+      for root, dirs, files, rootfd in os.fwalk('python/Lib/xml'):
+          print(root, "consumes", end=" ")
           print(sum([os.stat(name, dir_fd=rootfd).st_size for name in files]),
-                end="")
+                end=" ")
           print("bytes in", len(files), "non-directory files")
-          if 'CVS' in dirs:
-              dirs.remove('CVS')  # don't visit CVS directories
+          if '__pycache__' in dirs:
+              dirs.remove('__pycache__')  # don't visit __pycache__ directories
 
    In the next example, walking the tree bottom-up is essential:
    :func:`rmdir` doesn't allow deleting a directory before the directory is

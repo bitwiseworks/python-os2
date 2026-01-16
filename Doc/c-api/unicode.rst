@@ -68,8 +68,14 @@ Python:
 
 .. c:var:: PyTypeObject PyUnicode_Type
 
-   This instance of :c:type:`PyTypeObject` represents the Python Unicode type.  It
-   is exposed to Python code as ``str``.
+   This instance of :c:type:`PyTypeObject` represents the Python Unicode type.
+   It is exposed to Python code as ``str``.
+
+
+.. c:var:: PyTypeObject PyUnicodeIter_Type
+
+   This instance of :c:type:`PyTypeObject` represents the Python Unicode
+   iterator type. It is used to iterate over Unicode string objects.
 
 
 The following APIs are C macros and static inlined functions for fast checks and
@@ -256,13 +262,8 @@ the Python configuration.
 
 .. c:function:: int Py_UNICODE_ISPRINTABLE(Py_UCS4 ch)
 
-   Return ``1`` or ``0`` depending on whether *ch* is a printable character.
-   Nonprintable characters are those characters defined in the Unicode character
-   database as "Other" or "Separator", excepting the ASCII space (0x20) which is
-   considered printable.  (Note that printable characters in this context are
-   those which should not be escaped when :func:`repr` is invoked on a string.
-   It has no bearing on the handling of strings written to :data:`sys.stdout` or
-   :data:`sys.stderr`.)
+   Return ``1`` or ``0`` depending on whether *ch* is a printable character,
+   in the sense of :meth:`str.isprintable`.
 
 
 These APIs can be used for fast direct character conversions:
@@ -315,12 +316,22 @@ These APIs can be used to work with surrogates:
 
    Check if *ch* is a low surrogate (``0xDC00 <= ch <= 0xDFFF``).
 
+.. c:function:: Py_UCS4 Py_UNICODE_HIGH_SURROGATE(Py_UCS4 ch)
+
+    Return the high UTF-16 surrogate (``0xD800`` to ``0xDBFF``) for a Unicode
+    code point in the range ``[0x10000; 0x10FFFF]``.
+
+.. c:function:: Py_UCS4 Py_UNICODE_LOW_SURROGATE(Py_UCS4 ch)
+
+    Return the low UTF-16 surrogate (``0xDC00`` to ``0xDFFF``) for a Unicode
+    code point in the range ``[0x10000; 0x10FFFF]``.
+
 .. c:function:: Py_UCS4 Py_UNICODE_JOIN_SURROGATES(Py_UCS4 high, Py_UCS4 low)
 
    Join two surrogate code points and return a single :c:type:`Py_UCS4` value.
    *high* and *low* are respectively the leading and trailing surrogates in a
-   surrogate pair. *high* must be in the range [0xD800; 0xDBFF] and *low* must
-   be in the range [0xDC00; 0xDFFF].
+   surrogate pair. *high* must be in the range ``[0xD800; 0xDBFF]`` and *low* must
+   be in the range ``[0xDC00; 0xDFFF]``.
 
 
 Creating and accessing Unicode strings
@@ -594,6 +605,14 @@ APIs:
    Objects other than Unicode or its subtypes will cause a :exc:`TypeError`.
 
 
+.. c:function:: PyObject* PyUnicode_FromOrdinal(int ordinal)
+
+   Create a Unicode Object from the given Unicode code point *ordinal*.
+
+   The ordinal must be in ``range(0x110000)``. A :exc:`ValueError` is
+   raised in the case it is not.
+
+
 .. c:function:: PyObject* PyUnicode_FromEncodedObject(PyObject *obj, \
                                const char *encoding, const char *errors)
 
@@ -610,6 +629,25 @@ APIs:
 
    The API returns ``NULL`` if there was an error.  The caller is responsible for
    decref'ing the returned objects.
+
+
+.. c:function:: PyObject* PyUnicode_BuildEncodingMap(PyObject* string)
+
+   Return a mapping suitable for decoding a custom single-byte encoding.
+   Given a Unicode string *string* of up to 256 characters representing an encoding
+   table, returns either a compact internal mapping object or a dictionary
+   mapping character ordinals to byte values. Raises a :exc:`TypeError` and
+   return ``NULL`` on invalid input.
+   .. versionadded:: 3.2
+
+
+.. c:function:: const char* PyUnicode_GetDefaultEncoding(void)
+
+   Return the name of the default string encoding, ``"utf-8"``.
+   See :func:`sys.getdefaultencoding`.
+
+   The returned string does not need to be freed, and is valid
+   until interpreter shutdown.
 
 
 .. c:function:: Py_ssize_t PyUnicode_GetLength(PyObject *unicode)
@@ -1352,6 +1390,13 @@ the user settings on the machine running the codec.
    in *consumed*.
 
 
+.. c:function:: PyObject* PyUnicode_DecodeCodePageStateful(int code_page, const char *str, \
+                              Py_ssize_t size, const char *errors, Py_ssize_t *consumed)
+
+   Similar to :c:func:`PyUnicode_DecodeMBCSStateful`, except uses the code page
+   specified by *code_page*.
+
+
 .. c:function:: PyObject* PyUnicode_AsMBCSString(PyObject *unicode)
 
    Encode a Unicode object using MBCS and return the result as Python bytes
@@ -1366,10 +1411,6 @@ the user settings on the machine running the codec.
    :c:macro:`!CP_ACP` code page to get the MBCS encoder.
 
    .. versionadded:: 3.3
-
-
-Methods & Slots
-"""""""""""""""
 
 
 .. _unicodemethodsandslots:
@@ -1396,12 +1437,53 @@ They all return ``NULL`` or ``-1`` if an exception occurs.
    separator.  At most *maxsplit* splits will be done.  If negative, no limit is
    set.  Separators are not included in the resulting list.
 
+   On error, return ``NULL`` with an exception set.
+
+   Equivalent to :py:meth:`str.split`.
+
+
+.. c:function:: PyObject* PyUnicode_RSplit(PyObject *unicode, PyObject *sep, Py_ssize_t maxsplit)
+
+   Similar to :c:func:`PyUnicode_Split`, but splitting will be done beginning
+   at the end of the string.
+
+   On error, return ``NULL`` with an exception set.
+
+   Equivalent to :py:meth:`str.rsplit`.
+
 
 .. c:function:: PyObject* PyUnicode_Splitlines(PyObject *unicode, int keepends)
 
    Split a Unicode string at line breaks, returning a list of Unicode strings.
    CRLF is considered to be one line break.  If *keepends* is ``0``, the Line break
    characters are not included in the resulting strings.
+
+
+.. c:function:: PyObject* PyUnicode_Partition(PyObject *unicode, PyObject *sep)
+
+   Split a Unicode string at the first occurrence of *sep*, and return
+   a 3-tuple containing the part before the separator, the separator itself,
+   and the part after the separator. If the separator is not found,
+   return a 3-tuple containing the string itself, followed by two empty strings.
+
+   *sep* must not be empty.
+
+   On error, return ``NULL`` with an exception set.
+
+   Equivalent to :py:meth:`str.partition`.
+
+
+.. c:function:: PyObject* PyUnicode_RPartition(PyObject *unicode, PyObject *sep)
+
+   Similar to :c:func:`PyUnicode_Partition`, but split a Unicode string at the
+   last occurrence of *sep*. If the separator is not found, return a 3-tuple
+   containing two empty strings, followed by the string itself.
+
+   *sep* must not be empty.
+
+   On error, return ``NULL`` with an exception set.
+
+   Equivalent to :py:meth:`str.rpartition`.
 
 
 .. c:function:: PyObject* PyUnicode_Join(PyObject *separator, PyObject *seq)
@@ -1566,9 +1648,5 @@ They all return ``NULL`` or ``-1`` if an exception occurs.
    For interning an unbounded number of different strings, such as ones coming
    from user input, prefer calling :c:func:`PyUnicode_FromString` and
    :c:func:`PyUnicode_InternInPlace` directly.
-
-   .. impl-detail::
-
-      Strings interned this way are made :term:`immortal`.
 
 

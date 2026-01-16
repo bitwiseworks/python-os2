@@ -222,6 +222,9 @@ attributes (see :ref:`import-mod-attrs` for module attributes):
 +-----------------+-------------------+---------------------------+
 |                 | gi_running        | is the generator running? |
 +-----------------+-------------------+---------------------------+
+|                 | gi_suspended      | is the generator          |
+|                 |                   | suspended?                |
++-----------------+-------------------+---------------------------+
 |                 | gi_code           | code                      |
 +-----------------+-------------------+---------------------------+
 |                 | gi_yieldfrom      | object being iterated by  |
@@ -1120,7 +1123,7 @@ Classes and functions
       :func:`signature` in Python 3.5, but that decision has been reversed
       in order to restore a clearly supported standard interface for
       single-source Python 2/3 code migrating away from the legacy
-      :func:`getargspec` API.
+      :func:`!getargspec` API.
 
    .. versionchanged:: 3.7
       Python only explicitly guaranteed that it preserved the declaration
@@ -1737,7 +1740,7 @@ Buffer flags
 
 .. _inspect-module-cli:
 
-Command Line Interface
+Command-line interface
 ----------------------
 
 The :mod:`inspect` module also provides a basic introspection capability

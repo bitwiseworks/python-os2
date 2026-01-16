@@ -237,6 +237,85 @@ class FilterTests(BaseTest):
                                     42)
             self.assertEqual(len(w), 0)
 
+    def test_filter_module(self):
+        MS_WINDOWS = (sys.platform == 'win32')
+        with self.module.catch_warnings(record=True) as w:
+            self.module.simplefilter('error')
+            self.module.filterwarnings('always', module=r'package\.module\Z')
+            self.module.warn_explicit('msg', UserWarning, 'filename', 42,
+                                      module='package.module')
+            self.assertEqual(len(w), 1)
+            with self.assertRaises(UserWarning):
+                self.module.warn_explicit('msg', UserWarning, '/path/to/package/module', 42)
+            with self.assertRaises(UserWarning):
+                self.module.warn_explicit('msg', UserWarning, '/path/to/package/module.py', 42)
+
+        with self.module.catch_warnings(record=True) as w:
+            self.module.simplefilter('error')
+            self.module.filterwarnings('always', module='package')
+            self.module.warn_explicit('msg', UserWarning, 'filename', 42,
+                                      module='package.module')
+            self.assertEqual(len(w), 1)
+            with self.assertRaises(UserWarning):
+                self.module.warn_explicit('msg', UserWarning, 'filename', 42,
+                                          module='other.package.module')
+            with self.assertRaises(UserWarning):
+                self.module.warn_explicit('msg', UserWarning, '/path/to/otherpackage/module.py', 42)
+
+        with self.module.catch_warnings(record=True) as w:
+            self.module.simplefilter('error')
+            self.module.filterwarnings('always', module=r'/path/to/package/module\Z')
+            self.module.warn_explicit('msg', UserWarning, '/path/to/package/module', 42)
+            self.assertEqual(len(w), 1)
+            self.module.warn_explicit('msg', UserWarning, '/path/to/package/module.py', 42)
+            self.assertEqual(len(w), 2)
+            with self.assertRaises(UserWarning):
+                self.module.warn_explicit('msg', UserWarning, '/PATH/TO/PACKAGE/MODULE', 42)
+            if MS_WINDOWS:
+                if self.module is py_warnings:
+                    self.module.warn_explicit('msg', UserWarning, r'/path/to/package/module.PY', 42)
+                    self.assertEqual(len(w), 3)
+                with self.assertRaises(UserWarning):
+                    self.module.warn_explicit('msg', UserWarning, r'/path/to/package/module/__init__.py', 42)
+                with self.assertRaises(UserWarning):
+                    self.module.warn_explicit('msg', UserWarning, r'/path/to/package/module.pyw', 42)
+                with self.assertRaises(UserWarning):
+                    self.module.warn_explicit('msg', UserWarning, r'\path\to\package\module', 42)
+
+        with self.module.catch_warnings(record=True) as w:
+            self.module.simplefilter('error')
+            self.module.filterwarnings('always', module=r'/path/to/package/__init__\Z')
+            self.module.warn_explicit('msg', UserWarning, '/path/to/package/__init__.py', 42)
+            self.assertEqual(len(w), 1)
+            self.module.warn_explicit('msg', UserWarning, '/path/to/package/__init__', 42)
+            self.assertEqual(len(w), 2)
+
+        if MS_WINDOWS:
+            with self.module.catch_warnings(record=True) as w:
+                self.module.simplefilter('error')
+                self.module.filterwarnings('always', module=r'C:\\path\\to\\package\\module\Z')
+                self.module.warn_explicit('msg', UserWarning, r'C:\path\to\package\module', 42)
+                self.assertEqual(len(w), 1)
+                self.module.warn_explicit('msg', UserWarning, r'C:\path\to\package\module.py', 42)
+                self.assertEqual(len(w), 2)
+                if self.module is py_warnings:
+                    self.module.warn_explicit('msg', UserWarning, r'C:\path\to\package\module.PY', 42)
+                    self.assertEqual(len(w), 3)
+                with self.assertRaises(UserWarning):
+                    self.module.warn_explicit('msg', UserWarning, r'C:\path\to\package\module.pyw', 42)
+                with self.assertRaises(UserWarning):
+                    self.module.warn_explicit('msg', UserWarning, r'C:\PATH\TO\PACKAGE\MODULE', 42)
+                with self.assertRaises(UserWarning):
+                    self.module.warn_explicit('msg', UserWarning, r'C:/path/to/package/module', 42)
+                with self.assertRaises(UserWarning):
+                    self.module.warn_explicit('msg', UserWarning, r'C:\path\to\package\module\__init__.py', 42)
+
+        with self.module.catch_warnings(record=True) as w:
+            self.module.simplefilter('error')
+            self.module.filterwarnings('always', module=r'<unknown>\Z')
+            self.module.warn_explicit('msg', UserWarning, '', 42)
+            self.assertEqual(len(w), 1)
+
     def test_module_globals(self):
         with original_warnings.catch_warnings(record=True,
                 module=self.module) as w:
@@ -1628,6 +1707,25 @@ class DeprecatedTests(unittest.TestCase):
         instance = Child(42)
         self.assertEqual(instance.a, 42)
 
+    def test_do_not_shadow_user_arguments(self):
+        new_called = False
+        new_called_cls = None
+
+        @deprecated("MyMeta will go away soon")
+        class MyMeta(type):
+            def __new__(mcs, name, bases, attrs, cls=None):
+                nonlocal new_called, new_called_cls
+                new_called = True
+                new_called_cls = cls
+                return super().__new__(mcs, name, bases, attrs)
+
+        with self.assertWarnsRegex(DeprecationWarning, "MyMeta will go away soon"):
+            class Foo(metaclass=MyMeta, cls='haha'):
+                pass
+
+        self.assertTrue(new_called)
+        self.assertEqual(new_called_cls, 'haha')
+
     def test_existing_init_subclass(self):
         @deprecated("C will go away soon")
         class C:
@@ -1663,6 +1761,25 @@ class DeprecatedTests(unittest.TestCase):
                 pass
 
         self.assertEqual(D.inited, 3)
+
+    def test_existing_init_subclass_in_sibling_base(self):
+        @deprecated("A will go away soon")
+        class A:
+            pass
+        class B:
+            def __init_subclass__(cls, x):
+                super().__init_subclass__()
+                cls.inited = x
+
+        with self.assertWarnsRegex(DeprecationWarning, "A will go away soon"):
+            class C(A, B, x=42):
+                pass
+        self.assertEqual(C.inited, 42)
+
+        with self.assertWarnsRegex(DeprecationWarning, "A will go away soon"):
+            class D(B, A, x=42):
+                pass
+        self.assertEqual(D.inited, 42)
 
     def test_init_subclass_has_correct_cls(self):
         init_subclass_saw = None
@@ -1807,9 +1924,69 @@ class DeprecatedTests(unittest.TestCase):
         self.assertFalse(inspect.iscoroutinefunction(Cls.sync))
         self.assertTrue(inspect.iscoroutinefunction(Cls.coro))
 
+    def test_inspect_class_signature(self):
+        class Cls1:  # no __init__ or __new__
+            pass
+
+        class Cls2:  # __new__ only
+            def __new__(cls, x, y):
+                return super().__new__(cls)
+
+        class Cls3:  # __init__ only
+            def __init__(self, x, y):
+                pass
+
+        class Cls4:  # __new__ and __init__
+            def __new__(cls, x, y):
+                return super().__new__(cls)
+
+            def __init__(self, x, y):
+                pass
+
+        class Cls5(Cls1):  # inherits no __init__ or __new__
+            pass
+
+        class Cls6(Cls2):  # inherits __new__ only
+            pass
+
+        class Cls7(Cls3):  # inherits __init__ only
+            pass
+
+        class Cls8(Cls4):  # inherits __new__ and __init__
+            pass
+
+        # The `@deprecated` decorator will update the class in-place.
+        # Test the child classes first.
+        for cls in reversed((Cls1, Cls2, Cls3, Cls4, Cls5, Cls6, Cls7, Cls8)):
+            with self.subTest(f'class {cls.__name__} signature'):
+                try:
+                    original_signature = inspect.signature(cls)
+                except ValueError:
+                    original_signature = None
+                try:
+                    original_new_signature = inspect.signature(cls.__new__)
+                except ValueError:
+                    original_new_signature = None
+
+                deprecated_cls = deprecated("depr")(cls)
+
+                try:
+                    deprecated_signature = inspect.signature(deprecated_cls)
+                except ValueError:
+                    deprecated_signature = None
+                self.assertEqual(original_signature, deprecated_signature)
+
+                try:
+                    deprecated_new_signature = inspect.signature(deprecated_cls.__new__)
+                except ValueError:
+                    deprecated_new_signature = None
+                self.assertEqual(original_new_signature, deprecated_new_signature)
+
+
 def setUpModule():
     py_warnings.onceregistry.clear()
     c_warnings.onceregistry.clear()
+
 
 tearDownModule = setUpModule
 

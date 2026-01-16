@@ -80,7 +80,9 @@ The following warnings category classes are currently defined:
 |                                  | unless triggered by code in ``__main__``).    |
 +----------------------------------+-----------------------------------------------+
 | :exc:`SyntaxWarning`             | Base category for warnings about dubious      |
-|                                  | syntactic features.                           |
+|                                  | syntactic features (typically emitted when    |
+|                                  | compiling Python source code, and hence       |
+|                                  | may not be suppressed by runtime filters)     |
 +----------------------------------+-----------------------------------------------+
 | :exc:`RuntimeWarning`            | Base category for warnings about dubious      |
 |                                  | runtime features.                             |
@@ -451,7 +453,7 @@ Available Functions
           lower.one_way(**kw)
 
    This makes the warning refer to both the ``example.lower.one_way()`` and
-   ``package.higher.another_way()`` call sites only from calling code living
+   ``example.higher.another_way()`` call sites only from calling code living
    outside of ``example`` package.
 
    *source*, if supplied, is the destroyed object which emitted a
@@ -467,13 +469,20 @@ Available Functions
 .. function:: warn_explicit(message, category, filename, lineno, module=None, registry=None, module_globals=None, source=None)
 
    This is a low-level interface to the functionality of :func:`warn`, passing in
-   explicitly the message, category, filename and line number, and optionally the
-   module name and the registry (which should be the ``__warningregistry__``
-   dictionary of the module).  The module name defaults to the filename with
-   ``.py`` stripped; if no registry is passed, the warning is never suppressed.
+   explicitly the message, category, filename and line number, and optionally
+   other arguments.
    *message* must be a string and *category* a subclass of :exc:`Warning` or
    *message* may be a :exc:`Warning` instance, in which case *category* will be
    ignored.
+
+   *module*, if supplied, should be the module name.
+   If no module is passed, the filename with ``.py`` stripped is used.
+
+   *registry*, if supplied, should be the ``__warningregistry__`` dictionary
+   of the module.
+   If no registry is passed, each warning is treated as the first occurrence,
+   that is, filter actions ``"default"``, ``"module"`` and ``"once"`` are
+   handled as ``"always"``.
 
    *module_globals*, if supplied, should be the global namespace in use by the code
    for which the warning is issued.  (This argument is used to support displaying
@@ -577,7 +586,7 @@ Available Functions
    The deprecation message passed to the decorator is saved in the
    ``__deprecated__`` attribute on the decorated object.
    If applied to an overload, the decorator
-   must be after the :func:`@overload <typing.overload>` decorator
+   must be after the :deco:`~typing.overload` decorator
    for the attribute to exist on the overload as returned by
    :func:`typing.get_overloads`.
 

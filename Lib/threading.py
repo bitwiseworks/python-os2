@@ -650,7 +650,8 @@ class Event:
         (or fractions thereof).
 
         This method returns the internal flag on exit, so it will always return
-        True except if a timeout is given and the operation times out.
+        ``True`` except if a timeout is given and the operation times out, when
+        it will return ``False``.
 
         """
         with self._cond:
@@ -932,6 +933,8 @@ class Thread:
             # This thread is alive.
             self._ident = new_ident
             assert self._handle.ident == new_ident
+            if _HAVE_THREAD_NATIVE_ID:
+                self._set_native_id()
         else:
             # Otherwise, the thread is dead, Jim.  _PyThread_AfterFork()
             # already marked our handle done.
@@ -1379,7 +1382,7 @@ class _DeleteDummyThreadOnDel:
         # the related _DummyThread will be kept forever!
         _thread_local_info._track_dummy_thread_ref = self
 
-    def __del__(self):
+    def __del__(self, _active_limbo_lock=_active_limbo_lock, _active=_active):
         with _active_limbo_lock:
             if _active.get(self._tident) is self._dummy_thread:
                 _active.pop(self._tident, None)

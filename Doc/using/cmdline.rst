@@ -290,9 +290,15 @@ Miscellaneous options
 
 .. option:: -i
 
-   When a script is passed as first argument or the :option:`-c` option is used,
-   enter interactive mode after executing the script or the command, even when
-   :data:`sys.stdin` does not appear to be a terminal.  The
+   Enter interactive mode after execution.
+
+   Using the :option:`-i` option will enter interactive mode in any of the following circumstances\:
+
+   * When a script is passed as first argument
+   * When the :option:`-c` option is used
+   * When the :option:`-m` option is used
+
+   Interactive mode will start even when :data:`sys.stdin` does not appear to be a terminal. The
    :envvar:`PYTHONSTARTUP` file is not read.
 
    This can be useful to inspect global variables or a stack trace when a script
@@ -360,8 +366,8 @@ Miscellaneous options
 .. option:: -R
 
    Turn on hash randomization. This option only has an effect if the
-   :envvar:`PYTHONHASHSEED` environment variable is set to ``0``, since hash
-   randomization is enabled by default.
+   :envvar:`PYTHONHASHSEED` environment variable is set to anything other
+   than ``random``, since hash randomization is enabled by default.
 
    On previous versions of Python, this option turns on hash randomization,
    so that the :meth:`~object.__hash__` values of str and bytes objects
@@ -1220,6 +1226,14 @@ conflict.
 
    See also the :option:`-X gil <-X>` command-line option, which takes
    precedence over this variable, and :ref:`whatsnew313-free-threaded-cpython`.
+
+   .. versionadded:: 3.13
+
+.. envvar:: PYTHON_JIT
+
+   On builds where experimental just-in-time compilation is available, this
+   variable can force the JIT to be disabled (``0``) or enabled (``1``) at
+   interpreter startup.
 
    .. versionadded:: 3.13
 

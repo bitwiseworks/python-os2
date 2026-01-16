@@ -472,6 +472,7 @@ later:
 #include "pycore_object.h"           // _PyObject_GC_UNTRACK()
 #include "pycore_pyerrors.h"         // _PyErr_ChainExceptions1()
 #include <stddef.h>                  // offsetof()
+#include "pycore_weakref.h"          // FT_CLEAR_WEAKREFS()
 
 #include "clinic/odictobject.c.h"
 
@@ -1383,8 +1384,7 @@ odict_dealloc(PyODictObject *self)
     Py_TRASHCAN_BEGIN(self, odict_dealloc)
 
     Py_XDECREF(self->od_inst_dict);
-    if (self->od_weakreflist != NULL)
-        PyObject_ClearWeakRefs((PyObject *)self);
+    FT_CLEAR_WEAKREFS((PyObject*)self, self->od_weakreflist);
 
     _odict_clear_nodes(self);
     PyDict_Type.tp_dealloc((PyObject *)self);
@@ -1508,7 +1508,7 @@ odict_init(PyObject *self, PyObject *args, PyObject *kwds)
     if (len == -1)
         return -1;
     if (len > 1) {
-        const char *msg = "expected at most 1 arguments, got %zd";
+        const char *msg = "expected at most 1 argument, got %zd";
         PyErr_Format(PyExc_TypeError, msg, len);
         return -1;
     }

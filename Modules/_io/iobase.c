@@ -13,6 +13,7 @@
 #include "pycore_long.h"          // _PyLong_GetOne()
 #include "pycore_object.h"        // _PyType_HasFeature()
 #include "pycore_pyerrors.h"      // _PyErr_ChainExceptions1()
+#include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
 #include <stddef.h>               // offsetof()
 #include "_iomodule.h"
@@ -376,8 +377,7 @@ iobase_dealloc(iobase *self)
     }
     PyTypeObject *tp = Py_TYPE(self);
     _PyObject_GC_UNTRACK(self);
-    if (self->weakreflist != NULL)
-        PyObject_ClearWeakRefs((PyObject *) self);
+    FT_CLEAR_WEAKREFS((PyObject *) self, self->weakreflist);
     Py_CLEAR(self->dict);
     tp->tp_free((PyObject *)self);
     Py_DECREF(tp);
@@ -931,14 +931,21 @@ _io__RawIOBase_read_impl(PyObject *self, Py_ssize_t n)
         return res;
     }
 
-    n = PyNumber_AsSsize_t(res, PyExc_ValueError);
+    Py_ssize_t bytes_filled = PyNumber_AsSsize_t(res, PyExc_ValueError);
     Py_DECREF(res);
-    if (n == -1 && PyErr_Occurred()) {
+    if (bytes_filled == -1 && PyErr_Occurred()) {
         Py_DECREF(b);
         return NULL;
     }
+    if (bytes_filled < 0 || bytes_filled > n) {
+        Py_DECREF(b);
+        PyErr_Format(PyExc_ValueError,
+                     "readinto returned %zd outside buffer size %zd",
+                     bytes_filled, n);
+        return NULL;
+    }
 
-    res = PyBytes_FromStringAndSize(PyByteArray_AsString(b), n);
+    res = PyBytes_FromStringAndSize(PyByteArray_AsString(b), bytes_filled);
     Py_DECREF(b);
     return res;
 }

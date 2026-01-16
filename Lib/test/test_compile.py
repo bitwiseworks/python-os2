@@ -643,6 +643,21 @@ class TestSpecifics(unittest.TestCase):
                 compile('pass', filename, 'exec')
         self.assertRaises(TypeError, compile, 'pass', list(b'file.py'), 'exec')
 
+    def test_compile_filename_refleak(self):
+        # Regression tests for reference leak in PyUnicode_FSDecoder.
+        # See https://github.com/python/cpython/issues/139748.
+        mortal_str = 'this is a mortal string'
+        # check error path when 'mode' AC conversion failed
+        self.assertRaises(TypeError, compile, b'', mortal_str, mode=1234)
+        # check error path when 'optimize' AC conversion failed
+        self.assertRaises(OverflowError, compile, b'', mortal_str,
+                          'exec', optimize=1 << 1000)
+        # check error path when 'dont_inherit' AC conversion failed
+        class EvilBool:
+            def __bool__(self): raise ValueError
+        self.assertRaises(ValueError, compile, b'', mortal_str,
+                          'exec', dont_inherit=EvilBool())
+
     @support.cpython_only
     def test_same_filename_used(self):
         s = """def f(): pass\ndef g(): pass"""
@@ -1511,6 +1526,74 @@ class TestSpecifics(unittest.TestCase):
                 case []:
                     pass
             [[]]
+
+    def test_compile_warnings(self):
+        # Each invocation of compile() emits compiler warnings, even if they
+        # have the same message and line number.
+        source = textwrap.dedent(r"""
+            # tokenizer
+            1or 0  # line 3
+            # code generator
+            1 is 1  # line 5
+        """)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("default")
+            for i in range(2):
+                # Even if compile() is at the same line.
+                compile(source, '<stdin>', 'exec')
+
+        self.assertEqual([wm.lineno for wm in caught], [3, 5] * 2)
+
+    def test_compile_warning_in_finally(self):
+        # Ensure that warnings inside finally blocks are
+        # only emitted once despite the block being
+        # compiled twice (for normal execution and for
+        # exception handling).
+        source = textwrap.dedent("""
+            try:
+                pass
+            finally:
+                1 is 1  # line 5
+                try:
+                    pass
+                finally: # nested
+                    1 is 1  # line 9
+        """)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            compile(source, '<stdin>', 'exec')
+
+        self.assertEqual(sorted(wm.lineno for wm in caught), [5, 9])
+        for wm in caught:
+            self.assertEqual(wm.category, SyntaxWarning)
+            self.assertIn("\"is\" with 'int' literal", str(wm.message))
+
+        # Other code path is used for "try" with "except*".
+        source = textwrap.dedent("""
+            try:
+                pass
+            except *Exception:
+                pass
+            finally:
+                1 is 1  # line 7
+                try:
+                    pass
+                except *Exception:
+                    pass
+                finally: # nested
+                    1 is 1  # line 13
+        """)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            compile(source, '<stdin>', 'exec')
+
+        self.assertEqual(sorted(wm.lineno for wm in caught), [7, 13])
+        for wm in caught:
+            self.assertEqual(wm.category, SyntaxWarning)
+            self.assertIn("\"is\" with 'int' literal", str(wm.message))
+
 
 @requires_debug_ranges()
 class TestSourcePositions(unittest.TestCase):

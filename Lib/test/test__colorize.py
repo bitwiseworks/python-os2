@@ -10,8 +10,7 @@ from test.support.os_helper import EnvironmentVarGuard
 @contextlib.contextmanager
 def clear_env():
     with EnvironmentVarGuard() as mock_env:
-        for var in "FORCE_COLOR", "NO_COLOR", "PYTHON_COLORS":
-            mock_env.unset(var)
+        mock_env.unset("FORCE_COLOR", "NO_COLOR", "PYTHON_COLORS", "TERM")
         yield mock_env
 
 
@@ -125,6 +124,17 @@ class TestColorizeFunction(unittest.TestCase):
             with unittest.mock.patch("os.isatty", side_effect=ZeroDivisionError):
                 file = unittest.mock.MagicMock()
                 file.fileno.side_effect = io.UnsupportedOperation
+                file.isatty.return_value = True
+                self.assertEqual(_colorize.can_colorize(file=file), True)
+                file.isatty.return_value = False
+                self.assertEqual(_colorize.can_colorize(file=file), False)
+
+            # The documentation for file.fileno says:
+            # > An OSError is raised if the IO object does not use a file descriptor.
+            # gh-141570: Check OSError is caught and handled
+            with unittest.mock.patch("os.isatty", side_effect=ZeroDivisionError):
+                file = unittest.mock.MagicMock()
+                file.fileno.side_effect = OSError
                 file.isatty.return_value = True
                 self.assertEqual(_colorize.can_colorize(file=file), True)
                 file.isatty.return_value = False

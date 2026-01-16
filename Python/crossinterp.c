@@ -455,8 +455,8 @@ _release_xid_data(_PyCrossInterpreterData *data, int rawfree)
 {
     PyObject *exc = PyErr_GetRaisedException();
     int res = rawfree
-        ? _PyCrossInterpreterData_Release(data)
-        : _PyCrossInterpreterData_ReleaseAndRawFree(data);
+        ? _PyCrossInterpreterData_ReleaseAndRawFree(data)
+        : _PyCrossInterpreterData_Release(data);
     if (res < 0) {
         /* The owning interpreter is already destroyed. */
         _PyCrossInterpreterData_Clear(NULL, data);
@@ -1704,6 +1704,7 @@ _PyXI_Enter(_PyXI_session *session,
     // Convert the attrs for cross-interpreter use.
     _PyXI_namespace *sharedns = NULL;
     if (nsupdates != NULL) {
+        assert(PyDict_Check(nsupdates));
         sharedns = _PyXI_NamespaceFromDict(nsupdates, NULL);
         if (sharedns == NULL && PyErr_Occurred()) {
             assert(session->error == NULL);
