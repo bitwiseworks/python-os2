@@ -2262,7 +2262,7 @@ class Popen:
                         # XXX Rewrite these to use non-blocking I/O on the file
                         # objects; they are no longer using C stdio!
 
-                        for key, events in ready:                            if key.fileobj is self.stdin:
+                        for key, events in ready:
                             if key.fileobj is self.stdin:
                                 chunk = input_view[self._input_offset :
                                                    self._input_offset + _PIPE_BUF]
