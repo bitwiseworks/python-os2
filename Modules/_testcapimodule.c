@@ -3338,13 +3338,13 @@ static PyObject *
 finalize_thread_hang(PyObject *self, PyObject *callback)
 {
     // WASI builds some pthread stuff but doesn't have these APIs today?
-#if defined(_POSIX_THREADS) && !defined(__wasi__)
+#if defined(_POSIX_THREADS) && !defined(__wasi__) && !defined(__OS2__)
     pthread_cleanup_push(finalize_thread_hang_cleanup_callback, NULL);
 #endif
     PyObject_CallNoArgs(callback);
     // Should not reach here.
     Py_FatalError("thread unexpectedly did not hang");
-#if defined(_POSIX_THREADS) && !defined(__wasi__)
+#if defined(_POSIX_THREADS) && !defined(__wasi__) && !defined(__OS2__)
     pthread_cleanup_pop(0);
 #endif
     Py_RETURN_NONE;
