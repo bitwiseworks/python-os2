@@ -445,7 +445,7 @@ _PyPathConfig_ComputeSysPath0(const PyWideStringList *argv, PyObject **path0_p)
             else {
                 /* Must make a copy, path0copy has room for 2 * MAXPATHLEN */
                 wcsncpy(path0copy, path0, MAXPATHLEN);
-                q = wcsrchr(path0copy, SEP);
+                q = path0copy + (q - path0);
                 wcsncpy(q+1, link, MAXPATHLEN);
                 q[MAXPATHLEN + 1] = L'\0';
                 path0 = path0copy;
